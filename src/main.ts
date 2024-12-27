@@ -12,7 +12,7 @@ import { SampleRun } from './sample-run'
 export async function run(): Promise<void> {
   try {
     /** Sample Run code */
-    SampleRun()
+    await SampleRun()
     /** Sample code to run */
     const ms: string = core.getInput('milliseconds')
 
