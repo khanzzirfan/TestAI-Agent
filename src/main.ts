@@ -3,62 +3,16 @@ import * as github from '@actions/github'
 import * as exec from '@actions/exec'
 import { wait } from './wait'
 import { MainGraphRun } from './app'
+import { SampleRun } from './sample-run'
+
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
  */
 export async function run(): Promise<void> {
   try {
-    // Get inputs from the workflow file
-    const token = core.getInput('repo-token', { required: true })
-    const octokit = github.getOctokit(token)
-
-    // Get the pull request context
-    const context = github.context
-    if (!context.payload.pull_request) {
-      core.setFailed('This action must be run on a pull request event.')
-      return
-    }
-
-    const prNumber = context.payload.pull_request.number
-    const repo = context.repo.repo
-    const owner = context.repo.owner
-
-    // Log the PR number and branch
-    core.info(`Working on PR #${prNumber}`)
-    core.info(`Branch: ${context.payload.pull_request.head.ref}`)
-
-    // Fetch changes in the PR branch
-    await exec.exec('git', [
-      'fetch',
-      'origin',
-      `pull/${prNumber}/head:pr-${prNumber}`
-    ])
-    await exec.exec('git', ['checkout', `pr-${prNumber}`])
-
-    // Run linting (replace with any other action specific to your repo)
-    core.info('Running linting checks...')
-
-    try {
-      await exec.exec('npm', ['install'])
-      await exec.exec('npm', ['run', 'lint'])
-    } catch (error) {
-      core.setFailed(`Linting failed: ${error}`)
-      return
-    }
-
-    // Optionally, post a comment on the PR
-    const commentBody =
-      'Linting completed successfully. Your PR is ready for review!'
-    await octokit.rest.issues.createComment({
-      owner,
-      repo,
-      issue_number: prNumber,
-      body: commentBody
-    })
-
-    core.info('Action completed successfully.')
-
+    /** Sample Run code */
+    SampleRun()
     /** Sample code to run */
     const ms: string = core.getInput('milliseconds')
 

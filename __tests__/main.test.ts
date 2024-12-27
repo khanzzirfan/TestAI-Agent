@@ -9,9 +9,17 @@
 import * as core from '@actions/core'
 import * as main from '../src/main'
 
+// write jest mock for the action
+jest.mock('../src/app', () => ({
+  MainGraphRun: jest.fn()
+}))
+
+jest.mock('../src/sample-run', () => ({
+  SampleRun: jest.fn()
+}))
+
 // Mock the action's main function
 const runMock = jest.spyOn(main, 'run')
-
 // Other utilities
 const timeRegex = /^\d{2}:\d{2}:\d{2}/
 
@@ -23,9 +31,15 @@ let setFailedMock: jest.SpiedFunction<typeof core.setFailed>
 let setOutputMock: jest.SpiedFunction<typeof core.setOutput>
 
 describe('action', () => {
+  beforeAll(() => {
+    // Mock environment variables
+    process.env.TAVILY_API_KEY = 'test-api-key'
+    // open api key
+    process.env.OPENAI_API = 'test-api'
+  })
+
   beforeEach(() => {
     jest.clearAllMocks()
-
     debugMock = jest.spyOn(core, 'debug').mockImplementation()
     errorMock = jest.spyOn(core, 'error').mockImplementation()
     getInputMock = jest.spyOn(core, 'getInput').mockImplementation()

@@ -4,7 +4,7 @@ author: 'khanzzirfan'
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: 'radio' 
+  icon: 'radio'
   color: 'blue'
 
 # Define your inputs here.
