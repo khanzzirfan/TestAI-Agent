@@ -16,7 +16,7 @@ export const MainGraphRun = async () => {
   // meaning you can use it as you would any other runnable
   const app = workflow.compile({ checkpointer })
 
-  const query = `Execute npm test command in the provided directory './appcode' and return the output.`
+  const query = `Execute npm test command in the current directory and return the output.`
 
   // Use the Runnable
   const finalState = await app.invoke(
