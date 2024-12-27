@@ -1,16 +1,16 @@
-name: 'The name of your action here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: 'TestifyAI Agent'
+description: 'An AI agent that automatically writes tests for your code.'
+author: 'khanzzirfan'
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: 'heart'
-  color: 'red'
+  icon: 'radio' 
+  color: 'blue'
 
 # Define your inputs here.
 inputs:
   milliseconds:
-    description: 'Your input description here'
+    description: 'sample input'
     required: true
     default: '1000'
 
