@@ -41,17 +41,18 @@ export const CodeAssistantTools = [
             stderr: (data: Buffer) => {
               error += data.toString()
             }
-          }
+          },
+          ignoreReturnCode: true // Do not fail on non-zero exit code
         }
 
-        await exec.exec('npm', [command], options)
+        const exitCode = await exec.exec('npm', command.split(' '), options)
 
-        if (error) {
-          return `Error: ${error}`
+        if (exitCode !== 0) {
+          return `Command failed with exit code ${exitCode}. Error: ${error || 'Unknown error'}`
         }
         return output
-      } catch (error: unknown | any) {
-        return `Execution failed: ${error?.message}`
+      } catch (err: unknown | any) {
+        return `Execution failed: ${err?.message || 'Unknown failure'}`
       }
     }
   }),
