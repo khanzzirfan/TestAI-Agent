@@ -32,7 +32,7 @@ async function callModel(state: typeof MessagesAnnotation.State) {
     model: 'gpt-4o-mini',
     temperature: 0,
     verbose: true
-  })
+  }).bindTools(tools)
 
   const PROMPT_TEMPLATE = `You are an agent designed to interact with a Node.js project.
         Given an input command, execute the appropriate npm command in the provided directory and return the output.
