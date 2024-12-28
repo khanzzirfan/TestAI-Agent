@@ -9,7 +9,7 @@ import * as exec from '@actions/exec'
 export async function SampleRun(): Promise<void> {
   try {
     // Get inputs from the workflow file
-    const token = core.getInput('repo-token', { required: true })
+    const token = core.getInput('repo_token', { required: true })
     const octokit = github.getOctokit(token)
 
     // Get the pull request context

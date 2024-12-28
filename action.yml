@@ -13,6 +13,10 @@ inputs:
     description: 'sample input'
     required: true
     default: '1000'
+  ## Repository token
+  repo_token:
+    description: 'Repository token'
+    required: true
 
 # Define your outputs here.
 outputs:
