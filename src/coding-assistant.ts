@@ -1,24 +1,24 @@
 import { z } from 'zod'
+import * as exec from '@actions/exec'
 import { DynamicStructuredTool } from '@langchain/core/tools'
 // 4. Import dotenv for loading environment variables and fs for file system operations
 import dotenv from 'dotenv'
 import fs from 'fs'
-import { promisify } from 'util'
-import { exec } from 'child_process'
+
+/// import { exec } from 'child_process'
 dotenv.config()
 
-const nodeExecutor = promisify(exec)
-const nodeExec = async (command: string) => {
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        reject(error)
-      }
-      console.log(`npm command success stdout: ${stdout}`)
-      resolve(stdout)
-    })
-  })
-}
+// const nodeExec = async (command: string) => {
+//   return new Promise((resolve, reject) => {
+//     exec(command, (error, stdout, stderr) => {
+//       if (error) {
+//         reject(error)
+//       }
+//       console.log(`npm command success stdout: ${stdout}`)
+//       resolve(stdout)
+//     })
+//   })
+// }
 
 export const CodeAssistantTools = [
   new DynamicStructuredTool({
@@ -30,11 +30,26 @@ export const CodeAssistantTools = [
     }),
     func: async ({ command }) => {
       try {
-        const { stdout, stderr } = await nodeExecutor(command)
-        if (stderr) {
-          return `Error: ${stderr}`
+        let output = ''
+        let error = ''
+
+        const options = {
+          listeners: {
+            stdout: (data: Buffer) => {
+              output += data.toString()
+            },
+            stderr: (data: Buffer) => {
+              error += data.toString()
+            }
+          }
         }
-        return stdout
+
+        await exec.exec('npm', [command], options)
+
+        if (error) {
+          return `Error: ${error}`
+        }
+        return output
       } catch (error: unknown | any) {
         return `Execution failed: ${error?.message}`
       }
@@ -53,6 +68,8 @@ export const CodeAssistantTools = [
     func: async ({ path, fileName, content }) => {
       if (!content || !fileName) return 'No input provided'
       fs.writeFileSync(`${path}/${fileName}`, content, 'utf-8')
+      // write dummy echo await to make it async
+      await exec.exec('echo', [''])
       return `File ${fileName} created successfully`
     }
   })

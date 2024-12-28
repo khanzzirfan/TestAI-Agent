@@ -3,7 +3,7 @@ import * as github from '@actions/github'
 import * as exec from '@actions/exec'
 import { wait } from './wait'
 import { MainGraphRun } from './app'
-/// import { SampleRun } from './sample-run'
+import { SampleRun } from './sample-run'
 
 /**
  * The main function for the action.
@@ -12,7 +12,7 @@ import { MainGraphRun } from './app'
 export async function run(): Promise<void> {
   try {
     /** Sample Run code */
-    // await SampleRun()
+    await SampleRun()
     /** Sample code to run */
     const ms: string = core.getInput('milliseconds')
 
