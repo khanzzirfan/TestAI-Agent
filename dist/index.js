@@ -46508,16 +46508,17 @@ exports.CodeAssistantTools = [
                         stderr: (data) => {
                             error += data.toString();
                         }
-                    }
+                    },
+                    ignoreReturnCode: true // Do not fail on non-zero exit code
                 };
-                await exec.exec('npm', [command], options);
-                if (error) {
-                    return `Error: ${error}`;
+                const exitCode = await exec.exec('npm', command.split(' '), options);
+                if (exitCode !== 0) {
+                    return `Command failed with exit code ${exitCode}. Error: ${error || 'Unknown error'}`;
                 }
                 return output;
             }
-            catch (error) {
-                return `Execution failed: ${error?.message}`;
+            catch (err) {
+                return `Execution failed: ${err?.message || 'Unknown failure'}`;
             }
         }
     }),

@@ -1,24 +1,24 @@
 import { z } from 'zod'
-import * as exec from '@actions/exec'
 import { DynamicStructuredTool } from '@langchain/core/tools'
 // 4. Import dotenv for loading environment variables and fs for file system operations
 import dotenv from 'dotenv'
 import fs from 'fs'
-
-/// import { exec } from 'child_process'
+import { promisify } from 'util'
+import { exec } from 'child_process'
 dotenv.config()
 
-// const nodeExec = async (command: string) => {
-//   return new Promise((resolve, reject) => {
-//     exec(command, (error, stdout, stderr) => {
-//       if (error) {
-//         reject(error)
-//       }
-//       console.log(`npm command success stdout: ${stdout}`)
-//       resolve(stdout)
-//     })
-//   })
-// }
+const nodeExecutor = promisify(exec)
+const nodeExec = async (command: string) => {
+  return new Promise((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        reject(error)
+      }
+      console.log(`npm command success stdout: ${stdout}`)
+      resolve(stdout)
+    })
+  })
+}
 
 export const CodeAssistantTools = [
   new DynamicStructuredTool({
@@ -30,29 +30,13 @@ export const CodeAssistantTools = [
     }),
     func: async ({ command }) => {
       try {
-        let output = ''
-        let error = ''
-
-        const options = {
-          listeners: {
-            stdout: (data: Buffer) => {
-              output += data.toString()
-            },
-            stderr: (data: Buffer) => {
-              error += data.toString()
-            }
-          },
-          ignoreReturnCode: true // Do not fail on non-zero exit code
+        const { stdout, stderr } = await nodeExecutor(command)
+        if (stderr) {
+          return `Error: ${stderr}`
         }
-
-        const exitCode = await exec.exec('npm', command.split(' '), options)
-
-        if (exitCode !== 0) {
-          return `Command failed with exit code ${exitCode}. Error: ${error || 'Unknown error'}`
-        }
-        return output
-      } catch (err: unknown | any) {
-        return `Execution failed: ${err?.message || 'Unknown failure'}`
+        return stdout
+      } catch (error: unknown | any) {
+        return `Execution failed: ${error?.message}`
       }
     }
   }),
@@ -69,8 +53,6 @@ export const CodeAssistantTools = [
     func: async ({ path, fileName, content }) => {
       if (!content || !fileName) return 'No input provided'
       fs.writeFileSync(`${path}/${fileName}`, content, 'utf-8')
-      // write dummy echo await to make it async
-      await exec.exec('echo', [''])
       return `File ${fileName} created successfully`
     }
   })
