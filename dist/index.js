@@ -46432,63 +46432,49 @@ exports.MainGraphRun = MainGraphRun;
 
 "use strict";
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CodeAssistantTools = void 0;
 const zod_1 = __nccwpck_require__(34809);
-const exec = __importStar(__nccwpck_require__(95236));
 const tools_1 = __nccwpck_require__(3477);
 // 4. Import dotenv for loading environment variables and fs for file system operations
 const dotenv_1 = __importDefault(__nccwpck_require__(18889));
 const fs_1 = __importDefault(__nccwpck_require__(79896));
-/// import { exec } from 'child_process'
+const path_1 = __importDefault(__nccwpck_require__(16928));
+const util_1 = __nccwpck_require__(39023);
+const child_process_1 = __nccwpck_require__(35317);
 dotenv_1.default.config();
-// const nodeExec = async (command: string) => {
-//   return new Promise((resolve, reject) => {
-//     exec(command, (error, stdout, stderr) => {
-//       if (error) {
-//         reject(error)
-//       }
-//       console.log(`npm command success stdout: ${stdout}`)
-//       resolve(stdout)
-//     })
-//   })
-// }
+const nodeExecutor = (0, util_1.promisify)(child_process_1.exec);
+function listFilesRecursively(dirPath) {
+    let results = [];
+    const list = fs_1.default.readdirSync(dirPath);
+    list.forEach(file => {
+        const filePath = path_1.default.join(dirPath, file);
+        const stat = fs_1.default.statSync(filePath);
+        if (stat && stat.isDirectory()) {
+            // Recursively list files in subdirectory
+            results = results.concat(listFilesRecursively(filePath));
+        }
+        else {
+            // Add file path to results
+            results.push(filePath);
+        }
+    });
+    return results;
+}
+const nodeExec = async (command) => {
+    return new Promise((resolve, reject) => {
+        (0, child_process_1.exec)(command, (error, stdout, stderr) => {
+            if (error) {
+                reject(error);
+            }
+            console.log(`npm command success stdout: ${stdout}`);
+            resolve(stdout);
+        });
+    });
+};
 exports.CodeAssistantTools = [
     new tools_1.DynamicStructuredTool({
         name: 'npm-runner',
@@ -46498,27 +46484,14 @@ exports.CodeAssistantTools = [
         }),
         func: async ({ command }) => {
             try {
-                let output = '';
-                let error = '';
-                const options = {
-                    listeners: {
-                        stdout: (data) => {
-                            output += data.toString();
-                        },
-                        stderr: (data) => {
-                            error += data.toString();
-                        }
-                    },
-                    ignoreReturnCode: true // Do not fail on non-zero exit code
-                };
-                const exitCode = await exec.exec('npm', command.split(' '), options);
-                if (exitCode !== 0) {
-                    return `Command failed with exit code ${exitCode}. Error: ${error || 'Unknown error'}`;
+                const { stdout, stderr } = await nodeExecutor(command);
+                if (stderr) {
+                    return `Error: ${stderr}`;
                 }
-                return output;
+                return stdout;
             }
-            catch (err) {
-                return `Execution failed: ${err?.message || 'Unknown failure'}`;
+            catch (error) {
+                return `Execution failed: ${error?.message}`;
             }
         }
     }),
@@ -46535,9 +46508,20 @@ exports.CodeAssistantTools = [
             if (!content || !fileName)
                 return 'No input provided';
             fs_1.default.writeFileSync(`${path}/${fileName}`, content, 'utf-8');
-            // write dummy echo await to make it async
-            await exec.exec('echo', ['']);
             return `File ${fileName} created successfully`;
+        }
+    }),
+    // list files in a directory tool
+    new tools_1.DynamicStructuredTool({
+        name: 'list-files',
+        description: 'list files in a directory',
+        schema: zod_1.z.object({
+            path: zod_1.z.string().describe('path to the directory')
+        }),
+        func: async ({ path }) => {
+            const files = listFilesRecursively(path);
+            files.forEach(file => console.log(file));
+            return fs_1.default.readdirSync(path);
         }
     })
 ];
