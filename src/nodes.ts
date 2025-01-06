@@ -124,7 +124,11 @@ const runTests = async (state: typeof GraphState.State) => {
           - Current timestamp: {time}
         Your task is to execute npm tests with coverage option and with json output.
         Follow the instructions carefully to execute the tests.
-        Example command: npm test --prefix <directory_path> -- --coverage --json
+        Example commands: 
+          When package.json is in the root directory
+          - npm test -- --coverage --json
+          or if package.json is not in the root directory use below command
+          - npm test --prefix <directory_path> -- --coverage --json
     `
 
   const prompt = ChatPromptTemplate.fromMessages([
@@ -237,7 +241,11 @@ const runTestAgain = async (state: typeof GraphState.State) => {
         - Current timestamp: {time}
       Your task is to execute npm tests with coverage option and with json output.
       Follow the instructions carefully to execute the tests.
-      Example command: npm test --prefix <directory_path> -- --coverage --json
+      Example command:
+        When package.json is in the root directory
+        - npm test -- --coverage --json
+        or if package.json is not in the root directory use below command
+        - npm test --prefix <directory_path> -- --coverage --json
   `
 
   const prompt = ChatPromptTemplate.fromMessages([
