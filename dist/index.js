@@ -42461,9 +42461,11 @@ async function run() {
         /// await SampleRun()
         /** Sample code to run */
         const ms = core.getInput('milliseconds');
+        const filename = core.getInput('file_name');
         // The `who-to-greet` input is defined in action metadata file
         const whoToGreet = core.getInput('who-to-greet', { required: false });
         core.info(`Hello, ${whoToGreet}!`);
+        core.info(`The file name is ${filename}`);
         // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
         core.debug(`Waiting ${ms} milliseconds ...`);
         // Log the current timestamp, wait, then log the new timestamp
