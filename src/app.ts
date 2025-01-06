@@ -16,14 +16,20 @@ export const MainGraphRun = async () => {
   // meaning you can use it as you would any other runnable
   const app = workflow.compile({ checkpointer })
 
-  const query = `Execute npm test command in the current directory and return the output.`
-
+  const query = `Write and Execute jest unit test cases for Users.tsx file.
+  Guidelines:
+    - All the code is written in Typescript.
+    - List all the files in the src directory to find the Users.tsx file.
+    - Read the Users.tsx file content at right location in the project directory before writing tests.
+    - Read the corresponding Users.test.tsx or Users.spec.tsx file content to understand the existing tests.
+    - Make sure tests are passing by executing tests and coverage is generated in json format.
+  `
   // Use the Runnable
   const finalState = await app.invoke(
     {
       messages: [new HumanMessage(query)]
     },
-    { recursionLimit: 15, configurable: { thread_id: '42' } }
+    { recursionLimit: 100, configurable: { thread_id: '42' } }
   )
 
   console.log('result of graph')

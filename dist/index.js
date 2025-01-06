@@ -46412,11 +46412,18 @@ const MainGraphRun = async () => {
     // This compiles it into a LangChain Runnable,
     // meaning you can use it as you would any other runnable
     const app = graph_1.workflow.compile({ checkpointer });
-    const query = `Execute npm test command in the current directory and return the output.`;
+    const query = `Write and Execute jest unit test cases for Users.tsx file.
+  Guidelines:
+    - All the code is written in Typescript.
+    - List all the files in the src directory to find the Users.tsx file.
+    - Read the Users.tsx file content at right location in the project directory before writing tests.
+    - Read the corresponding Users.test.tsx or Users.spec.tsx file content to understand the existing tests.
+    - Make sure tests are passing by executing tests and coverage is generated in json format.
+  `;
     // Use the Runnable
     const finalState = await app.invoke({
         messages: [new messages_1.HumanMessage(query)]
-    }, { recursionLimit: 15, configurable: { thread_id: '42' } });
+    }, { recursionLimit: 100, configurable: { thread_id: '42' } });
     console.log('result of graph');
     // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
     const outputContent = finalState.messages.map(m => m.content).join('\n');
@@ -46427,7 +46434,7 @@ exports.MainGraphRun = MainGraphRun;
 
 /***/ }),
 
-/***/ 88100:
+/***/ 49542:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -46436,7 +46443,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.CodeAssistantTools = void 0;
+exports.CustomTools = void 0;
 const zod_1 = __nccwpck_require__(34809);
 const tools_1 = __nccwpck_require__(3477);
 // 4. Import dotenv for loading environment variables and fs for file system operations
@@ -46447,23 +46454,6 @@ const util_1 = __nccwpck_require__(39023);
 const child_process_1 = __nccwpck_require__(35317);
 dotenv_1.default.config();
 const nodeExecutor = (0, util_1.promisify)(child_process_1.exec);
-function listFilesRecursively(dirPath) {
-    let results = [];
-    const list = fs_1.default.readdirSync(dirPath);
-    list.forEach(file => {
-        const filePath = path_1.default.join(dirPath, file);
-        const stat = fs_1.default.statSync(filePath);
-        if (stat && stat.isDirectory()) {
-            // Recursively list files in subdirectory
-            results = results.concat(listFilesRecursively(filePath));
-        }
-        else {
-            // Add file path to results
-            results.push(filePath);
-        }
-    });
-    return results;
-}
 const nodeExec = async (command) => {
     return new Promise((resolve, reject) => {
         (0, child_process_1.exec)(command, (error, stdout, stderr) => {
@@ -46475,15 +46465,43 @@ const nodeExec = async (command) => {
         });
     });
 };
-exports.CodeAssistantTools = [
+const listFilesRecursively = (dir, excludeDirs = ['node_modules', 'public', 'dist', 'coverage']) => {
+    let results = [];
+    const listFiles = (currentDir) => {
+        const files = fs_1.default.readdirSync(currentDir);
+        files.forEach(file => {
+            const filePath = path_1.default.join(currentDir, file);
+            const stat = fs_1.default.statSync(filePath);
+            if (stat && stat.isDirectory()) {
+                if (!excludeDirs.includes(file)) {
+                    listFiles(filePath);
+                }
+            }
+            else {
+                results.push(filePath);
+            }
+        });
+    };
+    listFiles(dir);
+    return results;
+};
+exports.CustomTools = [
     new tools_1.DynamicStructuredTool({
-        name: 'npm-runner',
-        description: "call this tool to execute nodejs code on user's machine. It will execute the code and return the output. It will also print the output to the console.",
+        name: 'npm-test',
+        description: 'Tool to run npm test. It runs jest tests or any javascript tests. call this tool to execute tests. It will execute the code and return the output. It will also print the output to the console.',
         schema: zod_1.z.object({
             command: zod_1.z.string().describe('npm command')
         }),
+        // func: async ({ command }) => {
+        //   await nodeExec(command);
+        //   return "Code executed successfully";
+        // },
         func: async ({ command }) => {
             try {
+                // if command missing npm prefix, add it
+                if (!command.startsWith('npm')) {
+                    command = `npm ${command}`;
+                }
                 const { stdout, stderr } = await nodeExecutor(command);
                 if (stderr) {
                     return `Error: ${stderr}`;
@@ -46491,7 +46509,42 @@ exports.CodeAssistantTools = [
                 return stdout;
             }
             catch (error) {
-                return `Execution failed: ${error?.message}`;
+                return `Execution failed: ${error.message}`;
+            }
+        }
+    }),
+    // File system tool
+    new tools_1.DynamicStructuredTool({
+        name: 'create-file',
+        description: "Creates an empty file on user's machine at the specified path.",
+        schema: zod_1.z.object({
+            path: zod_1.z.string().describe('path to the file'),
+            fileName: zod_1.z.string().describe('name of the file')
+        }),
+        func: async ({ path: dirPath, fileName }) => {
+            try {
+                // Input validation
+                if (!dirPath || !fileName) {
+                    throw new Error('Both path and fileName are required');
+                }
+                // Normalize path and create full file path
+                const normalizedPath = path_1.default.normalize(dirPath);
+                const fullPath = path_1.default.join(normalizedPath, fileName);
+                // Ensure directory exists
+                if (!fs_1.default.existsSync(normalizedPath)) {
+                    fs_1.default.mkdirSync(normalizedPath, { recursive: true });
+                }
+                // Create empty file if it doesn't exist
+                if (!fs_1.default.existsSync(fullPath)) {
+                    fs_1.default.writeFileSync(fullPath, '', 'utf-8');
+                    return `File ${fileName} created successfully at ${normalizedPath}`;
+                }
+                else {
+                    return `File ${fileName} already exists at ${normalizedPath}`;
+                }
+            }
+            catch (error) {
+                return `Error creating file: ${error.message}`;
             }
         }
     }),
@@ -46511,17 +46564,40 @@ exports.CodeAssistantTools = [
             return `File ${fileName} created successfully`;
         }
     }),
-    // list files in a directory tool
+    // File system tool. list all files in a directory
     new tools_1.DynamicStructuredTool({
         name: 'list-files',
-        description: 'list files in a directory',
-        schema: zod_1.z.object({
-            path: zod_1.z.string().describe('path to the directory')
-        }),
+        description: "call this tool to list all files in a directory on user's machine. Provide path as input.",
+        schema: zod_1.z.object({ path: zod_1.z.string().describe('path to the directory') }),
         func: async ({ path }) => {
+            // get executing directory path
+            const executingPath = process.cwd();
             const files = listFilesRecursively(path);
-            files.forEach(file => console.log(file));
-            return fs_1.default.readdirSync(path);
+            return files;
+        }
+    }),
+    // read file tool
+    new tools_1.DynamicStructuredTool({
+        name: 'read-file',
+        description: "call this tool to read file on user's machine. Provide file name as input.",
+        schema: zod_1.z.object({ path: zod_1.z.string().describe('path to the file') }),
+        func: async ({ path }) => {
+            if (!path)
+                return 'No input provided';
+            const data = fs_1.default.readFileSync(path, 'utf-8');
+            return data;
+        }
+    }),
+    // File system tool
+    new tools_1.DynamicStructuredTool({
+        name: 'delete-file',
+        description: "call this tool to delete file on user's machine. Provide file name as input.",
+        schema: zod_1.z.object({ path: zod_1.z.string().describe('path to the file') }),
+        func: async ({ path }) => {
+            if (!path)
+                return 'No input provided';
+            fs_1.default.unlinkSync(path);
+            return `File ${path} deleted successfully`;
         }
     })
 ];
@@ -46537,30 +46613,30 @@ exports.CodeAssistantTools = [
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.workflow = void 0;
 const langgraph_1 = __nccwpck_require__(39405);
-const prebuilt_1 = __nccwpck_require__(95286);
 const nodes_1 = __nccwpck_require__(89505);
 // Define a new graph.
 // See https://langchain-ai.github.io/langgraphjs/how-tos/define-state/#getting-started for
 // more on defining custom graph states.
-const workflow = new langgraph_1.StateGraph(langgraph_1.MessagesAnnotation)
-    // Define the two nodes we will cycle between
-    .addNode('callModel', nodes_1.callModel)
-    .addNode('tools', new prebuilt_1.ToolNode(nodes_1.tools))
-    // Set the entrypoint as `callModel`
-    // This means that this node is the first one called
-    .addEdge('__start__', 'callModel')
-    .addConditionalEdges(
-// First, we define the edges' source node. We use `callModel`.
-// This means these are the edges taken after the `callModel` node is called.
-'callModel', 
-// Next, we pass in the function that will determine the sink node(s), which
-// will be called after the source node is called.
-nodes_1.shouldContinue, 
-// List of the possible destinations the conditional edge can route to.
-// Required for conditional edges to properly render the graph in Studio
-['tools', '__end__'])
-    // This means that after `tools` is called, `callModel` node is called next.
-    .addEdge('tools', 'callModel');
+const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
+    .addNode('list-files', nodes_1.listFilesDirectory)
+    .addNode('tools-list-files', nodes_1.toolNode)
+    .addNode('tools', nodes_1.toolNode)
+    .addNode('add-tests', nodes_1.addTests)
+    .addNode('tools-add-tests', nodes_1.toolNode)
+    .addNode('run-tests', nodes_1.runTests)
+    .addNode('tools-run-tests', nodes_1.toolNode)
+    .addNode('review-and-fix-errors', nodes_1.reviewAndFixErrors)
+    .addNode('tools-review-and-fix-errors', nodes_1.toolNode)
+    .addEdge('__start__', 'list-files')
+    .addConditionalEdges('list-files', nodes_1.listFilesDirectoryEdges)
+    .addConditionalEdges('add-tests', nodes_1.addTestEdges)
+    .addConditionalEdges('run-tests', nodes_1.runTestsEdges)
+    .addConditionalEdges('tools-list-files', nodes_1.listFilesDirectoryEdges)
+    .addConditionalEdges('tools-run-tests', nodes_1.runTestsEdges)
+    .addConditionalEdges('tools-add-tests', nodes_1.addTestEdges)
+    .addConditionalEdges('review-and-fix-errors', nodes_1.toolReviewAndFixErrorsEdges)
+    .addConditionalEdges('tools-review-and-fix-errors', nodes_1.toolReviewAndFixErrorsEdges)
+    .addEdge('run-tests', '__end__');
 exports.workflow = workflow;
 
 
@@ -46607,6 +46683,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = run;
 const core = __importStar(__nccwpck_require__(37484));
+const exec = __importStar(__nccwpck_require__(95236));
 const wait_1 = __nccwpck_require__(40910);
 const app_1 = __nccwpck_require__(168);
 const sample_run_1 = __nccwpck_require__(71225);
@@ -46647,6 +46724,41 @@ async function run() {
         if (error instanceof Error)
             core.setFailed(error.message);
     }
+    // Commit changes if there are any
+    try {
+        core.info('Checking for changes...');
+        let diffOutput = '';
+        await exec.exec('git', ['diff', '--name-only'], {
+            listeners: {
+                stdout: (data) => {
+                    diffOutput += data.toString();
+                }
+            }
+        });
+        if (diffOutput.trim()) {
+            core.info('Changes detected, committing...');
+            await exec.exec('git', ['config', 'user.name', 'github-actions']);
+            await exec.exec('git', [
+                'config',
+                'user.email',
+                'github-actions@github.com'
+            ]);
+            await exec.exec('git', ['add', '.']);
+            await exec.exec('git', [
+                'commit',
+                '-m',
+                'Automated commit by GitHub Actions'
+            ]);
+            await exec.exec('git', ['push']);
+            core.info('Changes committed and pushed.');
+        }
+        else {
+            core.info('No changes detected, skipping commit.');
+        }
+    }
+    catch (error) {
+        core.warning(`Failed to commit changes: ${error}`);
+    }
 }
 
 
@@ -46658,22 +46770,244 @@ async function run() {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.tools = exports.toolNode = void 0;
+exports.toolReviewAndFixErrorsEdges = exports.toolRunTestsEdges = exports.runTestsEdges = exports.addTestEdges = exports.listFilesDirectoryEdges = exports.listFilesDirectory = exports.runTests = exports.addTests = exports.reviewAndFixErrors = exports.runTestAgain = exports.GraphState = exports.tools = exports.toolNode = void 0;
 exports.callModel = callModel;
 exports.shouldContinue = shouldContinue;
+const messages_1 = __nccwpck_require__(62776);
 const tavily_search_1 = __nccwpck_require__(61396);
 const openai_1 = __nccwpck_require__(92079);
 const prompts_1 = __nccwpck_require__(45425);
 const prebuilt_1 = __nccwpck_require__(95286);
-const coding_assistant_1 = __nccwpck_require__(88100);
-const tools = [
-    new tavily_search_1.TavilySearchResults({ maxResults: 3 }),
-    ...coding_assistant_1.CodeAssistantTools
-];
+// import { CodeAssistantTools } from './coding-assistant'
+const custom_tools_1 = __nccwpck_require__(49542);
+const state_1 = __nccwpck_require__(2462);
+Object.defineProperty(exports, "GraphState", ({ enumerable: true, get: function () { return state_1.GraphState; } }));
+const tools = [new tavily_search_1.TavilySearchResults({ maxResults: 3 }), ...custom_tools_1.CustomTools];
 exports.tools = tools;
 // Define the tools for the agent to use
 const toolNode = new prebuilt_1.ToolNode(tools);
 exports.toolNode = toolNode;
+const llm = new openai_1.ChatOpenAI({
+    model: 'gpt-4o-mini',
+    temperature: 0,
+    verbose: true
+}).bindTools(tools);
+// define edges
+const runTestsEdges = async (state) => {
+    // check last message type
+    const messages = state.messages;
+    const lastMessage = messages[messages.length - 1];
+    // If the LLM makes a tool call, then we route to the "tools" node
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-run-tests';
+    }
+    if (lastMessage instanceof messages_1.ToolMessage) {
+        return 'run-tests';
+    }
+    return '__end__';
+};
+exports.runTestsEdges = runTestsEdges;
+const addTestEdges = async (state) => {
+    // check last message type
+    const messages = state.messages;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-add-tests';
+    }
+    return 'run-tests';
+};
+exports.addTestEdges = addTestEdges;
+const listFilesDirectoryEdges = async (state) => {
+    // check last message type
+    const messages = state.messages;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-list-files';
+    }
+    return 'add-tests';
+};
+exports.listFilesDirectoryEdges = listFilesDirectoryEdges;
+const toolRunTestsEdges = async (state) => {
+    // check last message type
+    const messages = state.messages;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-run-test-again';
+    }
+    return '__end__';
+};
+exports.toolRunTestsEdges = toolRunTestsEdges;
+const toolReviewAndFixErrorsEdges = async (state) => {
+    // check last message type
+    const messages = state.messages;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-review-and-fix-errors';
+    }
+    if (state.iteration > 5) {
+        return '__end__';
+    }
+    return 'run-tests';
+};
+exports.toolReviewAndFixErrorsEdges = toolReviewAndFixErrorsEdges;
+// Nodes
+const listFilesDirectory = async (state) => {
+    const directoryListingTemplate = `You are an expert to analyse the file directory structure.
+        Given a directory path, list all the files in the directory.
+        You have access to the following tools: {tool_names}.
+        Current time: {time}.
+        You should use the tools to interact with the directory.
+        You should return the list of files in the directory.
+        If the directory does not exist, return an error message.
+         {agent_scratchpad}
+        `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
+        ['system', directoryListingTemplate],
+        new prompts_1.MessagesPlaceholder('messages')
+    ]);
+    const formattedPrompt = await prompt.formatMessages({
+        time: new Date().toISOString(),
+        tool_names: tools.map(tool => tool.name).join(', '),
+        messages: state.messages,
+        agent_scratchpad: ''
+    });
+    const res = await llm.invoke(formattedPrompt);
+    console.log('Process listFilesDirectory Message Result', res);
+    return {
+        messages: [...state.messages, res]
+    };
+};
+exports.listFilesDirectory = listFilesDirectory;
+const runTests = async (state) => {
+    const runTestsTemplate = `You are an expert javascript test engineer specializing in test automation.
+        you have following tools Available:
+          - {tool_names}
+          - Current timestamp: {time}
+        Your task is to execute npm tests with coverage option and with json output.
+        Follow the instructions carefully to execute the tests.
+        Example command: npm test --prefix <directory_path> -- --coverage --json
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
+        ['system', runTestsTemplate],
+        new prompts_1.MessagesPlaceholder('messages')
+    ]);
+    const formattedPrompt = await prompt.formatMessages({
+        time: new Date().toISOString(),
+        tool_names: tools.map(tool => tool.name).join(', '),
+        messages: state.messages,
+        agent_scratchpad: ''
+    });
+    const res = await llm.invoke(formattedPrompt);
+    console.log('Process run test Message Result', res);
+    return {
+        messages: [...state.messages, res]
+    };
+};
+exports.runTests = runTests;
+const addTests = async (state) => {
+    const addTestsTemplate = `You are an expert at writing test cases in a javascript/node.js projects.
+  Given a file name and its content, add or update test cases for a React component.
+  
+  Guidelines:
+  1. Read the file content before writing tests.
+  2. Make accurate assertions based on the file content.
+  3. Focus on testing the component's core functionality based on the file content.
+  4. Write tests for:
+     - Component rendering
+     - Props validation
+     - State changes
+     - Side effects
+     - Event handling
+     - Edge cases
+  4. Use appropriate testing libraries (Jest, React Testing Library) and follow existing patterns.
+  5. Follow testing best practices:
+     - Arrange-Act-Assert pattern
+     - Meaningful test descriptions
+     - Isolated tests
+     - Clear assertions
+  
+  Constraints:
+  - Do not write unnecessary import statements which can fail linting
+  - Do not write new tests if they are not required or not related to the task
+  - Do not modify existing tests
+  - Do not write tests if total tests are already more than 10
+  - Do not make assumptions about the file content
+  
+  You have access to the following tools: {tool_names}
+  Current time: {time}
+  {agent_scratchpad}
+`;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
+        ['system', addTestsTemplate],
+        new prompts_1.MessagesPlaceholder('messages')
+    ]);
+    const formattedPrompt = await prompt.formatMessages({
+        time: new Date().toISOString(),
+        tool_names: tools.map(tool => tool.name).join(', '),
+        messages: state.messages,
+        agent_scratchpad: ''
+    });
+    const res = await llm.invoke(formattedPrompt);
+    console.log('Process listFilesDirectory Message Result', res);
+    return {
+        messages: [...state.messages, res]
+    };
+};
+exports.addTests = addTests;
+const reviewAndFixErrors = async (state) => {
+    const reviewAndFixErrorsTemplate = `You are an javascript engineer expert at reviewing code and fixing errors in test cases.
+  Given a set of test cases, code, review and fix any errors or issues in the test cases.
+  you have following tools Available:
+    - {tool_names}
+    - Current timestamp: {time}
+  Your task is to review the code, test cases and fix any issues or errors in the test cases.
+  You should also fix issues like linting errors, syntax errors, and other code quality issues.
+  Follow the instructions carefully to review and fix the test cases.
+`;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
+        ['system', reviewAndFixErrorsTemplate],
+        new prompts_1.MessagesPlaceholder('messages')
+    ]);
+    const formattedPrompt = await prompt.formatMessages({
+        time: new Date().toISOString(),
+        tool_names: tools.map(tool => tool.name).join(', '),
+        messages: state.messages,
+        agent_scratchpad: ''
+    });
+    const res = await llm.invoke(formattedPrompt);
+    console.log('Process reviewAndFixErrors Message Result', res);
+    return {
+        messages: [...state.messages, res],
+        iteration: state.iteration + 1
+    };
+};
+exports.reviewAndFixErrors = reviewAndFixErrors;
+const runTestAgain = async (state) => {
+    const runTestsTemplate = `You are an expert javascript test engineer specializing in test automation.
+      you have following tools Available:
+        - {tool_names}
+        - Current timestamp: {time}
+      Your task is to execute npm tests with coverage option and with json output.
+      Follow the instructions carefully to execute the tests.
+      Example command: npm test --prefix <directory_path> -- --coverage --json
+  `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
+        ['system', runTestsTemplate],
+        new prompts_1.MessagesPlaceholder('messages')
+    ]);
+    const formattedPrompt = await prompt.formatMessages({
+        time: new Date().toISOString(),
+        tool_names: tools.map(tool => tool.name).join(', '),
+        messages: state.messages,
+        agent_scratchpad: ''
+    });
+    const res = await llm.invoke(formattedPrompt);
+    console.log('Process listFilesDirectory Message Result', res);
+    return {
+        messages: [...state.messages, res]
+    };
+};
+exports.runTestAgain = runTestAgain;
 // Define the function that calls the model
 async function callModel(state) {
     /**
@@ -46899,6 +47233,38 @@ async function SampleRun() {
             core.setFailed(error.message);
     }
 }
+
+
+/***/ }),
+
+/***/ 2462:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GraphState = void 0;
+const langgraph_1 = __nccwpck_require__(39405);
+// Define the graph state
+exports.GraphState = langgraph_1.Annotation.Root({
+    messages: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => x.concat(y),
+        default: () => []
+    }),
+    next: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => 'supervisor'
+    }),
+    instructions: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => "Solve the human's question."
+    }),
+    iteration: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => 0
+    }),
+    hasError: (0, langgraph_1.Annotation)({ reducer: z => z, default: () => false })
+});
 
 
 /***/ }),

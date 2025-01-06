@@ -44,4 +44,39 @@ export async function run(): Promise<void> {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message)
   }
+
+  // Commit changes if there are any
+  try {
+    core.info('Checking for changes...')
+    let diffOutput = ''
+    await exec.exec('git', ['diff', '--name-only'], {
+      listeners: {
+        stdout: (data: Buffer) => {
+          diffOutput += data.toString()
+        }
+      }
+    })
+
+    if (diffOutput.trim()) {
+      core.info('Changes detected, committing...')
+      await exec.exec('git', ['config', 'user.name', 'github-actions'])
+      await exec.exec('git', [
+        'config',
+        'user.email',
+        'github-actions@github.com'
+      ])
+      await exec.exec('git', ['add', '.'])
+      await exec.exec('git', [
+        'commit',
+        '-m',
+        'Automated commit by GitHub Actions'
+      ])
+      await exec.exec('git', ['push'])
+      core.info('Changes committed and pushed.')
+    } else {
+      core.info('No changes detected, skipping commit.')
+    }
+  } catch (error) {
+    core.warning(`Failed to commit changes: ${error}`)
+  }
 }
