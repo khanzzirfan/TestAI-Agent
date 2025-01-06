@@ -160,18 +160,5 @@ export const CustomTools = [
       const data = fs.readFileSync(path, 'utf-8')
       return data
     }
-  }),
-
-  // File system tool
-  new DynamicStructuredTool({
-    name: 'delete-file',
-    description:
-      "call this tool to delete file on user's machine. Provide file name as input.",
-    schema: z.object({ path: z.string().describe('path to the file') }),
-    func: async ({ path }) => {
-      if (!path) return 'No input provided'
-      fs.unlinkSync(path)
-      return `File ${path} deleted successfully`
-    }
   })
 ]
