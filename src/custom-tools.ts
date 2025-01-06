@@ -71,6 +71,10 @@ export const CustomTools = [
         if (stderr) {
           return `Error: ${stderr}`
         }
+
+        // async wait for few seconds to get the output
+        await new Promise(resolve => setTimeout(resolve, 3000))
+
         return stdout
       } catch (error: any) {
         return `Execution failed: ${error.message}`

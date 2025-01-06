@@ -12,13 +12,15 @@ import { SampleRun } from './sample-run'
 export async function run(): Promise<void> {
   try {
     /** Sample Run code */
-    await SampleRun()
+    /// await SampleRun()
     /** Sample code to run */
     const ms: string = core.getInput('milliseconds')
+    const filename: string = core.getInput('file_name')
 
     // The `who-to-greet` input is defined in action metadata file
     const whoToGreet = core.getInput('who-to-greet', { required: false })
     core.info(`Hello, ${whoToGreet}!`)
+    core.info(`The file name is ${filename}`)
 
     // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
     core.debug(`Waiting ${ms} milliseconds ...`)

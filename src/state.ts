@@ -7,14 +7,6 @@ export const GraphState = Annotation.Root({
     reducer: (x, y) => x.concat(y),
     default: () => []
   }),
-  next: Annotation<string>({
-    reducer: (x, y) => y ?? x,
-    default: () => 'supervisor'
-  }),
-  instructions: Annotation<string>({
-    reducer: (x, y) => y ?? x,
-    default: () => "Solve the human's question."
-  }),
   iteration: Annotation<number>({
     reducer: z => z,
     default: () => 0

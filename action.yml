@@ -17,6 +17,10 @@ inputs:
   repo_token:
     description: 'Repository token'
     required: true
+  ## file name input
+  file_name:
+    description: 'File name'
+    required: true
 
 # Define your outputs here.
 outputs:
