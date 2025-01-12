@@ -53,6 +53,7 @@ const workflow = new StateGraph(GraphState)
   .addConditionalEdges('tools-write-tests', saveTestsEdges) // Route back through save flow
   .addConditionalEdges('run-tests', runTestsEdges)
   .addConditionalEdges('fix-errors', fixErrorsEdges)
+  .addConditionalEdges('tools-list-files', listFilesDirectoryEdges)
   .addConditionalEdges('tools-check-file', checkFileExistsEdges)
   .addConditionalEdges('tools-check-test-file', checkTestFileEdges)
   .addConditionalEdges('tools-run-tests', runTestsEdges)

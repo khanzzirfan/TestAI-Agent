@@ -232,7 +232,7 @@ const fixErrorsEdges = async (state: typeof GraphState.State) => {
 
 const listFilesDirectory = async (state: typeof GraphState.State) => {
   const directoryListingTemplate = `You are an expert to analyse the file directory structure.
-        Given a directory path, list all the files in the directory.
+        list all the files in the current directory.
         You have access to the following tools: {tool_names}.
         Current time: {time}.
         You should use the tools to interact with the directory.
@@ -240,7 +240,6 @@ const listFilesDirectory = async (state: typeof GraphState.State) => {
         If the directory does not exist, return an error message.
          {agent_scratchpad}
         `
-
   const prompt = ChatPromptTemplate.fromMessages([
     ['system', directoryListingTemplate],
     new MessagesPlaceholder('messages')
