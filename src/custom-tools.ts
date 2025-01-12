@@ -566,7 +566,9 @@ export const checkFileTool = tool(
           try {
             return {
               path: location.path,
-              content: fs.readFileSync(location.path, { encoding: encoding as BufferEncoding })
+              content: fs.readFileSync(location.path, {
+                encoding: encoding as BufferEncoding
+              })
             }
           } catch (err) {
             return {
