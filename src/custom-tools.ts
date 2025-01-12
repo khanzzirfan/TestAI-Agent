@@ -557,7 +557,11 @@ export const checkFileTool = tool(
     runManager: any
   ) => {
     try {
-      const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd()
+      const searchRootEx =
+        searchRoot && searchRoot === '.' ? process.cwd() : searchRoot
+      const rootDir = searchRootEx
+        ? validateFilePath(searchRootEx)
+        : process.cwd()
       const fileName = path.basename(filePath)
 
       // Find all matching files and get their content
@@ -655,9 +659,13 @@ export const findTestFileTool = tool(
     runManager: any
   ) => {
     try {
+      const searchRootEx =
+        searchRoot && searchRoot === '.' ? process.cwd() : searchRoot
       // Get the file name without extension to search for test files
       const sourceFileName = path.basename(sourcePath, path.extname(sourcePath))
-      const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd()
+      const rootDir = searchRootEx
+        ? validateFilePath(searchRootEx)
+        : process.cwd()
 
       // Function to check if a file is a test file for our source
       const isMatchingTestFile = (fileName: string): boolean => {

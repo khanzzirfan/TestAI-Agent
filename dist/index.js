@@ -42639,7 +42639,10 @@ exports.CustomTools = [
 ];
 exports.checkFileTool = (0, tools_1.tool)(async ({ path: filePath, searchRoot, excludeDirs = DEFAULT_EXCLUDE_DIRS, encoding = 'utf8' }, runManager) => {
     try {
-        const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+        const searchRootEx = searchRoot && searchRoot === '.' ? process.cwd() : searchRoot;
+        const rootDir = searchRootEx
+            ? validateFilePath(searchRootEx)
+            : process.cwd();
         const fileName = path_1.default.basename(filePath);
         // Find all matching files and get their content
         const results = findFileRecursively(rootDir, fileName, excludeDirs).map((location) => {
@@ -42714,9 +42717,12 @@ exports.checkFileTool = (0, tools_1.tool)(async ({ path: filePath, searchRoot, e
 });
 exports.findTestFileTool = (0, tools_1.tool)(async ({ sourcePath, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts'], searchRoot }, runManager) => {
     try {
+        const searchRootEx = searchRoot && searchRoot === '.' ? process.cwd() : searchRoot;
         // Get the file name without extension to search for test files
         const sourceFileName = path_1.default.basename(sourcePath, path_1.default.extname(sourcePath));
-        const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+        const rootDir = searchRootEx
+            ? validateFilePath(searchRootEx)
+            : process.cwd();
         // Function to check if a file is a test file for our source
         const isMatchingTestFile = (fileName) => {
             return extensions.some(ext => fileName === `${sourceFileName}${ext}` ||
@@ -42829,7 +42835,7 @@ const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
     .addNode('fix-errors', nodes_1.fixErrors)
     .addNode('tools-fix-errors', nodes_1.toolExecutor)
     // Add edges with fixed flow
-    .addEdge('__start__', 'check-file')
+    .addEdge('__start__', 'list-files')
     .addConditionalEdges('list-files', nodes_1.listFilesDirectoryEdges)
     .addConditionalEdges('check-file', nodes_1.checkFileExistsEdges)
     .addConditionalEdges('check-test-file', nodes_1.checkTestFileEdges)
@@ -43092,6 +43098,7 @@ const toolExecutor = async (state) => {
         };
     }, { fileContent: null, filePath: null, messages: [] });
     const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
+    console.log('Tool Executor State Updates', JSON.stringify(stateUpdateReducer));
     // Combine all state updates
     return {
         ...state,

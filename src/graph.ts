@@ -43,7 +43,7 @@ const workflow = new StateGraph(GraphState)
   .addNode('tools-fix-errors', toolExecutor)
 
   // Add edges with fixed flow
-  .addEdge('__start__', 'check-file')
+  .addEdge('__start__', 'list-files')
   .addConditionalEdges('list-files', listFilesDirectoryEdges)
   .addConditionalEdges('check-file', checkFileExistsEdges)
   .addConditionalEdges('check-test-file', checkTestFileEdges)

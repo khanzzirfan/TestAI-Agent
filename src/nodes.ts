@@ -140,6 +140,8 @@ const toolExecutor = async (state: typeof GraphState.State) => {
 
   const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer
 
+  console.log('Tool Executor State Updates', JSON.stringify(stateUpdateReducer))
+
   // Combine all state updates
   return {
     ...state,
