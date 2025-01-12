@@ -149,6 +149,16 @@ const toolExecutor = async (state: typeof GraphState.State) => {
 }
 
 // Edge definitions
+const listFilesDirectoryEdges = async (state: typeof GraphState.State) => {
+  // check last message type
+  const messages = state.messages
+  const lastMessage = messages[messages.length - 1] as AIMessage
+  if (lastMessage.tool_calls?.length) {
+    return 'tools-list-files'
+  }
+  return 'check-file'
+}
+
 const checkFileExistsEdges = async (state: typeof GraphState.State) => {
   const lastMessage = state.messages[state.messages.length - 1]
   if (lastMessage.tool_calls?.length) {
@@ -217,6 +227,37 @@ const fixErrorsEdges = async (state: typeof GraphState.State) => {
 // Nodes
 
 // Node definitions
+
+const listFilesDirectory = async (state: typeof GraphState.State) => {
+  const directoryListingTemplate = `You are an expert to analyse the file directory structure.
+        Given a directory path, list all the files in the directory.
+        You have access to the following tools: {tool_names}.
+        Current time: {time}.
+        You should use the tools to interact with the directory.
+        You should return the list of files in the directory.
+        If the directory does not exist, return an error message.
+         {agent_scratchpad}
+        `
+
+  const prompt = ChatPromptTemplate.fromMessages([
+    ['system', directoryListingTemplate],
+    new MessagesPlaceholder('messages')
+  ])
+
+  const formattedPrompt = await prompt.formatMessages({
+    time: new Date().toISOString(),
+    tool_names: tools.map(tool => tool.name).join(', '),
+    messages: state.messages,
+    agent_scratchpad: ''
+  })
+
+  const res = await model.invoke(formattedPrompt)
+  console.log('Process listFilesDirectory Message Result', res)
+  return {
+    messages: [...state.messages, res]
+  }
+}
+
 const checkFileExists = async (state: typeof GraphState.State) => {
   const template = `You are a code assistant checking for the existence of a source file.
     Given the filename {fileName}, verify it exists in the codebase.
@@ -436,5 +477,7 @@ export {
   readExistingTestEdges,
   saveTestsEdges,
   runTestsEdges,
-  fixErrorsEdges
+  fixErrorsEdges,
+  listFilesDirectory,
+  listFilesDirectoryEdges
 }

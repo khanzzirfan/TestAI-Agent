@@ -42814,6 +42814,8 @@ const nodes_1 = __nccwpck_require__(89505);
 // Create and compile the graph
 const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
     // Add nodes
+    .addNode('list-files', nodes_1.listFilesDirectory)
+    .addNode('tools-list-files', nodes_1.toolNode)
     .addNode('check-file', nodes_1.checkFileExists)
     .addNode('tools-check-file', nodes_1.toolExecutor)
     .addNode('check-test-file', nodes_1.checkTestFile)
@@ -42828,6 +42830,7 @@ const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
     .addNode('tools-fix-errors', nodes_1.toolExecutor)
     // Add edges with fixed flow
     .addEdge('__start__', 'check-file')
+    .addConditionalEdges('list-files', nodes_1.listFilesDirectoryEdges)
     .addConditionalEdges('check-file', nodes_1.checkFileExistsEdges)
     .addConditionalEdges('check-test-file', nodes_1.checkTestFileEdges)
     .addConditionalEdges('create-new-tests', nodes_1.writeTestsEdges)
@@ -42974,7 +42977,7 @@ async function run() {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.fixErrorsEdges = exports.runTestsEdges = exports.saveTestsEdges = exports.readExistingTestEdges = exports.writeTestsEdges = exports.checkTestFileEdges = exports.checkFileExistsEdges = exports.toolExecutor = exports.fixErrors = exports.saveTests = exports.readExistingTests = exports.createNewTests = exports.checkTestFile = exports.checkFileExists = exports.runTests = exports.GraphState = exports.tools = exports.toolNode = void 0;
+exports.listFilesDirectoryEdges = exports.listFilesDirectory = exports.fixErrorsEdges = exports.runTestsEdges = exports.saveTestsEdges = exports.readExistingTestEdges = exports.writeTestsEdges = exports.checkTestFileEdges = exports.checkFileExistsEdges = exports.toolExecutor = exports.fixErrors = exports.saveTests = exports.readExistingTests = exports.createNewTests = exports.checkTestFile = exports.checkFileExists = exports.runTests = exports.GraphState = exports.tools = exports.toolNode = void 0;
 const messages_1 = __nccwpck_require__(62776);
 const tavily_search_1 = __nccwpck_require__(61396);
 const openai_1 = __nccwpck_require__(92079);
@@ -43098,6 +43101,16 @@ const toolExecutor = async (state) => {
 };
 exports.toolExecutor = toolExecutor;
 // Edge definitions
+const listFilesDirectoryEdges = async (state) => {
+    // check last message type
+    const messages = state.messages;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-list-files';
+    }
+    return 'check-file';
+};
+exports.listFilesDirectoryEdges = listFilesDirectoryEdges;
 const checkFileExistsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
@@ -43164,6 +43177,33 @@ const fixErrorsEdges = async (state) => {
 exports.fixErrorsEdges = fixErrorsEdges;
 // Nodes
 // Node definitions
+const listFilesDirectory = async (state) => {
+    const directoryListingTemplate = `You are an expert to analyse the file directory structure.
+        Given a directory path, list all the files in the directory.
+        You have access to the following tools: {tool_names}.
+        Current time: {time}.
+        You should use the tools to interact with the directory.
+        You should return the list of files in the directory.
+        If the directory does not exist, return an error message.
+         {agent_scratchpad}
+        `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
+        ['system', directoryListingTemplate],
+        new prompts_1.MessagesPlaceholder('messages')
+    ]);
+    const formattedPrompt = await prompt.formatMessages({
+        time: new Date().toISOString(),
+        tool_names: tools.map(tool => tool.name).join(', '),
+        messages: state.messages,
+        agent_scratchpad: ''
+    });
+    const res = await model.invoke(formattedPrompt);
+    console.log('Process listFilesDirectory Message Result', res);
+    return {
+        messages: [...state.messages, res]
+    };
+};
+exports.listFilesDirectory = listFilesDirectory;
 const checkFileExists = async (state) => {
     const template = `You are a code assistant checking for the existence of a source file.
     Given the filename {fileName}, verify it exists in the codebase.
