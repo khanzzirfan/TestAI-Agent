@@ -478,12 +478,17 @@ export const CustomTools = [
       }
     }
   }),
+
   // Enhanced read file tool with Command
   new DynamicStructuredTool({
     name: 'read-file',
     description: 'Reads file content with encoding options and metadata',
     schema: z.object({
-      path: z.string().describe('path to the file'),
+      path: z
+        .string()
+        .describe(
+          'path to the file, but not the file name. Must be a valid path. Mutually exclusive with fileName'
+        ),
       encoding: z.string().optional().describe('file encoding'),
       includeMetadata: z.boolean().optional().describe('include file metadata')
     }),
@@ -544,88 +549,9 @@ export const CustomTools = [
         }
       }
     }
-  })
-]
-
-export const checkFileTool = tool(
-  async (
-    {
-      path: filePath,
-      searchRoot,
-      excludeDirs = DEFAULT_EXCLUDE_DIRS,
-      encoding = 'utf8'
-    }: {
-      path: string
-      searchRoot?: string
-      excludeDirs?: string[]
-      encoding?: string
-    },
-    runManager: any
-  ) => {
-    try {
-      const searchRootEx = process.cwd()
-      const rootDir = searchRootEx
-        ? validateFilePath(searchRootEx)
-        : process.cwd()
-      const fileName = path.basename(filePath)
-
-      // Find all matching files and get their content
-      const results = findFileRecursively(rootDir, fileName, excludeDirs).map(
-        (location: any) => {
-          try {
-            return {
-              path: location.path,
-              content: fs.readFileSync(location.path, {
-                encoding: encoding as BufferEncoding
-              })
-            }
-          } catch (err) {
-            return {
-              path: location.path,
-              content: null
-            }
-          }
-        }
-      )
-
-      const result =
-        results.length === 0
-          ? {
-              exists: false,
-              message: 'File not found'
-            }
-          : {
-              exists: true,
-              files: results,
-              message: 'Files found'
-            }
-
-      return {
-        fileContent: result.files?.map((f: any) => f.content).join('\n'),
-        filePath: result.files?.map((f: any) => f.path).join('\n'),
-        messages: [
-          new ToolMessage({
-            content: result.message,
-            tool_call_id: runManager?.toolCall?.id
-          })
-        ]
-      }
-    } catch (error: any) {
-      return {
-        file_check: {
-          exists: false,
-          error: error.message
-        },
-        messages: [
-          new ToolMessage({
-            content: `Error: ${error.message}`,
-            tool_call_id: runManager?.toolCall?.id
-          })
-        ]
-      }
-    }
-  },
-  {
+  }),
+  // Enhanced read file tool with Command
+  new DynamicStructuredTool({
     name: 'check-file',
     description: 'Recursively searches for a file and returns its content',
     schema: z.object({
@@ -644,106 +570,87 @@ export const checkFileTool = tool(
         .string()
         .optional()
         .describe('encoding to use when reading file content')
-    })
-  }
-)
-interface TestFileResult {
-  path: string
-  content: string
-}
+    }),
+    func: async (
+      {
+        path: filePath,
+        searchRoot,
+        excludeDirs = DEFAULT_EXCLUDE_DIRS,
+        encoding = 'utf8'
+      }: {
+        path: string
+        searchRoot?: string
+        excludeDirs?: string[]
+        encoding?: string
+      },
+      runManager: any
+    ) => {
+      try {
+        const searchRootEx = process.cwd()
+        const rootDir = searchRootEx
+          ? validateFilePath(searchRootEx)
+          : process.cwd()
+        const fileName = path.basename(filePath)
 
-export const findTestFileTool = tool(
-  async (
-    {
-      sourcePath,
-      extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts'],
-      searchRoot
-    }: {
-      sourcePath: string
-      extensions?: string[]
-      searchRoot?: string
-    },
-    runManager: any
-  ) => {
-    try {
-      const searchRootEx = process.cwd()
-      // searchRoot && searchRoot === '.' ? process.cwd() : searchRoot
-      // Get the file name without extension to search for test files
-      const sourceFileName = path.basename(sourcePath, path.extname(sourcePath))
-      const rootDir = searchRootEx
-        ? validateFilePath(searchRootEx)
-        : process.cwd()
-
-      // Function to check if a file is a test file for our source
-      const isMatchingTestFile = (fileName: string): boolean => {
-        return extensions.some(
-          ext =>
-            fileName === `${sourceFileName}${ext}` ||
-            fileName.endsWith(`/${sourceFileName}${ext}`)
-        )
-      }
-
-      // Find matching test file recursively
-      const findTestFile = (dir: string): TestFileResult | null => {
-        let result: TestFileResult | null = null
-        const search = (currentDir: string) => {
-          if (result) return // Stop if we found a match
-
-          const files = fs.readdirSync(currentDir)
-          for (const file of files) {
-            if (result) break // Stop if we found a match
-
-            const filePath = path.join(currentDir, file)
-            const stat = fs.statSync(filePath)
-
-            if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
-              search(filePath) // Recurse into subdirectories
-            } else if (isMatchingTestFile(file)) {
-              try {
-                const content = fs.readFileSync(filePath, 'utf8')
-                result = {
-                  path: filePath,
-                  content: content
-                }
-                break
-              } catch (err) {
-                console.warn(`Could not read file: ${filePath}`)
+        // Find all matching files and get their content
+        const results = findFileRecursively(rootDir, fileName, excludeDirs).map(
+          (location: any) => {
+            try {
+              return {
+                path: location.path,
+                content: fs.readFileSync(location.path, {
+                  encoding: encoding as BufferEncoding
+                })
+              }
+            } catch (err) {
+              return {
+                path: location.path,
+                content: null
               }
             }
           }
+        )
+
+        const result =
+          results.length === 0
+            ? {
+                exists: false,
+                message: 'File not found'
+              }
+            : {
+                exists: true,
+                files: results,
+                message: 'Files found'
+              }
+
+        return {
+          fileContent: result.files?.map((f: any) => f.content).join('\n'),
+          filePath: result.files?.map((f: any) => f.path).join('\n'),
+          messages: [
+            new ToolMessage({
+              content: result.message,
+              tool_call_id: runManager?.toolCall?.id
+            })
+          ]
         }
-
-        search(dir)
-        return result
-      }
-
-      const testFile = findTestFile(rootDir)
-
-      return {
-        testFileContent: testFile ? testFile.content : null,
-        testFilePath: testFile ? testFile.path : null,
-        messages: [
-          new ToolMessage({
-            content: testFile
-              ? `Found test file: ${testFile.path}`
-              : `No test file found for ${sourceFileName}`,
-            tool_call_id: runManager?.toolCall?.id
-          })
-        ]
-      }
-    } catch (error: any) {
-      return {
-        testFileContent: null,
-        messages: [
-          new ToolMessage({
-            content: `Error finding test file: ${error.message}`,
-            tool_call_id: runManager?.toolCall?.id
-          })
-        ]
+      } catch (error: any) {
+        return {
+          file_check: {
+            exists: false,
+            error: error.message
+          },
+          messages: [
+            new ToolMessage({
+              content: `Error: ${error.message}`,
+              tool_call_id: runManager?.toolCall?.id
+            })
+          ]
+        }
       }
     }
-  },
-  {
+  }),
+  // Enhanced read file tool with Command
+  new DynamicStructuredTool({
     name: 'find-test-file',
     description: 'Recursively finds and reads corresponding test file content',
     schema: z.object({
@@ -758,6 +665,104 @@ export const findTestFileTool = tool(
         .describe(
           'root directory to start search from. Default is project root. Example value: /'
         )
-    })
-  }
-)
+    }),
+    func: async (
+      {
+        sourcePath,
+        extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts'],
+        searchRoot
+      }: {
+        sourcePath: string
+        extensions?: string[]
+        searchRoot?: string
+      },
+      runManager: any
+    ) => {
+      try {
+        const searchRootEx = process.cwd()
+        // searchRoot && searchRoot === '.' ? process.cwd() : searchRoot
+        // Get the file name without extension to search for test files
+        const sourceFileName = path.basename(
+          sourcePath,
+          path.extname(sourcePath)
+        )
+        const rootDir = searchRootEx
+          ? validateFilePath(searchRootEx)
+          : process.cwd()
+
+        // Function to check if a file is a test file for our source
+        const isMatchingTestFile = (fileName: string): boolean => {
+          return extensions.some(
+            ext =>
+              fileName === `${sourceFileName}${ext}` ||
+              fileName.endsWith(`/${sourceFileName}${ext}`)
+          )
+        }
+
+        // Find matching test file recursively
+        const findTestFile = (dir: string): TestFileResult | null => {
+          let result: TestFileResult | null = null
+          const search = (currentDir: string) => {
+            if (result) return // Stop if we found a match
+
+            const files = fs.readdirSync(currentDir)
+            for (const file of files) {
+              if (result) break // Stop if we found a match
+
+              const filePath = path.join(currentDir, file)
+              const stat = fs.statSync(filePath)
+
+              if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
+                search(filePath) // Recurse into subdirectories
+              } else if (isMatchingTestFile(file)) {
+                try {
+                  const content = fs.readFileSync(filePath, 'utf8')
+                  result = {
+                    path: filePath,
+                    content: content
+                  }
+                  break
+                } catch (err) {
+                  console.warn(`Could not read file: ${filePath}`)
+                }
+              }
+            }
+          }
+
+          search(dir)
+          return result
+        }
+
+        const testFile = findTestFile(rootDir)
+
+        return {
+          testFileContent: testFile ? testFile.content : null,
+          testFilePath: testFile ? testFile.path : null,
+          messages: [
+            new ToolMessage({
+              content: testFile
+                ? `Found test file: ${testFile.path}`
+                : `No test file found for ${sourceFileName}`,
+              tool_call_id: runManager?.toolCall?.id
+            })
+          ]
+        }
+      } catch (error: any) {
+        return {
+          testFileContent: null,
+          messages: [
+            new ToolMessage({
+              content: `Error finding test file: ${error.message}`,
+              tool_call_id: runManager?.toolCall?.id
+            })
+          ]
+        }
+      }
+    }
+  })
+]
+
+interface TestFileResult {
+  path: string
+  content: string
+}

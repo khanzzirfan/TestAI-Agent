@@ -13,16 +13,11 @@ import {
 import { MessagesAnnotation, StateGraph, isCommand } from '@langchain/langgraph'
 import { ToolNode } from '@langchain/langgraph/prebuilt'
 // import { CodeAssistantTools } from './coding-assistant'
-import { CustomTools, findTestFileTool, checkFileTool } from './custom-tools'
+import { CustomTools } from './custom-tools'
 import { GraphState } from './state'
 import { isAIMessage } from '@langchain/core/messages'
 
-const tools = [
-  new TavilySearchResults({ maxResults: 3 }),
-  ...CustomTools,
-  findTestFileTool,
-  checkFileTool
-]
+const tools = [new TavilySearchResults({ maxResults: 3 }), ...CustomTools]
 
 // Define the tools for the agent to use
 const toolNode = new ToolNode(tools)
