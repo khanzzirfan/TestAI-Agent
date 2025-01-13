@@ -42477,7 +42477,9 @@ exports.CustomTools = [
         name: 'write-file',
         description: 'Writes content to a file with backup and validation options',
         schema: zod_1.z.object({
-            path: zod_1.z.string().describe('path to the file'),
+            path: zod_1.z
+                .string()
+                .describe('path to the file, but excluding the file name'),
             fileName: zod_1.z.string().describe('name of the file'),
             content: zod_1.z.string().describe('content to write'),
             createBackup: zod_1.z
@@ -42491,7 +42493,9 @@ exports.CustomTools = [
         }),
         func: async ({ path: dirPath, fileName, content, createBackup = false, appendContent = false }, runManager) => {
             try {
-                const fullPath = path_1.default.join(dirPath, fileName);
+                const normalizedPath = path_1.default.normalize(dirPath);
+                const directoryPath = path_1.default.dirname(normalizedPath);
+                const fullPath = path_1.default.join(directoryPath, fileName);
                 validateFilePath(fullPath);
                 // Create backup if requested and file exists
                 if (createBackup && fs_1.default.existsSync(fullPath)) {

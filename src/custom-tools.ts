@@ -331,7 +331,9 @@ export const CustomTools = [
     name: 'write-file',
     description: 'Writes content to a file with backup and validation options',
     schema: z.object({
-      path: z.string().describe('path to the file'),
+      path: z
+        .string()
+        .describe('path to the file, but excluding the file name'),
       fileName: z.string().describe('name of the file'),
       content: z.string().describe('content to write'),
       createBackup: z
@@ -360,7 +362,9 @@ export const CustomTools = [
       runManager: any
     ) => {
       try {
-        const fullPath = path.join(dirPath, fileName)
+        const normalizedPath = path.normalize(dirPath)
+        const directoryPath = path.dirname(normalizedPath)
+        const fullPath = path.join(directoryPath, fileName)
         validateFilePath(fullPath)
 
         // Create backup if requested and file exists
