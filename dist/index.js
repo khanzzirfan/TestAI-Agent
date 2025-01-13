@@ -42845,6 +42845,7 @@ const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
     .addConditionalEdges('tools-write-tests', nodes_1.saveTestsEdges) // Route back through save flow
     .addConditionalEdges('run-tests', nodes_1.runTestsEdges)
     .addConditionalEdges('fix-errors', nodes_1.fixErrorsEdges)
+    .addConditionalEdges('tools-list-files', nodes_1.listFilesDirectoryEdges)
     .addConditionalEdges('tools-check-file', nodes_1.checkFileExistsEdges)
     .addConditionalEdges('tools-check-test-file', nodes_1.checkTestFileEdges)
     .addConditionalEdges('tools-run-tests', nodes_1.runTestsEdges)
@@ -43186,7 +43187,7 @@ exports.fixErrorsEdges = fixErrorsEdges;
 // Node definitions
 const listFilesDirectory = async (state) => {
     const directoryListingTemplate = `You are an expert to analyse the file directory structure.
-        Given a directory path, list all the files in the directory.
+        list all the files in the current directory.
         You have access to the following tools: {tool_names}.
         Current time: {time}.
         You should use the tools to interact with the directory.
