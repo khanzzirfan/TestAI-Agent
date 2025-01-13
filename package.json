@@ -1,7 +1,7 @@
 {
   "name": "testifyai-agent",
   "description": "GitHub Actions for TestifyAI. This action is used to generate codegaurd to TestifyAI tests.",
-  "version": "v0.1.36",
+  "version": "v0.1.37",
   "author": "khanzzirfan",
   "private": true,
   "homepage": "https://github.com/khanzzirfan/TestAI-Agent.git",
@@ -69,10 +69,12 @@
   "dependencies": {
     "@actions/core": "^1.11.1",
     "@actions/github": "^6.0.0",
-    "@langchain/community": "^0.3.22",
+    "@langchain/azure-openai": "^0.0.11",
+    "@langchain/community": "^0.3.23",
+    "@langchain/openai": "^0.3.16",
     "@langchain/core": "^0.3.27",
     "@langchain/langgraph": "^0.2.39",
-    "@langchain/openai": "^0.3.2",
+    "langchain": "^0.3.10",
     "dotenv": "^16.4.7",
     "langsmith": "^0.1.55",
     "zod": "^3.23.8",

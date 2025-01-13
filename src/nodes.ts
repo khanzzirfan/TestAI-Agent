@@ -158,6 +158,7 @@ const listFilesDirectoryEdges = async (state: typeof GraphState.State) => {
 
 const checkFileExistsEdges = async (state: typeof GraphState.State) => {
   const lastMessage = state.messages[state.messages.length - 1]
+  console.log('checkFileExistsEdges -> state', JSON.stringify(state))
   if (lastMessage.tool_calls?.length) {
     return 'tools-check-file'
   }
@@ -166,6 +167,7 @@ const checkFileExistsEdges = async (state: typeof GraphState.State) => {
 
 const checkTestFileEdges = async (state: typeof GraphState.State) => {
   const lastMessage = state.messages[state.messages.length - 1]
+  console.log('checkTestFileEdges -> state', JSON.stringify(state))
   if (lastMessage.tool_calls?.length) {
     return 'tools-check-test-file'
   }
@@ -176,6 +178,7 @@ const checkTestFileEdges = async (state: typeof GraphState.State) => {
 
 const writeTestsEdges = async (state: typeof GraphState.State) => {
   const lastMessage = state.messages[state.messages.length - 1]
+  console.log('writeTestsEdges -> state', JSON.stringify(state))
   if (lastMessage.tool_calls?.length) {
     return 'tools-write-tests'
   }
@@ -184,6 +187,7 @@ const writeTestsEdges = async (state: typeof GraphState.State) => {
 
 const readExistingTestEdges = async (state: typeof GraphState.State) => {
   const lastMessage = state.messages[state.messages.length - 1]
+  console.log('readExistingTestEdges -> state', JSON.stringify(state))
   if (lastMessage.tool_calls?.length) {
     return 'tools-write-tests'
   }
