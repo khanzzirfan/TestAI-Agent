@@ -42327,6 +42327,11 @@ const validateFilePath = (filePath) => {
     }
     return absolutePath;
 };
+const getRelativePathFromCwd = (filePath) => {
+    const absolutePath = validateFilePath(filePath);
+    const projectRoot = process.cwd();
+    return path_1.default.relative(projectRoot, absolutePath);
+};
 exports.CustomTools = [
     new tools_1.DynamicStructuredTool({
         name: 'npm-test',
@@ -42639,7 +42644,7 @@ exports.CustomTools = [
 ];
 exports.checkFileTool = (0, tools_1.tool)(async ({ path: filePath, searchRoot, excludeDirs = DEFAULT_EXCLUDE_DIRS, encoding = 'utf8' }, runManager) => {
     try {
-        const searchRootEx = searchRoot && searchRoot === '.' ? process.cwd() : searchRoot;
+        const searchRootEx = process.cwd();
         const rootDir = searchRootEx
             ? validateFilePath(searchRootEx)
             : process.cwd();
@@ -42704,7 +42709,7 @@ exports.checkFileTool = (0, tools_1.tool)(async ({ path: filePath, searchRoot, e
         searchRoot: zod_1.z
             .string()
             .optional()
-            .describe('root directory to start search from'),
+            .describe('root directory to start search from. Only include valid search paths'),
         excludeDirs: zod_1.z
             .array(zod_1.z.string())
             .optional()
@@ -42717,7 +42722,8 @@ exports.checkFileTool = (0, tools_1.tool)(async ({ path: filePath, searchRoot, e
 });
 exports.findTestFileTool = (0, tools_1.tool)(async ({ sourcePath, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts'], searchRoot }, runManager) => {
     try {
-        const searchRootEx = searchRoot && searchRoot === '.' ? process.cwd() : searchRoot;
+        const searchRootEx = process.cwd();
+        // searchRoot && searchRoot === '.' ? process.cwd() : searchRoot
         // Get the file name without extension to search for test files
         const sourceFileName = path_1.default.basename(sourcePath, path_1.default.extname(sourcePath));
         const rootDir = searchRootEx
@@ -42798,7 +42804,7 @@ exports.findTestFileTool = (0, tools_1.tool)(async ({ sourcePath, extensions = [
         searchRoot: zod_1.z
             .string()
             .optional()
-            .describe('root directory to start search from')
+            .describe('root directory to start search from. Default is project root. Example value: /')
     })
 });
 
@@ -42820,8 +42826,6 @@ const nodes_1 = __nccwpck_require__(89505);
 // Create and compile the graph
 const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
     // Add nodes
-    .addNode('list-files', nodes_1.listFilesDirectory)
-    .addNode('tools-list-files', nodes_1.toolNode)
     .addNode('check-file', nodes_1.checkFileExists)
     .addNode('tools-check-file', nodes_1.toolExecutor)
     .addNode('check-test-file', nodes_1.checkTestFile)
@@ -42835,8 +42839,7 @@ const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
     .addNode('fix-errors', nodes_1.fixErrors)
     .addNode('tools-fix-errors', nodes_1.toolExecutor)
     // Add edges with fixed flow
-    .addEdge('__start__', 'list-files')
-    .addConditionalEdges('list-files', nodes_1.listFilesDirectoryEdges)
+    .addEdge('__start__', 'check-file')
     .addConditionalEdges('check-file', nodes_1.checkFileExistsEdges)
     .addConditionalEdges('check-test-file', nodes_1.checkTestFileEdges)
     .addConditionalEdges('create-new-tests', nodes_1.writeTestsEdges)
@@ -42845,7 +42848,6 @@ const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
     .addConditionalEdges('tools-write-tests', nodes_1.saveTestsEdges) // Route back through save flow
     .addConditionalEdges('run-tests', nodes_1.runTestsEdges)
     .addConditionalEdges('fix-errors', nodes_1.fixErrorsEdges)
-    .addConditionalEdges('tools-list-files', nodes_1.listFilesDirectoryEdges)
     .addConditionalEdges('tools-check-file', nodes_1.checkFileExistsEdges)
     .addConditionalEdges('tools-check-test-file', nodes_1.checkTestFileEdges)
     .addConditionalEdges('tools-run-tests', nodes_1.runTestsEdges)

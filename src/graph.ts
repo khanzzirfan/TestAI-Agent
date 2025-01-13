@@ -27,8 +27,6 @@ import {
 // Create and compile the graph
 const workflow = new StateGraph(GraphState)
   // Add nodes
-  .addNode('list-files', listFilesDirectory)
-  .addNode('tools-list-files', toolNode)
   .addNode('check-file', checkFileExists)
   .addNode('tools-check-file', toolExecutor)
   .addNode('check-test-file', checkTestFile)
@@ -43,8 +41,7 @@ const workflow = new StateGraph(GraphState)
   .addNode('tools-fix-errors', toolExecutor)
 
   // Add edges with fixed flow
-  .addEdge('__start__', 'list-files')
-  .addConditionalEdges('list-files', listFilesDirectoryEdges)
+  .addEdge('__start__', 'check-file')
   .addConditionalEdges('check-file', checkFileExistsEdges)
   .addConditionalEdges('check-test-file', checkTestFileEdges)
   .addConditionalEdges('create-new-tests', writeTestsEdges)
@@ -53,7 +50,6 @@ const workflow = new StateGraph(GraphState)
   .addConditionalEdges('tools-write-tests', saveTestsEdges) // Route back through save flow
   .addConditionalEdges('run-tests', runTestsEdges)
   .addConditionalEdges('fix-errors', fixErrorsEdges)
-  .addConditionalEdges('tools-list-files', listFilesDirectoryEdges)
   .addConditionalEdges('tools-check-file', checkFileExistsEdges)
   .addConditionalEdges('tools-check-test-file', checkTestFileEdges)
   .addConditionalEdges('tools-run-tests', runTestsEdges)

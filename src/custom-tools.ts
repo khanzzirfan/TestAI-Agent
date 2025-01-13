@@ -143,6 +143,12 @@ const validateFilePath = (filePath: string): string => {
   return absolutePath
 }
 
+const getRelativePathFromCwd = (filePath: string): string => {
+  const absolutePath = validateFilePath(filePath)
+  const projectRoot = process.cwd()
+  return path.relative(projectRoot, absolutePath)
+}
+
 export const CustomTools = [
   new DynamicStructuredTool({
     name: 'npm-test',
@@ -557,8 +563,7 @@ export const checkFileTool = tool(
     runManager: any
   ) => {
     try {
-      const searchRootEx =
-        searchRoot && searchRoot === '.' ? process.cwd() : searchRoot
+      const searchRootEx = process.cwd()
       const rootDir = searchRootEx
         ? validateFilePath(searchRootEx)
         : process.cwd()
@@ -628,7 +633,9 @@ export const checkFileTool = tool(
       searchRoot: z
         .string()
         .optional()
-        .describe('root directory to start search from'),
+        .describe(
+          'root directory to start search from. Only include valid search paths'
+        ),
       excludeDirs: z
         .array(z.string())
         .optional()
@@ -659,8 +666,8 @@ export const findTestFileTool = tool(
     runManager: any
   ) => {
     try {
-      const searchRootEx =
-        searchRoot && searchRoot === '.' ? process.cwd() : searchRoot
+      const searchRootEx = process.cwd()
+      // searchRoot && searchRoot === '.' ? process.cwd() : searchRoot
       // Get the file name without extension to search for test files
       const sourceFileName = path.basename(sourcePath, path.extname(sourcePath))
       const rootDir = searchRootEx
@@ -748,7 +755,9 @@ export const findTestFileTool = tool(
       searchRoot: z
         .string()
         .optional()
-        .describe('root directory to start search from')
+        .describe(
+          'root directory to start search from. Default is project root. Example value: /'
+        )
     })
   }
 )
