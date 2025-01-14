@@ -42352,18 +42352,6 @@ exports.CustomTools = [
             const data = fs_1.default.readFileSync(path, 'utf-8');
             return data;
         }
-    }),
-    // File system tool
-    new tools_1.DynamicStructuredTool({
-        name: 'delete-file',
-        description: "call this tool to delete file on user's machine. Provide file name as input.",
-        schema: zod_1.z.object({ path: zod_1.z.string().describe('path to the file') }),
-        func: async ({ path }) => {
-            if (!path)
-                return 'No input provided';
-            fs_1.default.unlinkSync(path);
-            return `File ${path} deleted successfully`;
-        }
     })
 ];
 
@@ -87451,6 +87439,12 @@ class Send {
             value: "Send"
         });
     }
+    toJSON() {
+        return {
+            node: this.node,
+            args: this.args,
+        };
+    }
 }
 exports.Send = Send;
 function _isSend(x) {
@@ -87540,12 +87534,11 @@ class Command {
             writable: true,
             value: void 0
         });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         Object.defineProperty(this, "update", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: []
+            value: void 0
         });
         Object.defineProperty(this, "resume", {
             enumerable: true,
@@ -87579,6 +87572,30 @@ class Command {
         else {
             return [["__root__", this.update]];
         }
+    }
+    toJSON() {
+        let serializedGoto;
+        if (typeof this.goto === "string") {
+            serializedGoto = this.goto;
+        }
+        else if (_isSend(this.goto)) {
+            serializedGoto = this.goto.toJSON();
+        }
+        else {
+            serializedGoto = this.goto.map((innerGoto) => {
+                if (typeof innerGoto === "string") {
+                    return innerGoto;
+                }
+                else {
+                    return innerGoto.toJSON();
+                }
+            });
+        }
+        return {
+            update: this.update,
+            resume: this.resume,
+            goto: serializedGoto,
+        };
     }
 }
 exports.Command = Command;
@@ -92261,6 +92278,92 @@ class Pregel extends runnables_1.Runnable {
             managed,
         };
     }
+    async _runLoop(params) {
+        const { loop, interruptAfter, interruptBefore, runManager, debug, config } = params;
+        let tickError;
+        try {
+            while (await loop.tick({
+                inputKeys: this.inputChannels,
+                interruptAfter,
+                interruptBefore,
+                manager: runManager,
+            })) {
+                if (debug) {
+                    (0, debug_js_1.printStepCheckpoint)(loop.checkpointMetadata.step, loop.channels, this.streamChannelsList);
+                }
+                if (debug) {
+                    (0, debug_js_1.printStepTasks)(loop.step, Object.values(loop.tasks));
+                }
+                // execute tasks, and wait for one to fail or all to finish.
+                // each task is independent from all other concurrent tasks
+                // yield updates/debug output as each task finishes
+                const taskStream = (0, retry_js_1.executeTasksWithRetry)(Object.values(loop.tasks).filter((task) => task.writes.length === 0), {
+                    stepTimeout: this.stepTimeout,
+                    signal: config.signal,
+                    retryPolicy: this.retryPolicy,
+                });
+                let graphInterrupt;
+                for await (const { task, error } of taskStream) {
+                    if (error !== undefined) {
+                        if ((0, errors_js_1.isGraphBubbleUp)(error)) {
+                            if (loop.isNested) {
+                                throw error;
+                            }
+                            if ((0, errors_js_1.isGraphInterrupt)(error)) {
+                                graphInterrupt = error;
+                                if (error.interrupts.length) {
+                                    const interrupts = error.interrupts.map((interrupt) => [constants_js_1.INTERRUPT, interrupt]);
+                                    const resumes = task.writes.filter((w) => w[0] === constants_js_1.RESUME);
+                                    if (resumes.length) {
+                                        interrupts.push(...resumes);
+                                    }
+                                    loop.putWrites(task.id, interrupts);
+                                }
+                            }
+                        }
+                        else {
+                            loop.putWrites(task.id, [
+                                [constants_js_1.ERROR, { message: error.message, name: error.name }],
+                            ]);
+                            throw error;
+                        }
+                    }
+                    else {
+                        loop.putWrites(task.id, task.writes);
+                    }
+                }
+                if (debug) {
+                    (0, debug_js_1.printStepWrites)(loop.step, Object.values(loop.tasks)
+                        .map((task) => task.writes)
+                        .flat(), this.streamChannelsList);
+                }
+                if (graphInterrupt !== undefined) {
+                    throw graphInterrupt;
+                }
+            }
+            if (loop.status === "out_of_steps") {
+                throw new errors_js_1.GraphRecursionError([
+                    `Recursion limit of ${config.recursionLimit} reached`,
+                    "without hitting a stop condition. You can increase the",
+                    `limit by setting the "recursionLimit" config key.`,
+                ].join(" "), {
+                    lc_error_code: "GRAPH_RECURSION_LIMIT",
+                });
+            }
+        }
+        catch (e) {
+            tickError = e;
+            const suppress = await loop.finishAndHandleError(tickError);
+            if (!suppress) {
+                throw e;
+            }
+        }
+        finally {
+            if (tickError === undefined) {
+                await loop.finishAndHandleError();
+            }
+        }
+    }
     async *_streamIterator(input, options) {
         const streamSubgraphs = options?.subgraphs;
         const inputConfig = (0, config_js_1.ensureLangGraphConfig)(this.config, options);
@@ -92304,7 +92407,15 @@ class Pregel extends runnables_1.Runnable {
         const { channelSpecs, managed } = await this.prepareSpecs(config);
         let loop;
         let loopError;
-        const runLoop = async () => {
+        /**
+         * The PregelLoop will yield events from concurrent tasks as soon as they are
+         * generated. Each task can push multiple events onto the stream in any order.
+         *
+         * We use a separate background method and stream here in order to yield events
+         * from the loop to the main stream and therefore back to the user as soon as
+         * they are available.
+         */
+        const createAndRunLoop = async () => {
             try {
                 loop = await loop_js_1.PregelLoop.initialize({
                     input,
@@ -92324,68 +92435,14 @@ class Pregel extends runnables_1.Runnable {
                         [constants_js_1.CONFIG_KEY_STREAM]: loop.stream,
                     };
                 }
-                while (await loop.tick({
-                    inputKeys: this.inputChannels,
+                await this._runLoop({
+                    loop,
                     interruptAfter,
                     interruptBefore,
-                    manager: runManager,
-                })) {
-                    if (debug) {
-                        (0, debug_js_1.printStepCheckpoint)(loop.checkpointMetadata.step, loop.channels, this.streamChannelsList);
-                    }
-                    if (debug) {
-                        (0, debug_js_1.printStepTasks)(loop.step, Object.values(loop.tasks));
-                    }
-                    // execute tasks, and wait for one to fail or all to finish.
-                    // each task is independent from all other concurrent tasks
-                    // yield updates/debug output as each task finishes
-                    const taskStream = (0, retry_js_1.executeTasksWithRetry)(Object.values(loop.tasks).filter((task) => task.writes.length === 0), {
-                        stepTimeout: this.stepTimeout,
-                        signal: config.signal,
-                        retryPolicy: this.retryPolicy,
-                    });
-                    // Timeouts will be thrown
-                    for await (const { task, error } of taskStream) {
-                        if (error !== undefined) {
-                            if ((0, errors_js_1.isGraphBubbleUp)(error)) {
-                                if (loop.isNested) {
-                                    throw error;
-                                }
-                                if ((0, errors_js_1.isGraphInterrupt)(error) && error.interrupts.length) {
-                                    const interrupts = error.interrupts.map((interrupt) => [constants_js_1.INTERRUPT, interrupt]);
-                                    const resumes = task.writes.filter((w) => w[0] === constants_js_1.RESUME);
-                                    if (resumes.length) {
-                                        interrupts.push(...resumes);
-                                    }
-                                    loop.putWrites(task.id, interrupts);
-                                }
-                            }
-                            else {
-                                loop.putWrites(task.id, [
-                                    [constants_js_1.ERROR, { message: error.message, name: error.name }],
-                                ]);
-                                throw error;
-                            }
-                        }
-                        else {
-                            loop.putWrites(task.id, task.writes);
-                        }
-                    }
-                    if (debug) {
-                        (0, debug_js_1.printStepWrites)(loop.step, Object.values(loop.tasks)
-                            .map((task) => task.writes)
-                            .flat(), this.streamChannelsList);
-                    }
-                }
-                if (loop.status === "out_of_steps") {
-                    throw new errors_js_1.GraphRecursionError([
-                        `Recursion limit of ${config.recursionLimit} reached`,
-                        "without hitting a stop condition. You can increase the",
-                        `limit by setting the "recursionLimit" config key.`,
-                    ].join(" "), {
-                        lc_error_code: "GRAPH_RECURSION_LIMIT",
-                    });
-                }
+                    runManager,
+                    debug,
+                    config,
+                });
             }
             catch (e) {
                 loopError = e;
@@ -92419,7 +92476,7 @@ class Pregel extends runnables_1.Runnable {
                 }
             }
         };
-        const runLoopPromise = runLoop();
+        const runLoopPromise = createAndRunLoop();
         try {
             for await (const chunk of stream) {
                 if (chunk === undefined) {
@@ -92649,8 +92706,10 @@ exports.mapOutputValues = mapOutputValues;
 function* mapOutputUpdates(outputChannels, tasks, cached
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ) {
-    const outputTasks = tasks.filter(([task]) => {
-        return task.config === undefined || !task.config.tags?.includes(constants_js_1.TAG_HIDDEN);
+    const outputTasks = tasks.filter(([task, ww]) => {
+        return ((task.config === undefined || !task.config.tags?.includes(constants_js_1.TAG_HIDDEN)) &&
+            ww[0][0] !== constants_js_1.ERROR &&
+            ww[0][0] !== constants_js_1.INTERRUPT);
     });
     if (!outputTasks.length) {
         return;
@@ -93166,125 +93225,125 @@ class PregelLoop {
      * @param params
      */
     async tick(params) {
-        let tickError;
-        try {
-            if (this.store && !this.store.isRunning) {
-                this.store?.start();
+        if (this.store && !this.store.isRunning) {
+            this.store?.start();
+        }
+        const { inputKeys = [], interruptAfter = [], interruptBefore = [], manager, } = params;
+        if (this.status !== "pending") {
+            throw new Error(`Cannot tick when status is no longer "pending". Current status: "${this.status}"`);
+        }
+        if (![INPUT_DONE, INPUT_RESUMING].includes(this.input)) {
+            await this._first(inputKeys);
+        }
+        else if (Object.values(this.tasks).every((task) => task.writes.filter(([c]) => !(c in langgraph_checkpoint_1.WRITES_IDX_MAP)).length > 0)) {
+            const writes = Object.values(this.tasks).flatMap((t) => t.writes);
+            // All tasks have finished
+            const managedValueWrites = (0, algo_js_1._applyWrites)(this.checkpoint, this.channels, Object.values(this.tasks), this.checkpointerGetNextVersion);
+            for (const [key, values] of Object.entries(managedValueWrites)) {
+                await this.updateManagedValues(key, values);
             }
-            const { inputKeys = [], interruptAfter = [], interruptBefore = [], manager, } = params;
-            if (this.status !== "pending") {
-                throw new Error(`Cannot tick when status is no longer "pending". Current status: "${this.status}"`);
+            // produce values output
+            const valuesOutput = await (0, utils_js_1.gatherIterator)((0, utils_js_1.prefixGenerator)((0, io_js_1.mapOutputValues)(this.outputKeys, writes, this.channels), "values"));
+            this._emit(valuesOutput);
+            // clear pending writes
+            this.checkpointPendingWrites = [];
+            await this._putCheckpoint({
+                source: "loop",
+                writes: (0, io_js_1.mapOutputUpdates)(this.outputKeys, Object.values(this.tasks).map((task) => [task, task.writes])).next().value ?? null,
+            });
+            // after execution, check if we should interrupt
+            if ((0, algo_js_1.shouldInterrupt)(this.checkpoint, interruptAfter, Object.values(this.tasks))) {
+                this.status = "interrupt_after";
+                throw new errors_js_1.GraphInterrupt();
             }
-            if (![INPUT_DONE, INPUT_RESUMING].includes(this.input)) {
-                await this._first(inputKeys);
+        }
+        else {
+            return false;
+        }
+        if (this.step > this.stop) {
+            this.status = "out_of_steps";
+            return false;
+        }
+        const nextTasks = (0, algo_js_1._prepareNextTasks)(this.checkpoint, this.checkpointPendingWrites, this.nodes, this.channels, this.managed, this.config, true, {
+            step: this.step,
+            checkpointer: this.checkpointer,
+            isResuming: this.input === INPUT_RESUMING,
+            manager,
+            store: this.store,
+        });
+        this.tasks = nextTasks;
+        // Produce debug output
+        if (this.checkpointer) {
+            this._emit(await (0, utils_js_1.gatherIterator)((0, utils_js_1.prefixGenerator)((0, debug_js_1.mapDebugCheckpoint)(this.step - 1, // printing checkpoint for previous step
+            this.checkpointConfig, this.channels, this.streamKeys, this.checkpointMetadata, Object.values(this.tasks), this.checkpointPendingWrites, this.prevCheckpointConfig), "debug")));
+        }
+        if (Object.values(this.tasks).length === 0) {
+            this.status = "done";
+            return false;
+        }
+        // if there are pending writes from a previous loop, apply them
+        if (this.skipDoneTasks && this.checkpointPendingWrites.length > 0) {
+            for (const [tid, k, v] of this.checkpointPendingWrites) {
+                if (k === constants_js_1.ERROR || k === constants_js_1.INTERRUPT || k === constants_js_1.RESUME) {
+                    continue;
+                }
+                const task = Object.values(this.tasks).find((t) => t.id === tid);
+                if (task) {
+                    task.writes.push([k, v]);
+                }
             }
-            else if (Object.values(this.tasks).every((task) => task.writes.filter(([c]) => !(c in langgraph_checkpoint_1.WRITES_IDX_MAP)).length > 0)) {
-                const writes = Object.values(this.tasks).flatMap((t) => t.writes);
-                // All tasks have finished
+            for (const task of Object.values(this.tasks)) {
+                if (task.writes.length > 0) {
+                    this._outputWrites(task.id, task.writes, true);
+                }
+            }
+        }
+        // if all tasks have finished, re-tick
+        if (Object.values(this.tasks).every((task) => task.writes.length > 0)) {
+            return this.tick({
+                inputKeys,
+                interruptAfter,
+                interruptBefore,
+                manager,
+            });
+        }
+        // Before execution, check if we should interrupt
+        if ((0, algo_js_1.shouldInterrupt)(this.checkpoint, interruptBefore, Object.values(this.tasks))) {
+            this.status = "interrupt_before";
+            throw new errors_js_1.GraphInterrupt();
+        }
+        // Produce debug output
+        const debugOutput = await (0, utils_js_1.gatherIterator)((0, utils_js_1.prefixGenerator)((0, debug_js_1.mapDebugTasks)(this.step, Object.values(this.tasks)), "debug"));
+        this._emit(debugOutput);
+        return true;
+    }
+    async finishAndHandleError(error) {
+        const suppress = this._suppressInterrupt(error);
+        if (suppress || error === undefined) {
+            this.output = (0, io_js_1.readChannels)(this.channels, this.outputKeys);
+        }
+        if (suppress) {
+            // emit one last "values" event, with pending writes applied
+            if (this.tasks !== undefined &&
+                this.checkpointPendingWrites.length > 0 &&
+                Object.values(this.tasks).some((task) => task.writes.length > 0)) {
                 const managedValueWrites = (0, algo_js_1._applyWrites)(this.checkpoint, this.channels, Object.values(this.tasks), this.checkpointerGetNextVersion);
                 for (const [key, values] of Object.entries(managedValueWrites)) {
                     await this.updateManagedValues(key, values);
                 }
-                // produce values output
-                const valuesOutput = await (0, utils_js_1.gatherIterator)((0, utils_js_1.prefixGenerator)((0, io_js_1.mapOutputValues)(this.outputKeys, writes, this.channels), "values"));
-                this._emit(valuesOutput);
-                // clear pending writes
-                this.checkpointPendingWrites = [];
-                await this._putCheckpoint({
-                    source: "loop",
-                    writes: (0, io_js_1.mapOutputUpdates)(this.outputKeys, Object.values(this.tasks).map((task) => [task, task.writes])).next().value ?? null,
-                });
-                // after execution, check if we should interrupt
-                if ((0, algo_js_1.shouldInterrupt)(this.checkpoint, interruptAfter, Object.values(this.tasks))) {
-                    this.status = "interrupt_after";
-                    if (this.isNested) {
-                        throw new errors_js_1.GraphInterrupt();
-                    }
-                    else {
-                        return false;
-                    }
-                }
+                this._emit((0, utils_js_1.gatherIteratorSync)((0, utils_js_1.prefixGenerator)((0, io_js_1.mapOutputValues)(this.outputKeys, Object.values(this.tasks).flatMap((t) => t.writes), this.channels), "values")));
             }
-            else {
-                return false;
-            }
-            if (this.step > this.stop) {
-                this.status = "out_of_steps";
-                return false;
-            }
-            const nextTasks = (0, algo_js_1._prepareNextTasks)(this.checkpoint, this.checkpointPendingWrites, this.nodes, this.channels, this.managed, this.config, true, {
-                step: this.step,
-                checkpointer: this.checkpointer,
-                isResuming: this.input === INPUT_RESUMING,
-                manager,
-                store: this.store,
-            });
-            this.tasks = nextTasks;
-            // Produce debug output
-            if (this.checkpointer) {
-                this._emit(await (0, utils_js_1.gatherIterator)((0, utils_js_1.prefixGenerator)((0, debug_js_1.mapDebugCheckpoint)(this.step - 1, // printing checkpoint for previous step
-                this.checkpointConfig, this.channels, this.streamKeys, this.checkpointMetadata, Object.values(this.tasks), this.checkpointPendingWrites, this.prevCheckpointConfig), "debug")));
-            }
-            if (Object.values(this.tasks).length === 0) {
-                this.status = "done";
-                return false;
-            }
-            // if there are pending writes from a previous loop, apply them
-            if (this.skipDoneTasks && this.checkpointPendingWrites.length > 0) {
-                for (const [tid, k, v] of this.checkpointPendingWrites) {
-                    if (k === constants_js_1.ERROR || k === constants_js_1.INTERRUPT || k === constants_js_1.RESUME) {
-                        continue;
-                    }
-                    const task = Object.values(this.tasks).find((t) => t.id === tid);
-                    if (task) {
-                        task.writes.push([k, v]);
-                    }
-                }
-                for (const task of Object.values(this.tasks)) {
-                    if (task.writes.length > 0) {
-                        this._outputWrites(task.id, task.writes, true);
-                    }
-                }
-            }
-            // if all tasks have finished, re-tick
-            if (Object.values(this.tasks).every((task) => task.writes.length > 0)) {
-                return this.tick({
-                    inputKeys,
-                    interruptAfter,
-                    interruptBefore,
-                    manager,
-                });
-            }
-            // Before execution, check if we should interrupt
-            if ((0, algo_js_1.shouldInterrupt)(this.checkpoint, interruptBefore, Object.values(this.tasks))) {
-                this.status = "interrupt_before";
-                if (this.isNested) {
-                    throw new errors_js_1.GraphInterrupt();
-                }
-                else {
-                    return false;
-                }
-            }
-            // Produce debug output
-            const debugOutput = await (0, utils_js_1.gatherIterator)((0, utils_js_1.prefixGenerator)((0, debug_js_1.mapDebugTasks)(this.step, Object.values(this.tasks)), "debug"));
-            this._emit(debugOutput);
-            return true;
+            // Emit INTERRUPT event
+            this._emit([
+                [
+                    "updates",
+                    {
+                        [constants_js_1.INTERRUPT]: error.interrupts,
+                    },
+                ],
+            ]);
         }
-        catch (e) {
-            tickError = e;
-            if (!this._suppressInterrupt(tickError)) {
-                throw tickError;
-            }
-            else {
-                this.output = (0, io_js_1.readChannels)(this.channels, this.outputKeys);
-            }
-            return false;
-        }
-        finally {
-            if (tickError === undefined) {
-                this.output = (0, io_js_1.readChannels)(this.channels, this.outputKeys);
-            }
-        }
+        return suppress;
     }
     _suppressInterrupt(e) {
         return (0, errors_js_1.isGraphInterrupt)(e) && !this.isNested;
@@ -93514,7 +93573,7 @@ class StreamMessagesHandler extends base_1.BaseCallbackHandler {
     handleChatModelStart(_llm, _messages, runId, _parentRunId, _extraParams, tags, metadata, name) {
         if (metadata &&
             // Include legacy LangGraph SDK tag
-            (!tags || !(tags.includes(constants_js_1.TAG_NOSTREAM) && tags.includes("nostream")))) {
+            (!tags || (!tags.includes(constants_js_1.TAG_NOSTREAM) && !tags.includes("nostream")))) {
             this.metadatas[runId] = [
                 metadata.langgraph_checkpoint_ns.split("|"),
                 { tags, name, ...metadata },
@@ -93524,13 +93583,15 @@ class StreamMessagesHandler extends base_1.BaseCallbackHandler {
     handleLLMNewToken(token, _idx, runId, _parentRunId, _tags, fields) {
         const chunk = fields?.chunk;
         this.emittedChatModelRunIds[runId] = true;
-        if (isChatGenerationChunk(chunk) && this.metadatas[runId] !== undefined) {
-            this._emit(this.metadatas[runId], chunk.message);
-        }
-        else {
-            this._emit(this.metadatas[runId], new messages_1.AIMessageChunk({
-                content: token,
-            }));
+        if (this.metadatas[runId] !== undefined) {
+            if (isChatGenerationChunk(chunk)) {
+                this._emit(this.metadatas[runId], chunk.message);
+            }
+            else {
+                this._emit(this.metadatas[runId], new messages_1.AIMessageChunk({
+                    content: token,
+                }));
+            }
         }
     }
     handleLLMEnd(output, runId) {
