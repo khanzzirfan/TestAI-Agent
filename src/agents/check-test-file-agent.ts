@@ -24,13 +24,10 @@ export const checkTestFile = async (state: typeof GraphState.State) => {
 
   const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
 
-  // first three messages
-  const messages = state.messages.slice(0, 3);
-
   const formattedPrompt = await prompt.formatMessages({
     fileName: state.fileName,
     time: new Date().toISOString(),
-    messages: messages
+    messages: state.messages
   });
 
   const res = await llm.invoke(formattedPrompt);

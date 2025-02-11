@@ -11,15 +11,12 @@ export const checkFileExists = async (state: typeof GraphState.State) => {
     Current time: {time}
     `;
 
-  // first three messages
-  const messages = state.messages.slice(0, 4);
-
   const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
 
   const formattedPrompt = await prompt.formatMessages({
     fileName: state.fileName,
     time: new Date().toISOString(),
-    messages: messages
+    messages: state.messages
   });
 
   const res = await llm.invoke(formattedPrompt);
