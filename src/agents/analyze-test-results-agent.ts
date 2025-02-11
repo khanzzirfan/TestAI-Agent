@@ -1,9 +1,9 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage } from '@langchain/core/messages';
 import { llm } from '../llm';
-import { GraphState } from '../state';
+import { State, Update } from '../state';
 
-export const analyzeTestResults = async (state: typeof GraphState.State) => {
+export const analyzeTestResults = async (state: State): Promise<Update> => {
   const template = `
 Analyze the test results and return the parsed JSON output for further reporting.
 IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
@@ -29,7 +29,7 @@ IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
 };
 
 // examin test results edges
-export const analyzeTestResultsEdges = async (state: typeof GraphState.State) => {
+export const analyzeTestResultsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
     return 'tools-examine-test-results';

@@ -1,8 +1,8 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { llm } from '../llm';
-import { GraphState } from '../state';
+import { State, Update } from '../state';
 
-export const createNewTests = async (state: typeof GraphState.State) => {
+export const createNewTests = async (state: State): Promise<Update> => {
   const template = `
     Your task is to create comprehensive test cases for the component specified in {fileName}.
     The component's content is provided below:
@@ -29,7 +29,6 @@ export const createNewTests = async (state: typeof GraphState.State) => {
 
   const res = await llm.invoke(formattedPrompt);
   return {
-    ...state,
     messages: [res]
   };
 };

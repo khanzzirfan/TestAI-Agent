@@ -1,9 +1,9 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage } from '@langchain/core/messages';
 import { llm } from '../llm';
-import { GraphState } from '../state';
+import { State, Update } from '../state';
 
-export const saveTests = async (state: typeof GraphState.State) => {
+export const saveTests = async (state: State): Promise<Update> => {
   const template = `
     Save the generated test content to a file with correct naming convention and path.
 
@@ -28,14 +28,12 @@ export const saveTests = async (state: typeof GraphState.State) => {
 
   const res = await llm.invoke(formattedPrompt);
   return {
-    ...state,
     messages: [res]
   };
 };
 
-export const writeTestsEdges = async (state: typeof GraphState.State) => {
-  const lastMessage = state.messages[state.messages.length - 1];
-  // @ts-ignore
+export const writeTestsEdges = async (state: State) => {
+  const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
     return 'tools-create-new-tests';
   }
@@ -43,7 +41,7 @@ export const writeTestsEdges = async (state: typeof GraphState.State) => {
 };
 
 // Define a separate edge handler for save tests
-export const saveTestsEdges = async (state: typeof GraphState.State) => {
+export const saveTestsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
     return 'tools-write-tests';

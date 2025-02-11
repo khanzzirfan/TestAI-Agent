@@ -1,9 +1,9 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage } from '@langchain/core/messages';
 import { llm } from '../llm';
-import { GraphState } from '../state';
+import { State, Update } from '../state';
 
-export const analyzeExistingTests = async (state: typeof GraphState.State) => {
+export const analyzeExistingTests = async (state: State): Promise<Update> => {
   const template = `
     All necessary test cases and component details are included below.
     Analyze the existing test cases for {fileName} and determine if they are sufficient.
@@ -42,13 +42,12 @@ export const analyzeExistingTests = async (state: typeof GraphState.State) => {
 
   const res = await llm.invoke(formattedPrompt);
   return {
-    ...state,
     messages: [res]
   };
 };
 
 // edge
-export const analyzeExistingTestEdges = async (state: typeof GraphState.State) => {
+export const analyzeExistingTestEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
     return 'tools-write-tests';

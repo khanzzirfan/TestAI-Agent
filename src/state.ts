@@ -16,35 +16,38 @@ export const GraphState = Annotation.Root({
     default: () => false
   }),
   fileName: Annotation<string>({
-    reducer: (x, y) => y ?? x,
+    reducer: z => z,
     default: () => ''
   }),
   testFileName: Annotation<string>({
-    reducer: (x, y) => y ?? x,
+    reducer: z => z,
     default: () => ''
   }),
   fileContent: Annotation<string>({
-    reducer: (x, y) => y ?? x,
+    reducer: z => z,
     default: () => ''
   }),
   filePath: Annotation<string>({
-    reducer: (x, y) => y ?? x,
+    reducer: z => z,
     default: () => ''
   }),
   testFileContent: Annotation<string>({
-    reducer: (x, y) => y ?? x,
+    reducer: z => z,
     default: () => ''
   }),
   testFilePath: Annotation<string>({
-    reducer: (x, y) => y ?? x,
+    reducer: z => z,
     default: () => ''
   }),
   testResults: Annotation<any>({
-    reducer: (x, y) => y ?? x,
+    reducer: z => z,
     default: () => null
   }),
   testSummary: Annotation<any>({
-    reducer: (x, y) => y ?? x,
+    reducer: z => z,
     default: () => null
   })
 });
+
+export type State = typeof GraphState.State;
+export type Update = typeof GraphState.Update;

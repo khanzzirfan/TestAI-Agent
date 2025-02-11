@@ -1,9 +1,9 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage } from '@langchain/core/messages';
 import { llm } from '../llm';
-import { GraphState } from '../state';
+import { State, Update } from '../state';
 
-export const checkTestFile = async (state: typeof GraphState.State) => {
+export const checkTestFile = async (state: State): Promise<Update> => {
   const template = `
     Your task is to check if a test file exists for {fileName}.
     
@@ -32,14 +32,13 @@ export const checkTestFile = async (state: typeof GraphState.State) => {
 
   const res = await llm.invoke(formattedPrompt);
   return {
-    ...state,
     messages: [res]
   };
 };
 
 // Edge
 
-export const checkTestFileEdges = async (state: typeof GraphState.State) => {
+export const checkTestFileEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
     return 'tools-find-test-file';

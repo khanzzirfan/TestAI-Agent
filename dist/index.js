@@ -41880,13 +41880,11 @@ const checkFileExists = async (state) => {
     Use the available tool: find-file.
     Current time: {time}
     `;
-    // first three messages
-    const messages = state.messages.slice(0, 4);
     const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
     const formattedPrompt = await prompt.formatMessages({
         fileName: state.fileName,
         time: new Date().toISOString(),
-        messages: messages
+        messages: state.messages
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
@@ -41944,12 +41942,10 @@ const checkTestFile = async (state) => {
     IMPORTANT: Strictly follow the provided guidelines.
     `;
     const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
-    // first three messages
-    const messages = state.messages.slice(0, 3);
     const formattedPrompt = await prompt.formatMessages({
         fileName: state.fileName,
         time: new Date().toISOString(),
-        messages: messages
+        messages: state.messages
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {

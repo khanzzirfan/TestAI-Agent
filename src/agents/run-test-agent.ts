@@ -1,10 +1,9 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage } from '@langchain/core/messages';
-
 import { llm } from '../llm';
-import { GraphState } from '../state';
+import { State, Update } from '../state';
 
-export const runTests = async (state: typeof GraphState.State) => {
+export const runTests = async (state: State): Promise<Update> => {
   const template = `
     ### Task: Run Tests and Analyze Results
 
@@ -26,13 +25,12 @@ export const runTests = async (state: typeof GraphState.State) => {
 
   const res = await llm.invoke(formattedPrompt);
   return {
-    ...state,
     messages: [res]
   };
 };
 
 // edge
-export const runTestsEdges = async (state: typeof GraphState.State) => {
+export const runTestsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
     return 'tools-run-tests';

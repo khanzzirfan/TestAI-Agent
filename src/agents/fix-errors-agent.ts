@@ -1,9 +1,9 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage } from '@langchain/core/messages';
 import { llm } from '../llm';
-import { GraphState } from '../state';
+import { State, Update } from '../state';
 
-export const fixErrors = async (state: typeof GraphState.State) => {
+export const fixErrors = async (state: State): Promise<Update> => {
   const template = `
     Fix and update test cases for {fileName}, then save the updated file.
     
@@ -47,7 +47,6 @@ export const fixErrors = async (state: typeof GraphState.State) => {
 
   const res = await llm.invoke(formattedPrompt);
   return {
-    ...state,
     messages: [res],
     iteration: state.iteration + 1,
     // reset error flags
@@ -58,7 +57,7 @@ export const fixErrors = async (state: typeof GraphState.State) => {
 };
 
 // Edge
-export const fixErrorsEdges = async (state: typeof GraphState.State) => {
+export const fixErrorsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
     return 'tools-fix-errors';
