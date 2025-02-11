@@ -4298,374 +4298,6 @@ module.exports = function (str, sep) {
 
 /***/ }),
 
-/***/ 18889:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const fs = __nccwpck_require__(79896)
-const path = __nccwpck_require__(16928)
-const os = __nccwpck_require__(70857)
-const crypto = __nccwpck_require__(76982)
-const packageJson = __nccwpck_require__(80056)
-
-const version = packageJson.version
-
-const LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg
-
-// Parse src into an Object
-function parse (src) {
-  const obj = {}
-
-  // Convert buffer to string
-  let lines = src.toString()
-
-  // Convert line breaks to same format
-  lines = lines.replace(/\r\n?/mg, '\n')
-
-  let match
-  while ((match = LINE.exec(lines)) != null) {
-    const key = match[1]
-
-    // Default undefined or null to empty string
-    let value = (match[2] || '')
-
-    // Remove whitespace
-    value = value.trim()
-
-    // Check if double quoted
-    const maybeQuote = value[0]
-
-    // Remove surrounding quotes
-    value = value.replace(/^(['"`])([\s\S]*)\1$/mg, '$2')
-
-    // Expand newlines if double quoted
-    if (maybeQuote === '"') {
-      value = value.replace(/\\n/g, '\n')
-      value = value.replace(/\\r/g, '\r')
-    }
-
-    // Add to object
-    obj[key] = value
-  }
-
-  return obj
-}
-
-function _parseVault (options) {
-  const vaultPath = _vaultPath(options)
-
-  // Parse .env.vault
-  const result = DotenvModule.configDotenv({ path: vaultPath })
-  if (!result.parsed) {
-    const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`)
-    err.code = 'MISSING_DATA'
-    throw err
-  }
-
-  // handle scenario for comma separated keys - for use with key rotation
-  // example: DOTENV_KEY="dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=prod,dotenv://:key_7890@dotenvx.com/vault/.env.vault?environment=prod"
-  const keys = _dotenvKey(options).split(',')
-  const length = keys.length
-
-  let decrypted
-  for (let i = 0; i < length; i++) {
-    try {
-      // Get full key
-      const key = keys[i].trim()
-
-      // Get instructions for decrypt
-      const attrs = _instructions(result, key)
-
-      // Decrypt
-      decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key)
-
-      break
-    } catch (error) {
-      // last key
-      if (i + 1 >= length) {
-        throw error
-      }
-      // try next key
-    }
-  }
-
-  // Parse decrypted .env string
-  return DotenvModule.parse(decrypted)
-}
-
-function _log (message) {
-  console.log(`[dotenv@${version}][INFO] ${message}`)
-}
-
-function _warn (message) {
-  console.log(`[dotenv@${version}][WARN] ${message}`)
-}
-
-function _debug (message) {
-  console.log(`[dotenv@${version}][DEBUG] ${message}`)
-}
-
-function _dotenvKey (options) {
-  // prioritize developer directly setting options.DOTENV_KEY
-  if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
-    return options.DOTENV_KEY
-  }
-
-  // secondary infra already contains a DOTENV_KEY environment variable
-  if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
-    return process.env.DOTENV_KEY
-  }
-
-  // fallback to empty string
-  return ''
-}
-
-function _instructions (result, dotenvKey) {
-  // Parse DOTENV_KEY. Format is a URI
-  let uri
-  try {
-    uri = new URL(dotenvKey)
-  } catch (error) {
-    if (error.code === 'ERR_INVALID_URL') {
-      const err = new Error('INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development')
-      err.code = 'INVALID_DOTENV_KEY'
-      throw err
-    }
-
-    throw error
-  }
-
-  // Get decrypt key
-  const key = uri.password
-  if (!key) {
-    const err = new Error('INVALID_DOTENV_KEY: Missing key part')
-    err.code = 'INVALID_DOTENV_KEY'
-    throw err
-  }
-
-  // Get environment
-  const environment = uri.searchParams.get('environment')
-  if (!environment) {
-    const err = new Error('INVALID_DOTENV_KEY: Missing environment part')
-    err.code = 'INVALID_DOTENV_KEY'
-    throw err
-  }
-
-  // Get ciphertext payload
-  const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`
-  const ciphertext = result.parsed[environmentKey] // DOTENV_VAULT_PRODUCTION
-  if (!ciphertext) {
-    const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`)
-    err.code = 'NOT_FOUND_DOTENV_ENVIRONMENT'
-    throw err
-  }
-
-  return { ciphertext, key }
-}
-
-function _vaultPath (options) {
-  let possibleVaultPath = null
-
-  if (options && options.path && options.path.length > 0) {
-    if (Array.isArray(options.path)) {
-      for (const filepath of options.path) {
-        if (fs.existsSync(filepath)) {
-          possibleVaultPath = filepath.endsWith('.vault') ? filepath : `${filepath}.vault`
-        }
-      }
-    } else {
-      possibleVaultPath = options.path.endsWith('.vault') ? options.path : `${options.path}.vault`
-    }
-  } else {
-    possibleVaultPath = path.resolve(process.cwd(), '.env.vault')
-  }
-
-  if (fs.existsSync(possibleVaultPath)) {
-    return possibleVaultPath
-  }
-
-  return null
-}
-
-function _resolveHome (envPath) {
-  return envPath[0] === '~' ? path.join(os.homedir(), envPath.slice(1)) : envPath
-}
-
-function _configVault (options) {
-  _log('Loading env from encrypted .env.vault')
-
-  const parsed = DotenvModule._parseVault(options)
-
-  let processEnv = process.env
-  if (options && options.processEnv != null) {
-    processEnv = options.processEnv
-  }
-
-  DotenvModule.populate(processEnv, parsed, options)
-
-  return { parsed }
-}
-
-function configDotenv (options) {
-  const dotenvPath = path.resolve(process.cwd(), '.env')
-  let encoding = 'utf8'
-  const debug = Boolean(options && options.debug)
-
-  if (options && options.encoding) {
-    encoding = options.encoding
-  } else {
-    if (debug) {
-      _debug('No encoding is specified. UTF-8 is used by default')
-    }
-  }
-
-  let optionPaths = [dotenvPath] // default, look for .env
-  if (options && options.path) {
-    if (!Array.isArray(options.path)) {
-      optionPaths = [_resolveHome(options.path)]
-    } else {
-      optionPaths = [] // reset default
-      for (const filepath of options.path) {
-        optionPaths.push(_resolveHome(filepath))
-      }
-    }
-  }
-
-  // Build the parsed data in a temporary object (because we need to return it).  Once we have the final
-  // parsed data, we will combine it with process.env (or options.processEnv if provided).
-  let lastError
-  const parsedAll = {}
-  for (const path of optionPaths) {
-    try {
-      // Specifying an encoding returns a string instead of a buffer
-      const parsed = DotenvModule.parse(fs.readFileSync(path, { encoding }))
-
-      DotenvModule.populate(parsedAll, parsed, options)
-    } catch (e) {
-      if (debug) {
-        _debug(`Failed to load ${path} ${e.message}`)
-      }
-      lastError = e
-    }
-  }
-
-  let processEnv = process.env
-  if (options && options.processEnv != null) {
-    processEnv = options.processEnv
-  }
-
-  DotenvModule.populate(processEnv, parsedAll, options)
-
-  if (lastError) {
-    return { parsed: parsedAll, error: lastError }
-  } else {
-    return { parsed: parsedAll }
-  }
-}
-
-// Populates process.env from .env file
-function config (options) {
-  // fallback to original dotenv if DOTENV_KEY is not set
-  if (_dotenvKey(options).length === 0) {
-    return DotenvModule.configDotenv(options)
-  }
-
-  const vaultPath = _vaultPath(options)
-
-  // dotenvKey exists but .env.vault file does not exist
-  if (!vaultPath) {
-    _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`)
-
-    return DotenvModule.configDotenv(options)
-  }
-
-  return DotenvModule._configVault(options)
-}
-
-function decrypt (encrypted, keyStr) {
-  const key = Buffer.from(keyStr.slice(-64), 'hex')
-  let ciphertext = Buffer.from(encrypted, 'base64')
-
-  const nonce = ciphertext.subarray(0, 12)
-  const authTag = ciphertext.subarray(-16)
-  ciphertext = ciphertext.subarray(12, -16)
-
-  try {
-    const aesgcm = crypto.createDecipheriv('aes-256-gcm', key, nonce)
-    aesgcm.setAuthTag(authTag)
-    return `${aesgcm.update(ciphertext)}${aesgcm.final()}`
-  } catch (error) {
-    const isRange = error instanceof RangeError
-    const invalidKeyLength = error.message === 'Invalid key length'
-    const decryptionFailed = error.message === 'Unsupported state or unable to authenticate data'
-
-    if (isRange || invalidKeyLength) {
-      const err = new Error('INVALID_DOTENV_KEY: It must be 64 characters long (or more)')
-      err.code = 'INVALID_DOTENV_KEY'
-      throw err
-    } else if (decryptionFailed) {
-      const err = new Error('DECRYPTION_FAILED: Please check your DOTENV_KEY')
-      err.code = 'DECRYPTION_FAILED'
-      throw err
-    } else {
-      throw error
-    }
-  }
-}
-
-// Populate process.env with parsed values
-function populate (processEnv, parsed, options = {}) {
-  const debug = Boolean(options && options.debug)
-  const override = Boolean(options && options.override)
-
-  if (typeof parsed !== 'object') {
-    const err = new Error('OBJECT_REQUIRED: Please check the processEnv argument being passed to populate')
-    err.code = 'OBJECT_REQUIRED'
-    throw err
-  }
-
-  // Set process.env
-  for (const key of Object.keys(parsed)) {
-    if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
-      if (override === true) {
-        processEnv[key] = parsed[key]
-      }
-
-      if (debug) {
-        if (override === true) {
-          _debug(`"${key}" is already defined and WAS overwritten`)
-        } else {
-          _debug(`"${key}" is already defined and was NOT overwritten`)
-        }
-      }
-    } else {
-      processEnv[key] = parsed[key]
-    }
-  }
-}
-
-const DotenvModule = {
-  configDotenv,
-  _configVault,
-  _parseVault,
-  config,
-  decrypt,
-  parse,
-  populate
-}
-
-module.exports.configDotenv = DotenvModule.configDotenv
-module.exports._configVault = DotenvModule._configVault
-module.exports._parseVault = DotenvModule._parseVault
-module.exports.config = DotenvModule.config
-module.exports.decrypt = DotenvModule.decrypt
-module.exports.parse = DotenvModule.parse
-module.exports.populate = DotenvModule.populate
-
-module.exports = DotenvModule
-
-
-/***/ }),
-
 /***/ 16577:
 /***/ ((module, exports) => {
 
@@ -42123,6 +41755,481 @@ exports.NEVER = parseUtil_1.INVALID;
 
 /***/ }),
 
+/***/ 51867:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.analyzeExistingTestEdges = exports.analyzeExistingTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const analyzeExistingTests = async (state) => {
+    const template = `
+    All necessary test cases and component details are included below.
+    Analyze the existing test cases for {fileName} and determine if they are sufficient.
+    If the tests are inadequate, create new test cases to improve coverage.
+
+    ### Test File Name: {testFileName}
+    ### Test file path: {testFilePath}
+    ### **Existing Test Content:**
+    {testFileContent}
+
+    ### **Component Content:**
+    {fileContent}
+
+    ### **Guidelines:**
+    - **Analyze** the existing test cases for coverage and accuracy.
+    - **Identify** any gaps or missing test scenarios.
+    - **Create** new test cases to improve coverage if necessary.
+    - **Maintain** consistency with existing test structure.
+    - **Ensure** the tests are accurate, reliable, and compatible with the component.
+
+    ### **Output:**
+    - Return the updated test file content only.
+    - If new test cases are created, use write-file tool call to save the test file.
+  `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        testFileName: state.testFileName,
+        testFilePath: state.testFilePath,
+        testFileContent: state.testFileContent,
+        fileContent: state.fileContent,
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        ...state,
+        messages: [res]
+    };
+};
+exports.analyzeExistingTests = analyzeExistingTests;
+// edge
+const analyzeExistingTestEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-write-tests';
+    }
+    return 'run-tests';
+};
+exports.analyzeExistingTestEdges = analyzeExistingTestEdges;
+
+
+/***/ }),
+
+/***/ 40860:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.analyzeTestResultsEdges = exports.analyzeTestResults = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const analyzeTestResults = async (state) => {
+    const template = `
+Analyze the test results and return the parsed JSON output for further reporting.
+IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
+
+### **Test Results:**  
+{testResults}
+
+`;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages,
+        testResults: JSON.stringify(state.testResults, null, 2)
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        ...state,
+        messages: [res]
+    };
+};
+exports.analyzeTestResults = analyzeTestResults;
+// examin test results edges
+const analyzeTestResultsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-examine-test-results';
+    }
+    else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
+        return 'fix-errors';
+    }
+    return '__end__';
+};
+exports.analyzeTestResultsEdges = analyzeTestResultsEdges;
+
+
+/***/ }),
+
+/***/ 35486:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.checkFileExistsEdges = exports.checkFileExists = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const checkFileExists = async (state) => {
+    const template = `
+    Given the filename {fileName}, verify it exists in the codebase.
+    Use the available tool: find-file.
+    Current time: {time}
+    `;
+    // first three messages
+    const messages = state.messages.slice(0, 4);
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        time: new Date().toISOString(),
+        messages: messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        ...state,
+        messages: [res]
+    };
+};
+exports.checkFileExists = checkFileExists;
+// Edge
+// Edge definitions
+const checkFileExistsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-find-file';
+    }
+    if (state.fileContent === null) {
+        return 'find-file';
+    }
+    else if (state.testFileName && state.testFileContent) {
+        return 'analyze-existing-tests';
+    }
+    else
+        return 'find-test-file';
+};
+exports.checkFileExistsEdges = checkFileExistsEdges;
+
+
+/***/ }),
+
+/***/ 91198:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.checkTestFileEdges = exports.checkTestFile = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const checkTestFile = async (state) => {
+    const template = `
+    Your task is to check if a test file exists for {fileName}.
+    
+    ### **Guidelines:**
+    1. Look for both .test.tsx and .spec.tsx extensions.
+    2. If found, read and store the existing test content.
+    
+    ### **Tools:**
+    - Use the available tool: find-test-file.
+    
+    ### **Expected Output:**
+    1. Return the content of the test file if found.
+    2. If no test file is found, indicate that no test file exists.
+    
+    Current time: {time}
+    IMPORTANT: Strictly follow the provided guidelines.
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    // first three messages
+    const messages = state.messages.slice(0, 3);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        time: new Date().toISOString(),
+        messages: messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        ...state,
+        messages: [res]
+    };
+};
+exports.checkTestFile = checkTestFile;
+// Edge
+const checkTestFileEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-find-test-file';
+    }
+    // Route based on whether test file exists
+    return state.testFileContent ? 'analyze-existing-tests' : 'create-new-tests';
+};
+exports.checkTestFileEdges = checkTestFileEdges;
+
+
+/***/ }),
+
+/***/ 38768:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createNewTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const createNewTests = async (state) => {
+    const template = `
+    Your task is to create comprehensive test cases for the component specified in {fileName}.
+    The component's content is provided below:
+
+    Component content: {fileContent}
+    
+    Guidelines:
+    1. Write tests that thoroughly cover the component's functionality.
+    2. Test all possible inputs and their variations.
+    3. Include tests for user interactions and edge cases.
+    4. Ensure robust error handling and test boundary conditions.
+    5. Aim for a test coverage of over 80%.
+    
+    Use modern testing practices and frameworks that are appropriate for the language of the component.
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        fileContent: state.fileContent,
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        ...state,
+        messages: [res]
+    };
+};
+exports.createNewTests = createNewTests;
+
+
+/***/ }),
+
+/***/ 26757:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.fixErrorsEdges = exports.fixErrors = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const fixErrors = async (state) => {
+    const template = `
+    Fix and update test cases for {fileName}, then save the updated file.
+    
+    ### **Test Failures:**  
+    {failureReasons}
+    
+    ### **Instructions:**  
+    - **Analyze** test failures and identify root causes.  
+    - **Fix errors** and update test cases accordingly.  
+    - **Ensure tests remain accurate, reliable, and compatible.**  
+    - **Maintain best practices** and follow existing test structure.  
+    
+    ### **Test File Name:**  
+    {testFileName}
+    
+    ### **Test File Path:**  
+    {testFilePath}
+    
+    ### **Existing Test Content:**  
+    {testFileContent}
+    
+    ### **Component Content:**  
+    {fileContent}
+    
+    ### **Output:**  
+    1. Return the **fully updated test file**, ready to run.  
+    2. **Use the 'write-file' tool call** to save the updated test file.  
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        testFileName: state.testFileName,
+        testFilePath: state.testFilePath,
+        fileContent: state.fileContent,
+        testFileContent: state.testFileContent,
+        failureReasons: state.testResults ? JSON.stringify(state.testResults.failures, null, 2) : 'No test results found',
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        ...state,
+        messages: [res],
+        iteration: state.iteration + 1,
+        // reset error flags
+        hasError: false,
+        testResults: null,
+        testSummary: null
+    };
+};
+exports.fixErrors = fixErrors;
+// Edge
+const fixErrorsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-fix-errors';
+    }
+    if (state.iteration > 5) {
+        return '__end__';
+    }
+    return 'run-tests';
+};
+exports.fixErrorsEdges = fixErrorsEdges;
+
+
+/***/ }),
+
+/***/ 36758:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(51867), exports);
+__exportStar(__nccwpck_require__(35486), exports);
+__exportStar(__nccwpck_require__(91198), exports);
+__exportStar(__nccwpck_require__(87810), exports);
+__exportStar(__nccwpck_require__(40860), exports);
+__exportStar(__nccwpck_require__(26757), exports);
+__exportStar(__nccwpck_require__(74780), exports);
+__exportStar(__nccwpck_require__(38768), exports);
+
+
+/***/ }),
+
+/***/ 74780:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.runTestsEdges = exports.runTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const runTests = async (state) => {
+    const template = `
+    ### Task: Run Tests and Analyze Results
+
+    Execute the test suite using the appropriate **npm test command**.
+
+    use the **tool call** npm-test to run the tests.
+    
+    Output:
+    - Return a summary of the test results, highlighting any failures.
+    - Include coverage information if available.;
+  `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        ...state,
+        messages: [res]
+    };
+};
+exports.runTests = runTests;
+// edge
+const runTestsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-run-tests';
+    }
+    // if (state.hasError) {
+    //   return "fix-errors";
+    // }
+    return 'analyze-results';
+    // return "__end__";
+};
+exports.runTestsEdges = runTestsEdges;
+
+
+/***/ }),
+
+/***/ 87810:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.saveTestsEdges = exports.writeTestsEdges = exports.saveTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const saveTests = async (state) => {
+    const template = `
+    Save the generated test content to a file with correct naming convention and path.
+
+### **File Naming Rules:**
+- Use the appropriate test file extension: **'.test.tsx'** or **.spec.tsx**.
+- Maintain the same directory structure as {fileName}.
+- Ensure consistency with existing test files.
+
+### **Expected Action:**
+- Save the file using a **tool call** write-file with the correct **file path and name**.
+- Test file path: **{testFilePath}**
+
+ `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages,
+        testFilePath: state.testFilePath
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        ...state,
+        messages: [res]
+    };
+};
+exports.saveTests = saveTests;
+const writeTestsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    // @ts-ignore
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-create-new-tests';
+    }
+    return 'find-test-file';
+};
+exports.writeTestsEdges = writeTestsEdges;
+// Define a separate edge handler for save tests
+const saveTestsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-write-tests';
+    }
+    return 'run-tests'; // After saving, proceed to run tests
+};
+exports.saveTestsEdges = saveTestsEdges;
+
+
+/***/ }),
+
 /***/ 168:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -42167,193 +42274,41 @@ const langgraph_1 = __nccwpck_require__(39405);
 const messages_1 = __nccwpck_require__(62776);
 const graph_1 = __nccwpck_require__(10931);
 const core = __importStar(__nccwpck_require__(37484));
+const tools_1 = __nccwpck_require__(72003);
 const MainGraphRun = async () => {
     // Initialize memory to persist state between graph runs
     const checkpointer = new langgraph_1.MemorySaver();
     const filename = core.getInput('file_name');
+    const toolNames = tools_1.CustomTools.map(tool => tool.name).join(', ');
     // Finally, we compile it!
     // This compiles it into a LangChain Runnable,
     // meaning you can use it as you would any other runnable
     const app = graph_1.workflow.compile({ checkpointer });
-    const query = `Write and Execute jest unit test cases for ${filename} file.
+    const query = `
+  You are a coding assistant with expertise in test automation.
+  Generate and execute tests for ${filename}.
+
+  Use the available tools: ${toolNames}.
+  Current time: {time}
+
   Guidelines:
-    - All the code is written in Typescript.
-    - List all the files in the src directory to find the ${filename} file.
-    - Read the ${filename} file content at right location in the project directory before writing tests.
-    - Read the corresponding ${filename}.test.tsx or ${filename}.spec.tsx file content to understand the existing tests.
-    - Make sure tests are passing by executing tests and coverage is generated in json format.
-  `;
+  1. Verify the source file exists
+  2. Check for existing test file
+  3. Improve existing tests or create new tests
+  4. Save test file
+  5. Run tests with coverage
+  6. Fix any failures`;
     // Use the Runnable
+    const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
     const finalState = await app.invoke({
         messages: [new messages_1.HumanMessage(query)]
-    }, { recursionLimit: 100, configurable: { thread_id: '42' } });
-    console.log('result of graph');
+    }, { recursionLimit: 100, configurable: { thread_id: currentDate } });
+    console.log('result of graph for a threadId:', currentDate);
     // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
     const outputContent = finalState.messages.map(m => m.content).join('\n');
     console.log(outputContent);
 };
 exports.MainGraphRun = MainGraphRun;
-
-
-/***/ }),
-
-/***/ 49542:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.CustomTools = void 0;
-const zod_1 = __nccwpck_require__(34809);
-const tools_1 = __nccwpck_require__(3477);
-// 4. Import dotenv for loading environment variables and fs for file system operations
-const dotenv_1 = __importDefault(__nccwpck_require__(18889));
-const fs_1 = __importDefault(__nccwpck_require__(79896));
-const path_1 = __importDefault(__nccwpck_require__(16928));
-const util_1 = __nccwpck_require__(39023);
-const child_process_1 = __nccwpck_require__(35317);
-dotenv_1.default.config();
-const nodeExecutor = (0, util_1.promisify)(child_process_1.exec);
-const nodeExec = async (command) => {
-    return new Promise((resolve, reject) => {
-        (0, child_process_1.exec)(command, (error, stdout, stderr) => {
-            if (error) {
-                reject(error);
-            }
-            console.log(`npm command success stdout: ${stdout}`);
-            resolve(stdout);
-        });
-    });
-};
-const listFilesRecursively = (dir, excludeDirs = ['node_modules', 'public', 'dist', 'coverage']) => {
-    let results = [];
-    const listFiles = (currentDir) => {
-        const files = fs_1.default.readdirSync(currentDir);
-        files.forEach(file => {
-            const filePath = path_1.default.join(currentDir, file);
-            const stat = fs_1.default.statSync(filePath);
-            if (stat && stat.isDirectory()) {
-                if (!excludeDirs.includes(file)) {
-                    listFiles(filePath);
-                }
-            }
-            else {
-                results.push(filePath);
-            }
-        });
-    };
-    listFiles(dir);
-    return results;
-};
-exports.CustomTools = [
-    new tools_1.DynamicStructuredTool({
-        name: 'npm-test',
-        description: 'Tool to run npm test. It runs jest tests or any javascript tests. call this tool to execute tests. It will execute the code and return the output. It will also print the output to the console.',
-        schema: zod_1.z.object({
-            command: zod_1.z.string().describe('npm command')
-        }),
-        // func: async ({ command }) => {
-        //   await nodeExec(command);
-        //   return "Code executed successfully";
-        // },
-        func: async ({ command }) => {
-            try {
-                // if command missing npm prefix, add it
-                if (!command.startsWith('npm')) {
-                    command = `npm ${command}`;
-                }
-                const { stdout, stderr } = await nodeExecutor(command);
-                if (stderr) {
-                    return `Error: ${stderr}`;
-                }
-                // async wait for few seconds to get the output
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                return stdout;
-            }
-            catch (error) {
-                return `Execution failed: ${error.message}`;
-            }
-        }
-    }),
-    // File system tool
-    new tools_1.DynamicStructuredTool({
-        name: 'create-file',
-        description: "Creates an empty file on user's machine at the specified path.",
-        schema: zod_1.z.object({
-            path: zod_1.z.string().describe('path to the file'),
-            fileName: zod_1.z.string().describe('name of the file')
-        }),
-        func: async ({ path: dirPath, fileName }) => {
-            try {
-                // Input validation
-                if (!dirPath || !fileName) {
-                    throw new Error('Both path and fileName are required');
-                }
-                // Normalize path and create full file path
-                const normalizedPath = path_1.default.normalize(dirPath);
-                const fullPath = path_1.default.join(normalizedPath, fileName);
-                // Ensure directory exists
-                if (!fs_1.default.existsSync(normalizedPath)) {
-                    fs_1.default.mkdirSync(normalizedPath, { recursive: true });
-                }
-                // Create empty file if it doesn't exist
-                if (!fs_1.default.existsSync(fullPath)) {
-                    fs_1.default.writeFileSync(fullPath, '', 'utf-8');
-                    return `File ${fileName} created successfully at ${normalizedPath}`;
-                }
-                else {
-                    return `File ${fileName} already exists at ${normalizedPath}`;
-                }
-            }
-            catch (error) {
-                return `Error creating file: ${error.message}`;
-            }
-        }
-    }),
-    // File system tool
-    new tools_1.DynamicStructuredTool({
-        name: 'write-file',
-        description: "call this tool to write file on user's machine. Provide file name and content as input.",
-        schema: zod_1.z.object({
-            path: zod_1.z.string().describe('path to the file'),
-            fileName: zod_1.z.string().describe('name of the file'),
-            content: zod_1.z.string().describe('content to write in the file')
-        }),
-        func: async ({ path, fileName, content }) => {
-            if (!content || !fileName)
-                return 'No input provided';
-            fs_1.default.writeFileSync(`${path}/${fileName}`, content, 'utf-8');
-            return `File ${fileName} created successfully`;
-        }
-    }),
-    // File system tool. list all files in a directory
-    new tools_1.DynamicStructuredTool({
-        name: 'list-files',
-        description: "call this tool to list all files in a directory on user's machine. Provide path as input.",
-        schema: zod_1.z.object({ path: zod_1.z.string().describe('path to the directory') }),
-        func: async ({ path }) => {
-            // get executing directory path
-            const executingPath = process.cwd();
-            const files = listFilesRecursively(path);
-            return files;
-        }
-    }),
-    // read file tool
-    new tools_1.DynamicStructuredTool({
-        name: 'read-file',
-        description: "call this tool to read file on user's machine. Provide file name as input.",
-        schema: zod_1.z.object({ path: zod_1.z.string().describe('path to the file') }),
-        func: async ({ path }) => {
-            if (!path)
-                return 'No input provided';
-            const data = fs_1.default.readFileSync(path, 'utf-8');
-            return data;
-        }
-    })
-];
 
 
 /***/ }),
@@ -42366,31 +42321,69 @@ exports.CustomTools = [
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.workflow = void 0;
 const langgraph_1 = __nccwpck_require__(39405);
-const nodes_1 = __nccwpck_require__(89505);
-// Define a new graph.
-// See https://langchain-ai.github.io/langgraphjs/how-tos/define-state/#getting-started for
-// more on defining custom graph states.
-const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
-    .addNode('list-files', nodes_1.listFilesDirectory)
-    .addNode('tools-list-files', nodes_1.toolNode)
-    .addNode('tools', nodes_1.toolNode)
-    .addNode('add-tests', nodes_1.addTests)
-    .addNode('tools-add-tests', nodes_1.toolNode)
-    .addNode('run-tests', nodes_1.runTests)
-    .addNode('tools-run-tests', nodes_1.toolNode)
-    .addNode('review-and-fix-errors', nodes_1.reviewAndFixErrors)
-    .addNode('tools-review-and-fix-errors', nodes_1.toolNode)
-    .addEdge('__start__', 'list-files')
-    .addConditionalEdges('list-files', nodes_1.listFilesDirectoryEdges)
-    .addConditionalEdges('add-tests', nodes_1.addTestEdges)
-    .addConditionalEdges('run-tests', nodes_1.runTestsEdges)
-    .addConditionalEdges('tools-list-files', nodes_1.listFilesDirectoryEdges)
-    .addConditionalEdges('tools-run-tests', nodes_1.runTestsEdges)
-    .addConditionalEdges('tools-add-tests', nodes_1.addTestEdges)
-    .addConditionalEdges('review-and-fix-errors', nodes_1.toolReviewAndFixErrorsEdges)
-    .addConditionalEdges('tools-review-and-fix-errors', nodes_1.toolReviewAndFixErrorsEdges)
+const state_1 = __nccwpck_require__(2462);
+const agents_1 = __nccwpck_require__(36758);
+const tool_executor_utility_1 = __nccwpck_require__(74226);
+// Create and compile the graph
+const workflow = new langgraph_1.StateGraph(state_1.GraphState)
+    // Add nodes
+    .addNode('find-file', agents_1.checkFileExists)
+    .addNode('tools-find-file', tool_executor_utility_1.toolExecutor)
+    .addNode('find-test-file', agents_1.checkTestFile)
+    .addNode('tools-find-test-file', tool_executor_utility_1.toolExecutor)
+    .addNode('create-new-tests', agents_1.createNewTests)
+    .addNode('analyze-existing-tests', agents_1.analyzeExistingTests)
+    .addNode('save-tests', agents_1.saveTests)
+    .addNode('tools-write-tests', tool_executor_utility_1.toolExecutor)
+    .addNode('run-tests', agents_1.runTests)
+    .addNode('tools-run-tests', tool_executor_utility_1.toolExecutor)
+    .addNode('analyze-results', agents_1.analyzeTestResults)
+    .addNode('fix-errors', agents_1.fixErrors)
+    .addNode('tools-fix-errors', tool_executor_utility_1.toolExecutor)
+    .addNode('tools-examine-test-results', tool_executor_utility_1.toolExecutor)
+    .addNode('tools-create-new-tests', tool_executor_utility_1.toolExecutor)
+    // Add edges with fixed flow
+    .addEdge('__start__', 'find-file')
+    .addConditionalEdges('find-file', agents_1.checkFileExistsEdges)
+    .addConditionalEdges('find-test-file', agents_1.checkTestFileEdges)
+    .addConditionalEdges('create-new-tests', agents_1.writeTestsEdges)
+    .addConditionalEdges('analyze-existing-tests', agents_1.analyzeExistingTestEdges)
+    .addConditionalEdges('save-tests', agents_1.saveTestsEdges) // Use new edge handler
+    .addConditionalEdges('tools-write-tests', agents_1.saveTestsEdges) // Route back through save flow
+    .addConditionalEdges('run-tests', agents_1.runTestsEdges)
+    .addConditionalEdges('analyze-results', agents_1.analyzeTestResultsEdges)
+    .addConditionalEdges('fix-errors', agents_1.fixErrorsEdges)
+    .addConditionalEdges('tools-find-file', agents_1.checkFileExistsEdges)
+    .addConditionalEdges('tools-find-test-file', agents_1.checkTestFileEdges)
+    .addConditionalEdges('tools-run-tests', agents_1.runTestsEdges)
+    .addConditionalEdges('tools-fix-errors', agents_1.fixErrorsEdges)
+    .addConditionalEdges('tools-create-new-tests', agents_1.writeTestsEdges)
+    .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges)
     .addEdge('run-tests', '__end__');
 exports.workflow = workflow;
+
+
+/***/ }),
+
+/***/ 26627:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.llm = void 0;
+const tavily_search_1 = __nccwpck_require__(61396);
+const openai_1 = __nccwpck_require__(92079);
+const prebuilt_1 = __nccwpck_require__(95286);
+const tools_1 = __nccwpck_require__(72003);
+const tools = [new tavily_search_1.TavilySearchResults({ maxResults: 3 }), ...tools_1.CustomTools];
+// Define the tools for the agent to use
+const toolNode = new prebuilt_1.ToolNode(tools);
+exports.llm = new openai_1.ChatOpenAI({
+    model: 'gpt-4o',
+    temperature: 0,
+    verbose: true
+}).bindTools(tools);
 
 
 /***/ }),
@@ -42492,17 +42485,9 @@ async function run() {
         if (diffOutput.trim()) {
             core.info('Changes detected, committing...');
             await exec.exec('git', ['config', 'user.name', 'github-actions']);
-            await exec.exec('git', [
-                'config',
-                'user.email',
-                'github-actions@github.com'
-            ]);
+            await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
             await exec.exec('git', ['add', '.']);
-            await exec.exec('git', [
-                'commit',
-                '-m',
-                'Automated commit by GitHub Actions'
-            ]);
+            await exec.exec('git', ['commit', '-m', 'Automated commit by GitHub Actions']);
             await exec.exec('git', ['push']);
             core.info('Changes committed and pushed.');
         }
@@ -42518,261 +42503,6 @@ async function run() {
 
 /***/ }),
 
-/***/ 89505:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.toolReviewAndFixErrorsEdges = exports.toolRunTestsEdges = exports.runTestsEdges = exports.addTestEdges = exports.listFilesDirectoryEdges = exports.listFilesDirectory = exports.runTests = exports.addTests = exports.reviewAndFixErrors = exports.runTestAgain = exports.GraphState = exports.tools = exports.toolNode = void 0;
-const messages_1 = __nccwpck_require__(62776);
-const tavily_search_1 = __nccwpck_require__(61396);
-const openai_1 = __nccwpck_require__(92079);
-const prompts_1 = __nccwpck_require__(45425);
-const prebuilt_1 = __nccwpck_require__(95286);
-// import { CodeAssistantTools } from './coding-assistant'
-const custom_tools_1 = __nccwpck_require__(49542);
-const state_1 = __nccwpck_require__(2462);
-Object.defineProperty(exports, "GraphState", ({ enumerable: true, get: function () { return state_1.GraphState; } }));
-const tools = [new tavily_search_1.TavilySearchResults({ maxResults: 3 }), ...custom_tools_1.CustomTools];
-exports.tools = tools;
-// Define the tools for the agent to use
-const toolNode = new prebuilt_1.ToolNode(tools);
-exports.toolNode = toolNode;
-const llm = new openai_1.ChatOpenAI({
-    model: 'gpt-4o-mini',
-    temperature: 0,
-    verbose: true
-}).bindTools(tools);
-// define edges
-const runTestsEdges = async (state) => {
-    // check last message type
-    const messages = state.messages;
-    const lastMessage = messages[messages.length - 1];
-    // If the LLM makes a tool call, then we route to the "tools" node
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-run-tests';
-    }
-    if (lastMessage instanceof messages_1.ToolMessage) {
-        return 'run-tests';
-    }
-    return '__end__';
-};
-exports.runTestsEdges = runTestsEdges;
-const addTestEdges = async (state) => {
-    // check last message type
-    const messages = state.messages;
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-add-tests';
-    }
-    return 'run-tests';
-};
-exports.addTestEdges = addTestEdges;
-const listFilesDirectoryEdges = async (state) => {
-    // check last message type
-    const messages = state.messages;
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-list-files';
-    }
-    return 'add-tests';
-};
-exports.listFilesDirectoryEdges = listFilesDirectoryEdges;
-const toolRunTestsEdges = async (state) => {
-    // check last message type
-    const messages = state.messages;
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-run-test-again';
-    }
-    return '__end__';
-};
-exports.toolRunTestsEdges = toolRunTestsEdges;
-const toolReviewAndFixErrorsEdges = async (state) => {
-    // check last message type
-    const messages = state.messages;
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-review-and-fix-errors';
-    }
-    if (state.iteration > 5) {
-        return '__end__';
-    }
-    return 'run-tests';
-};
-exports.toolReviewAndFixErrorsEdges = toolReviewAndFixErrorsEdges;
-// Nodes
-const listFilesDirectory = async (state) => {
-    const directoryListingTemplate = `You are an expert to analyse the file directory structure.
-        Given a directory path, list all the files in the directory.
-        You have access to the following tools: {tool_names}.
-        Current time: {time}.
-        You should use the tools to interact with the directory.
-        You should return the list of files in the directory.
-        If the directory does not exist, return an error message.
-         {agent_scratchpad}
-        `;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', directoryListingTemplate],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        time: new Date().toISOString(),
-        tool_names: tools.map(tool => tool.name).join(', '),
-        messages: state.messages,
-        agent_scratchpad: ''
-    });
-    const res = await llm.invoke(formattedPrompt);
-    console.log('Process listFilesDirectory Message Result', res);
-    return {
-        messages: [...state.messages, res]
-    };
-};
-exports.listFilesDirectory = listFilesDirectory;
-const runTests = async (state) => {
-    const runTestsTemplate = `You are an expert javascript test engineer specializing in test automation.
-        you have following tools Available:
-          - {tool_names}
-          - Current timestamp: {time}
-        Your task is to execute npm tests with coverage option and with json output.
-        Follow the instructions carefully to execute the tests.
-        Example commands: 
-          When package.json is in the root directory
-          - npm test -- --coverage --json
-          or if package.json is not in the root directory use below command
-          - npm test --prefix <directory_path> -- --coverage --json
-    `;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', runTestsTemplate],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        time: new Date().toISOString(),
-        tool_names: tools.map(tool => tool.name).join(', '),
-        messages: state.messages,
-        agent_scratchpad: ''
-    });
-    const res = await llm.invoke(formattedPrompt);
-    console.log('Process run test Message Result', res);
-    return {
-        messages: [...state.messages, res]
-    };
-};
-exports.runTests = runTests;
-const addTests = async (state) => {
-    const addTestsTemplate = `You are an expert at writing test cases in a javascript/node.js projects.
-  Given a file name and its content, add or update test cases for a React component.
-  
-  Guidelines:
-  1. Read the file content before writing tests.
-  2. Make accurate assertions based on the file content.
-  3. Focus on testing the component's core functionality based on the file content.
-  4. Write tests for:
-     - Component rendering
-     - Props validation
-     - State changes
-     - Side effects
-     - Event handling
-     - Edge cases
-  4. Use appropriate testing libraries (Jest, React Testing Library) and follow existing patterns.
-  5. Follow testing best practices:
-     - Arrange-Act-Assert pattern
-     - Meaningful test descriptions
-     - Isolated tests
-     - Clear assertions
-  6. Ensure test file name match the naming convention in the project.
-  
-  Constraints:
-  - Do not write unnecessary import statements which can fail linting
-  - Do not write new tests if they are not required or not related to the task
-  - Do not modify existing tests
-  - Do not write tests if total tests are already more than 10
-  - Do not make assumptions about the file content
-  
-  You have access to the following tools: {tool_names}
-  Current time: {time}
-  {agent_scratchpad}
-`;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', addTestsTemplate],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        time: new Date().toISOString(),
-        tool_names: tools.map(tool => tool.name).join(', '),
-        messages: state.messages,
-        agent_scratchpad: ''
-    });
-    const res = await llm.invoke(formattedPrompt);
-    console.log('Process listFilesDirectory Message Result', res);
-    return {
-        messages: [...state.messages, res]
-    };
-};
-exports.addTests = addTests;
-const reviewAndFixErrors = async (state) => {
-    const reviewAndFixErrorsTemplate = `You are an javascript engineer expert at reviewing code and fixing errors in test cases.
-  Given a set of test cases, code, review and fix any errors or issues in the test cases.
-  you have following tools Available:
-    - {tool_names}
-    - Current timestamp: {time}
-  Your task is to review the code, test cases and fix any issues or errors in the test cases.
-  You should also fix issues like linting errors, syntax errors, and other code quality issues.
-  Follow the instructions carefully to review and fix the test cases.
-`;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', reviewAndFixErrorsTemplate],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        time: new Date().toISOString(),
-        tool_names: tools.map(tool => tool.name).join(', '),
-        messages: state.messages,
-        agent_scratchpad: ''
-    });
-    const res = await llm.invoke(formattedPrompt);
-    console.log('Process reviewAndFixErrors Message Result', res);
-    return {
-        messages: [...state.messages, res],
-        iteration: state.iteration + 1
-    };
-};
-exports.reviewAndFixErrors = reviewAndFixErrors;
-const runTestAgain = async (state) => {
-    const runTestsTemplate = `You are an expert javascript test engineer specializing in test automation.
-      you have following tools Available:
-        - {tool_names}
-        - Current timestamp: {time}
-      Your task is to execute npm tests with coverage option and with json output.
-      Follow the instructions carefully to execute the tests.
-      Example command:
-        When package.json is in the root directory
-        - npm test -- --coverage --json
-        or if package.json is not in the root directory use below command
-        - npm test --prefix <directory_path> -- --coverage --json
-  `;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', runTestsTemplate],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        time: new Date().toISOString(),
-        tool_names: tools.map(tool => tool.name).join(', '),
-        messages: state.messages,
-        agent_scratchpad: ''
-    });
-    const res = await llm.invoke(formattedPrompt);
-    console.log('Process listFilesDirectory Message Result', res);
-    return {
-        messages: [...state.messages, res]
-    };
-};
-exports.runTestAgain = runTestAgain;
-
-
-/***/ }),
-
 /***/ 2462:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -42781,7 +42511,7 @@ exports.runTestAgain = runTestAgain;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.GraphState = void 0;
 const langgraph_1 = __nccwpck_require__(39405);
-// Define the graph state
+// Define the graph state with additional properties
 exports.GraphState = langgraph_1.Annotation.Root({
     messages: (0, langgraph_1.Annotation)({
         reducer: (x, y) => x.concat(y),
@@ -42791,8 +42521,875 @@ exports.GraphState = langgraph_1.Annotation.Root({
         reducer: z => z,
         default: () => 0
     }),
-    hasError: (0, langgraph_1.Annotation)({ reducer: z => z, default: () => false })
+    hasError: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => false
+    }),
+    fileName: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => ''
+    }),
+    testFileName: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => ''
+    }),
+    fileContent: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => ''
+    }),
+    filePath: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => ''
+    }),
+    testFileContent: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => ''
+    }),
+    testFilePath: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => ''
+    }),
+    testResults: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => null
+    }),
+    testSummary: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x,
+        default: () => null
+    })
 });
+
+
+/***/ }),
+
+/***/ 74226:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.toolExecutor = void 0;
+const messages_1 = __nccwpck_require__(62776);
+const messages_2 = __nccwpck_require__(62776);
+const langgraph_1 = __nccwpck_require__(39405);
+const tools_1 = __nccwpck_require__(72003);
+const tools = [...tools_1.CustomTools];
+const toolMap = new Map(tools.map(tool => [tool.name, tool]));
+const toolExecutor = async (state) => {
+    // debug state
+    console.log(state);
+    const message = state.messages.at(-1);
+    // @ts-ignore
+    if (!(0, messages_1.isAIMessage)(message) || message.tool_calls === undefined || message.tool_calls.length === 0) {
+        throw new Error('Most recent message must be an AIMessage with a tool call.');
+    }
+    // Execute all tool calls in parallel with proper error handling
+    const toolResults = (await Promise.allSettled(message.tool_calls.map(async (toolCall) => {
+        try {
+            const tool = toolMap.get(toolCall.name);
+            if (!tool) {
+                throw new Error(`Tool ${toolCall.name} not found`);
+            }
+            const result = await tool.invoke(toolCall.args);
+            return {
+                success: true,
+                result
+            };
+        }
+        catch (error) {
+            return {
+                success: false,
+                result: null,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    })));
+    // Process results and create state updates
+    const stateUpdates = toolResults.map((result, index) => {
+        // @ts-ignore
+        const toolCall = message?.tool_calls[index];
+        if (result.status === 'rejected') {
+            // Handle promise rejection
+            return {
+                update: {
+                    messages: [
+                        new messages_2.ToolMessage({
+                            content: `Tool execution failed: ${result.reason}`,
+                            // @ts-ignore
+                            tool_call_id: toolCall.id,
+                            additional_kwargs: { error: result.reason }
+                        })
+                    ]
+                }
+            };
+        }
+        const toolResult = result.value;
+        if (!toolResult.success) {
+            // Handle tool execution error
+            return {
+                update: {
+                    messages: [
+                        new messages_2.ToolMessage({
+                            content: `Tool execution failed: ${toolResult.error}`,
+                            // @ts-ignore
+                            tool_call_id: toolCall.id,
+                            additional_kwargs: { error: toolResult.error }
+                        })
+                    ]
+                }
+            };
+        }
+        // Handle successful tool execution
+        if ((0, langgraph_1.isCommand)(toolResult.result)) {
+            return toolResult.result;
+        }
+        const { messages: toolMessage, ...restResult } = toolResult.result;
+        // Convert regular tool output to Command
+        return {
+            ...restResult,
+            messages: [
+                new messages_2.ToolMessage({
+                    content: typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolMessage, null, 2),
+                    // @ts-ignore
+                    tool_call_id: toolCall.id,
+                    additional_kwargs: { result: toolResult.result }
+                })
+            ]
+        };
+    });
+    const stateUpdateReducer = stateUpdates.reduce((acc, update) => {
+        const { messages, ...restUpdate } = update;
+        return {
+            ...restUpdate,
+            messages: [...acc.messages, ...messages]
+        };
+    }, { fileContent: null, filePath: null, messages: [] });
+    const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
+    // Combine all state updates
+    return {
+        ...state,
+        ...restStateUpdates,
+        messages: [...state.messages, ...stateUpdateReducer.messages]
+    };
+};
+exports.toolExecutor = toolExecutor;
+
+
+/***/ }),
+
+/***/ 48716:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.FileFolderTools = void 0;
+const zod_1 = __nccwpck_require__(34809);
+const tools_1 = __nccwpck_require__(3477);
+const fs_1 = __importDefault(__nccwpck_require__(79896));
+const path_1 = __importDefault(__nccwpck_require__(16928));
+const messages_1 = __nccwpck_require__(62776);
+// Configuration constants
+const DEFAULT_EXCLUDE_DIRS = ['node_modules', 'public', 'dist', 'coverage', '.git', 'build'];
+const findFileRecursively = (searchPath, targetFile, excludeDirs = ['node_modules', 'public', 'dist', 'coverage', '.git']) => {
+    let results = [];
+    const search = (currentDir) => {
+        try {
+            const files = fs_1.default.readdirSync(currentDir);
+            for (const file of files) {
+                const filePath = path_1.default.join(currentDir, file);
+                const stat = fs_1.default.statSync(filePath);
+                if (stat.isDirectory()) {
+                    if (!excludeDirs.includes(file)) {
+                        // Recurse into subdirectories that aren't excluded
+                        search(filePath);
+                    }
+                }
+                else if (file === targetFile || filePath.endsWith(targetFile)) {
+                    // Match either exact filename or path ending with the target
+                    results.push({
+                        path: filePath,
+                        isDirectory: false,
+                        metadata: {
+                            size: stat.size,
+                            created: stat.birthtime,
+                            modified: stat.mtime,
+                            accessed: stat.atime
+                        }
+                    });
+                }
+            }
+        }
+        catch (error) {
+            console.error(`Error searching directory ${currentDir}:`, error);
+        }
+    };
+    search(searchPath);
+    return results;
+};
+const listFilesRecursively = (dir, excludeDirs = ['node_modules', 'public', 'dist', 'coverage', '.git'], filePattern = null) => {
+    let results = [];
+    const listFiles = (currentDir) => {
+        try {
+            const files = fs_1.default.readdirSync(currentDir);
+            files.forEach(file => {
+                const filePath = path_1.default.join(currentDir, file);
+                const stat = fs_1.default.statSync(filePath);
+                if (stat && stat.isDirectory()) {
+                    if (!excludeDirs.includes(file)) {
+                        listFiles(filePath);
+                    }
+                }
+                else {
+                    if (!filePattern || new RegExp(filePattern).test(file)) {
+                        results.push({
+                            path: filePath,
+                            size: stat.size,
+                            modified: stat.mtime,
+                            created: stat.birthtime
+                        });
+                    }
+                }
+            });
+        }
+        catch (error) {
+            console.error(`Error reading directory ${currentDir}:`, error);
+        }
+    };
+    listFiles(dir);
+    return results;
+};
+const validateFilePath = filePath => {
+    if (!filePath)
+        throw new Error('File path is required');
+    const normalizedPath = path_1.default.normalize(filePath);
+    const absolutePath = path_1.default.resolve(normalizedPath);
+    // Security check - ensure path is within project directory
+    const projectRoot = process.cwd();
+    if (!absolutePath.startsWith(projectRoot)) {
+        throw new Error('Access denied: File path must be within project directory');
+    }
+    return absolutePath;
+};
+exports.FileFolderTools = [
+    // Enhanced create file tool
+    new tools_1.DynamicStructuredTool({
+        name: 'create-file',
+        description: 'Creates a new file with optional template content and validation',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path to the file'),
+            fileName: zod_1.z.string().describe('name of the file'),
+            template: zod_1.z.string().optional().describe('template name to use'),
+            overwrite: zod_1.z.boolean().optional().describe('overwrite if file exists')
+        }),
+        func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager) => {
+            try {
+                const normalizedPath = path_1.default.normalize(dirPath);
+                const fullPath = path_1.default.join(normalizedPath, fileName);
+                validateFilePath(fullPath);
+                if (!fs_1.default.existsSync(normalizedPath)) {
+                    fs_1.default.mkdirSync(normalizedPath, { recursive: true });
+                }
+                if (fs_1.default.existsSync(fullPath) && !overwrite) {
+                    return {
+                        file_operation: {
+                            success: false,
+                            error: 'File already exists and overwrite is not enabled'
+                        },
+                        messages: [
+                            new messages_1.ToolMessage({
+                                content: 'File creation failed: File already exists and overwrite is not enabled',
+                                tool_call_id: runManager?.toolCall?.id
+                            })
+                        ]
+                    };
+                }
+                let content = template ? '// Generated file\n\n' : '';
+                fs_1.default.writeFileSync(fullPath, content, 'utf-8');
+                return {
+                    file_operation: {
+                        success: true,
+                        path: fullPath,
+                        message: `File created successfully at ${fullPath}`
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `File created successfully at ${fullPath}`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+            catch (error) {
+                return {
+                    file_operation: {
+                        success: false,
+                        error: error.message
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `File creation failed: ${error.message}`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+        }
+    }),
+    // Enhanced write file tool
+    new tools_1.DynamicStructuredTool({
+        name: 'write-file',
+        description: 'Writes content to a file with backup and validation options',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path to the file'),
+            fileName: zod_1.z.string().describe('name of the file'),
+            content: zod_1.z.string().describe('content to write'),
+            createBackup: zod_1.z.boolean().optional().describe('create backup of existing file'),
+            appendContent: zod_1.z.boolean().optional().describe('append instead of overwrite')
+        }),
+        func: async ({ path: dirPath, fileName, content, createBackup = false, appendContent = false }, runManager) => {
+            try {
+                const fullPath = path_1.default.join(dirPath, fileName);
+                validateFilePath(fullPath);
+                // Create backup if requested and file exists
+                if (createBackup && fs_1.default.existsSync(fullPath)) {
+                    const backupPath = `${fullPath}.backup-${Date.now()}`;
+                    fs_1.default.copyFileSync(fullPath, backupPath);
+                }
+                // Write content
+                if (appendContent && fs_1.default.existsSync(fullPath)) {
+                    fs_1.default.appendFileSync(fullPath, '\n' + content, 'utf-8');
+                }
+                else {
+                    fs_1.default.writeFileSync(fullPath, content, 'utf-8');
+                }
+                return {
+                    success: true,
+                    path: fullPath,
+                    //// message: `File ${appendContent ? "updated" : "written"} successfully`,
+                    /// Tool messages are now handled by the ToolMessage class
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `File write successfull. File ${appendContent ? 'updated' : 'written'} successfully`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+            catch (error) {
+                return {
+                    success: false,
+                    error: error.message,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `File write failed: ${error.message}`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+        }
+    }),
+    // Enhanced list files tool
+    new tools_1.DynamicStructuredTool({
+        name: 'list-files',
+        description: 'Lists files in a directory with filtering and detailed information',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path to the directory'),
+            pattern: zod_1.z.string().optional().describe('file pattern to match'),
+            exclude: zod_1.z.array(zod_1.z.string()).optional().describe('directories to exclude'),
+            includeDetails: zod_1.z.boolean().optional().describe('include file details')
+        }),
+        func: async ({ path: dirPath, pattern, exclude, includeDetails = false }, runManager) => {
+            try {
+                const absolutePath = validateFilePath(dirPath);
+                const files = listFilesRecursively(absolutePath, exclude || ['node_modules', 'public', 'dist', 'coverage', '.git'], pattern);
+                if (!includeDetails) {
+                    return {
+                        success: true,
+                        files: files.map(f => f.path),
+                        messages: [
+                            new messages_1.ToolMessage({
+                                content: `Files listed successfully in ${dirPath}`,
+                                additional_kwargs: { files: files.map(f => f.path) },
+                                tool_call_id: runManager?.toolCall?.id
+                            })
+                        ]
+                    };
+                }
+                const fileDirPath = path_1.default.dirname(absolutePath);
+                return {
+                    success: true,
+                    files: files,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Files listed successfully in ${fileDirPath}`,
+                            additional_kwargs: { files },
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+            catch (error) {
+                return {
+                    success: false,
+                    error: error.message,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Failed to list files: ${error.message}`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+        }
+    }),
+    // Enhanced read file tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'read-file',
+        description: 'Reads file content with encoding options and metadata',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path to the file'),
+            encoding: zod_1.z.string().optional().describe('file encoding'),
+            includeMetadata: zod_1.z.boolean().optional().describe('include file metadata')
+        }),
+        func: async ({ path: filePath, encoding = 'utf-8', includeMetadata = false }, runManager) => {
+            try {
+                const absolutePath = validateFilePath(filePath);
+                const content = fs_1.default.readFileSync(absolutePath, { encoding: encoding });
+                let result = { content };
+                if (includeMetadata) {
+                    const stats = fs_1.default.statSync(absolutePath);
+                    result.metadata = {
+                        size: stats.size,
+                        created: stats.birthtime,
+                        modified: stats.mtime,
+                        accessed: stats.atime
+                    };
+                }
+                return {
+                    file_content: {
+                        success: true,
+                        ...result
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `File read successfully: ${filePath}`,
+                            tool_call_id: runManager?.toolCall?.id,
+                            additional_kwargs: result
+                        })
+                    ]
+                };
+            }
+            catch (error) {
+                return {
+                    file_content: {
+                        success: false,
+                        error: error.message
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Failed to read file: ${error.message}`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+        }
+    }),
+    // Enhanced find file tool
+    new tools_1.DynamicStructuredTool({
+        name: 'find-file',
+        description: 'Recursively searches for a file and returns its content',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path or name of the file to find'),
+            searchRoot: zod_1.z.string().optional().describe('current root directory to start search from'),
+            excludeDirs: zod_1.z.array(zod_1.z.string()).optional().describe('directories to exclude from search'),
+            encoding: zod_1.z.string().optional().describe('encoding to use when reading file content')
+        }),
+        func: async ({ path: filePath, excludeDirs = DEFAULT_EXCLUDE_DIRS, encoding = 'utf8' }, runManager) => {
+            try {
+                const searchRoot = process.cwd();
+                const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+                const fileName = path_1.default.basename(filePath);
+                // Find all matching files and get their content
+                const results = findFileRecursively(rootDir, fileName, excludeDirs).map(location => {
+                    try {
+                        return {
+                            path: location.path,
+                            content: fs_1.default.readFileSync(location.path, encoding)
+                        };
+                    }
+                    catch (err) {
+                        return {
+                            path: location.path,
+                            content: null
+                        };
+                    }
+                });
+                const result = results.length === 0
+                    ? {
+                        exists: false,
+                        message: 'File not found'
+                    }
+                    : {
+                        exists: true,
+                        files: results,
+                        message: 'Files found'
+                    };
+                return {
+                    fileContent: result.files?.map(f => f.content).join('\n'),
+                    filePath: result.files?.map(f => f.path).join('\n'),
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Found: ${result.message} \n 
+              filepath: ${result.files?.map(f => f.path).join('\n')} \n
+              filecontent: ${result.files?.map(f => f.content).join('\n')}
+              `,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+            catch (error) {
+                return {
+                    file_check: {
+                        exists: false,
+                        error: error.message
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error: ${error.message}`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+        }
+    }),
+    new tools_1.DynamicStructuredTool({
+        name: 'find-test-file',
+        description: 'Recursively finds and reads corresponding test file content',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            sourcePath: zod_1.z.string().describe('path to the source file'),
+            extensions: zod_1.z.array(zod_1.z.string()).optional().describe('test file extensions to look for'),
+            searchRoot: zod_1.z.string().optional().describe('current root directory to start search from')
+        }),
+        func: async ({ sourcePath, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts'] }, runManager) => {
+            try {
+                // Get the file name without extension to search for test files
+                const searchRoot = process.cwd();
+                const sourceFileName = path_1.default.basename(sourcePath, path_1.default.extname(sourcePath));
+                const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+                // Function to check if a file is a test file for our source
+                const isMatchingTestFile = (fileName) => {
+                    return extensions.some(ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`));
+                };
+                // Find matching test file recursively
+                const findTestFile = (dir) => {
+                    let result = null;
+                    const search = (currentDir) => {
+                        if (result)
+                            return; // Stop if we found a match
+                        const files = fs_1.default.readdirSync(currentDir);
+                        for (const file of files) {
+                            if (result)
+                                break; // Stop if we found a match
+                            const filePath = path_1.default.join(currentDir, file);
+                            const stat = fs_1.default.statSync(filePath);
+                            if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
+                                search(filePath); // Recurse into subdirectories
+                            }
+                            else if (isMatchingTestFile(file)) {
+                                try {
+                                    const content = fs_1.default.readFileSync(filePath, 'utf8');
+                                    result = {
+                                        path: filePath,
+                                        content: content
+                                    };
+                                    break;
+                                }
+                                catch (err) {
+                                    console.warn(`Could not read file: ${filePath}`);
+                                }
+                            }
+                        }
+                    };
+                    search(dir);
+                    return result;
+                };
+                const testFile = findTestFile(rootDir);
+                return {
+                    testFileContent: testFile ? testFile.content : null,
+                    testFilePath: testFile ? testFile.path : null,
+                    testFileName: testFile ? path_1.default.basename(testFile.path) : null,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: testFile
+                                ? `Found test file: ${testFile.path} \nContent: ${JSON.stringify(testFile.content)}`.replace(/\s+/g, ' ')
+                                : `No test file found for ${sourceFileName}`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+            catch (error) {
+                return {
+                    testFileContent: null,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error finding test file: ${error.message}`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+        }
+    })
+];
+
+
+/***/ }),
+
+/***/ 72003:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CustomTools = void 0;
+const npm_test_tool_1 = __nccwpck_require__(28834);
+const file_folder_tools_1 = __nccwpck_require__(48716);
+const test_result_analyzer_tool_1 = __nccwpck_require__(37543);
+exports.CustomTools = [...npm_test_tool_1.TestTools, ...file_folder_tools_1.FileFolderTools, ...test_result_analyzer_tool_1.TestResultAnalyzerTools];
+
+
+/***/ }),
+
+/***/ 28834:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TestTools = void 0;
+const zod_1 = __nccwpck_require__(34809);
+const tools_1 = __nccwpck_require__(3477);
+const util_1 = __nccwpck_require__(39023);
+const child_process_1 = __nccwpck_require__(35317);
+const messages_1 = __nccwpck_require__(62776);
+const nodeExecutor = (0, util_1.promisify)(child_process_1.exec);
+exports.TestTools = [
+    // Enhanced npm test tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'npm-test',
+        description: 'Executes npm test commands with support for various options including coverage and watch mode',
+        schema: zod_1.z.object({
+            command: zod_1.z.string().describe('npm command to execute'),
+            options: zod_1.z
+                .object({
+                directory_path: zod_1.z
+                    .string()
+                    .optional()
+                    .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+                coverage: zod_1.z.boolean().optional().describe('Run tests with coverage'),
+                json: zod_1.z.boolean().optional().describe('Output test results as JSON'),
+                watch: zod_1.z.boolean().optional().describe('Run tests in watch mode'),
+                testRegex: zod_1.z.string().optional().describe('Regular expression to match test files'),
+                updateSnapshots: zod_1.z.boolean().optional().describe('Update test snapshots')
+            })
+                .optional()
+        }),
+        func: async ({ command, options = {} }, runManager) => {
+            try {
+                const testCommandCheck = command.includes('test');
+                let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
+                // Add options to the command
+                if (options.directory_path)
+                    fullCommand += ` --prefix ./appcode`;
+                // suffix json
+                fullCommand += ` -- --json`;
+                if (options.coverage)
+                    fullCommand += ' --coverage';
+                // if (options.json) fullCommand += " --json";
+                if (options.testRegex)
+                    fullCommand += ` --testRegex="${options.testRegex}"`;
+                if (options.updateSnapshots)
+                    fullCommand += ' -u';
+                // append silent flag to suppress npm notices
+                // fullCommand += " --silent 2>/dev/null";
+                const { stdout, stderr } = await nodeExecutor(fullCommand);
+                return {
+                    testResults: { success: true, output: stdout },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Test execution completed successfully`,
+                            tool_call_id: runManager?.toolCall?.id,
+                            additional_kwargs: { stdout }
+                        })
+                    ]
+                };
+            }
+            catch (error) {
+                return {
+                    hasError: true,
+                    testResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Test execution failed: ${error.message}`,
+                            tool_call_id: runManager?.toolCall?.id,
+                            additional_kwargs: { error: error.message }
+                        })
+                    ]
+                };
+            }
+        }
+    })
+];
+
+
+/***/ }),
+
+/***/ 37543:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TestResultAnalyzerTools = void 0;
+const zod_1 = __nccwpck_require__(34809);
+const tools_1 = __nccwpck_require__(3477);
+const messages_1 = __nccwpck_require__(62776);
+exports.TestResultAnalyzerTools = [
+    // New tool: Json Test Result Analyzer
+    new tools_1.DynamicStructuredTool({
+        name: 'json-test-result-analyzer',
+        description: 'Analyzes and summarizes test results from JSON output',
+        schema: zod_1.z.object({
+            result: zod_1.z
+                .object({
+                numTotalTests: zod_1.z.number().describe('total number of tests'),
+                numPassedTests: zod_1.z.number().describe('number of passed tests'),
+                numFailedTests: zod_1.z.number().describe('number of failed tests'),
+                numPendingTests: zod_1.z.number().describe('number of skipped tests'),
+                failureReasons: zod_1.z.array(zod_1.z.string()).optional().describe('failure reasons'),
+                coverage: zod_1.z
+                    .object({
+                    lines: zod_1.z
+                        .object({
+                        total: zod_1.z.number().describe('total lines'),
+                        covered: zod_1.z.number().describe('covered lines'),
+                        skipped: zod_1.z.number().describe('skipped lines'),
+                        pct: zod_1.z.number().describe('coverage percentage')
+                    })
+                        .describe('line coverage'),
+                    statements: zod_1.z
+                        .object({
+                        total: zod_1.z.number().describe('total statements'),
+                        covered: zod_1.z.number().describe('covered statements'),
+                        skipped: zod_1.z.number().describe('skipped statements'),
+                        pct: zod_1.z.number().describe('coverage percentage')
+                    })
+                        .describe('statement coverage'),
+                    functions: zod_1.z
+                        .object({
+                        total: zod_1.z.number().describe('total functions'),
+                        covered: zod_1.z.number().describe('covered functions'),
+                        skipped: zod_1.z.number().describe('skipped functions'),
+                        pct: zod_1.z.number().describe('coverage percentage')
+                    })
+                        .describe('function coverage'),
+                    branches: zod_1.z
+                        .object({
+                        total: zod_1.z.number().describe('total branches'),
+                        covered: zod_1.z.number().describe('covered branches'),
+                        skipped: zod_1.z.number().describe('skipped branches'),
+                        pct: zod_1.z.number().describe('coverage percentage')
+                    })
+                        .describe('branch coverage')
+                })
+                    .describe('test coverage  metrics')
+            })
+                .describe('parsed JSON test results')
+        }),
+        func: async ({ result }, runManager) => {
+            try {
+                const testResults = result;
+                const totalTests = testResults.numTotalTests;
+                const totalPassed = testResults.numPassedTests;
+                const totalFailed = testResults.numFailedTests;
+                const totalSkipped = testResults.numPendingTests;
+                return {
+                    testSummary: {
+                        totalTests,
+                        totalPassed,
+                        totalFailed,
+                        totalSkipped,
+                        failureReasons: testResults.failureReasons || [],
+                        coverage: {
+                            lines: {
+                                total: testResults.coverage.lines.total,
+                                covered: testResults.coverage.lines.covered,
+                                skipped: testResults.coverage.lines.skipped,
+                                pct: testResults.coverage.lines.pct
+                            },
+                            statements: {
+                                total: testResults.coverage.statements.total,
+                                covered: testResults.coverage.statements.covered,
+                                skipped: testResults.coverage.statements.skipped,
+                                pct: testResults.coverage.statements.pct
+                            },
+                            functions: {
+                                total: testResults.coverage.functions.total,
+                                covered: testResults.coverage.functions.covered,
+                                skipped: testResults.coverage.functions.skipped,
+                                pct: testResults.coverage.functions.pct
+                            },
+                            branches: {
+                                total: testResults.coverage.branches.total,
+                                covered: testResults.coverage.branches.covered,
+                                skipped: testResults.coverage.branches.skipped,
+                                pct: testResults.coverage.branches.pct
+                            }
+                        }
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Test results analyzed: ${totalPassed} passed, ${totalFailed} failed, ${totalSkipped} skipped`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+            catch (error) {
+                return {
+                    testSummary: {
+                        error: error.message
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error analyzing test results: ${error.message}`,
+                            tool_call_id: runManager?.toolCall?.id
+                        })
+                    ]
+                };
+            }
+        }
+    })
+];
 
 
 /***/ }),
@@ -99513,14 +100110,6 @@ function getEncodingNameForModel(model) {
 exports.Tiktoken = Tiktoken;
 exports.getEncodingNameForModel = getEncodingNameForModel;
 
-
-/***/ }),
-
-/***/ 80056:
-/***/ ((module) => {
-
-"use strict";
-module.exports = /*#__PURE__*/JSON.parse('{"name":"dotenv","version":"16.4.7","description":"Loads environment variables from .env file","main":"lib/main.js","types":"lib/main.d.ts","exports":{".":{"types":"./lib/main.d.ts","require":"./lib/main.js","default":"./lib/main.js"},"./config":"./config.js","./config.js":"./config.js","./lib/env-options":"./lib/env-options.js","./lib/env-options.js":"./lib/env-options.js","./lib/cli-options":"./lib/cli-options.js","./lib/cli-options.js":"./lib/cli-options.js","./package.json":"./package.json"},"scripts":{"dts-check":"tsc --project tests/types/tsconfig.json","lint":"standard","pretest":"npm run lint && npm run dts-check","test":"tap run --allow-empty-coverage --disable-coverage --timeout=60000","test:coverage":"tap run --show-full-coverage --timeout=60000 --coverage-report=lcov","prerelease":"npm test","release":"standard-version"},"repository":{"type":"git","url":"git://github.com/motdotla/dotenv.git"},"funding":"https://dotenvx.com","keywords":["dotenv","env",".env","environment","variables","config","settings"],"readmeFilename":"README.md","license":"BSD-2-Clause","devDependencies":{"@types/node":"^18.11.3","decache":"^4.6.2","sinon":"^14.0.1","standard":"^17.0.0","standard-version":"^9.5.0","tap":"^19.2.0","typescript":"^4.8.4"},"engines":{"node":">=12"},"browser":{"fs":false}}');
 
 /***/ }),
 

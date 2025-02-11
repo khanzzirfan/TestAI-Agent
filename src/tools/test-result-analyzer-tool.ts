@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { DynamicStructuredTool } from '@langchain/core/tools'
-import { ToolMessage } from '@langchain/core/messages'
+import { z } from 'zod';
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { ToolMessage } from '@langchain/core/messages';
 
 export const TestResultAnalyzerTools = [
   // New tool: Json Test Result Analyzer
@@ -56,11 +56,11 @@ export const TestResultAnalyzerTools = [
     }),
     func: async ({ result }, runManager: any) => {
       try {
-        const testResults = result
-        const totalTests = testResults.numTotalTests
-        const totalPassed = testResults.numPassedTests
-        const totalFailed = testResults.numFailedTests
-        const totalSkipped = testResults.numPendingTests
+        const testResults = result;
+        const totalTests = testResults.numTotalTests;
+        const totalPassed = testResults.numPassedTests;
+        const totalFailed = testResults.numFailedTests;
+        const totalSkipped = testResults.numPendingTests;
 
         return {
           testSummary: {
@@ -102,7 +102,7 @@ export const TestResultAnalyzerTools = [
               tool_call_id: runManager?.toolCall?.id
             })
           ]
-        }
+        };
       } catch (error: unknown | any) {
         return {
           testSummary: {
@@ -114,8 +114,8 @@ export const TestResultAnalyzerTools = [
               tool_call_id: runManager?.toolCall?.id
             })
           ]
-        }
+        };
       }
     }
   })
-]
+];

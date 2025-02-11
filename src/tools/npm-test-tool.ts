@@ -1,10 +1,10 @@
-import { z } from 'zod'
-import { DynamicStructuredTool } from '@langchain/core/tools'
-import { promisify } from 'util'
-import { exec } from 'child_process'
-import { ToolMessage } from '@langchain/core/messages'
+import { z } from 'zod';
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { promisify } from 'util';
+import { exec } from 'child_process';
+import { ToolMessage } from '@langchain/core/messages';
 
-const nodeExecutor = promisify(exec)
+const nodeExecutor = promisify(exec);
 
 export const TestTools = [
   // Enhanced npm test tool with Command
@@ -31,20 +31,20 @@ export const TestTools = [
     }),
     func: async ({ command, options = {} }, runManager: any) => {
       try {
-        const testCommandCheck = command.includes('test')
-        let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command
+        const testCommandCheck = command.includes('test');
+        let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
         // Add options to the command
-        if (options.directory_path) fullCommand += ` --prefix ./appcode`
+        if (options.directory_path) fullCommand += ` --prefix ./appcode`;
         // suffix json
-        fullCommand += ` -- --json`
-        if (options.coverage) fullCommand += ' --coverage'
+        fullCommand += ` -- --json`;
+        if (options.coverage) fullCommand += ' --coverage';
         // if (options.json) fullCommand += " --json";
-        if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`
-        if (options.updateSnapshots) fullCommand += ' -u'
+        if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`;
+        if (options.updateSnapshots) fullCommand += ' -u';
 
         // append silent flag to suppress npm notices
         // fullCommand += " --silent 2>/dev/null";
-        const { stdout, stderr } = await nodeExecutor(fullCommand)
+        const { stdout, stderr } = await nodeExecutor(fullCommand);
 
         return {
           testResults: { success: true, output: stdout },
@@ -55,7 +55,7 @@ export const TestTools = [
               additional_kwargs: { stdout }
             })
           ]
-        }
+        };
       } catch (error: unknown | any) {
         return {
           hasError: true,
@@ -71,8 +71,8 @@ export const TestTools = [
               additional_kwargs: { error: error.message }
             })
           ]
-        }
+        };
       }
     }
   })
-]
+];
