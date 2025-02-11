@@ -41800,7 +41800,6 @@ const analyzeExistingTests = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        ...state,
         messages: [res]
     };
 };
@@ -41888,7 +41887,6 @@ const checkFileExists = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        ...state,
         messages: [res]
     };
 };
@@ -41949,7 +41947,6 @@ const checkTestFile = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        ...state,
         messages: [res]
     };
 };
@@ -42001,7 +41998,6 @@ const createNewTests = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        ...state,
         messages: [res]
     };
 };
@@ -42060,7 +42056,6 @@ const fixErrors = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        ...state,
         messages: [res],
         iteration: state.iteration + 1,
         // reset error flags
@@ -42146,7 +42141,6 @@ const runTests = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        ...state,
         messages: [res]
     };
 };
@@ -42199,14 +42193,12 @@ const saveTests = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        ...state,
         messages: [res]
     };
 };
 exports.saveTests = saveTests;
 const writeTestsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
-    // @ts-ignore
     if (lastMessage.tool_calls?.length) {
         return 'tools-create-new-tests';
     }
@@ -42522,35 +42514,35 @@ exports.GraphState = langgraph_1.Annotation.Root({
         default: () => false
     }),
     fileName: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x,
+        reducer: z => z,
         default: () => ''
     }),
     testFileName: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x,
+        reducer: z => z,
         default: () => ''
     }),
     fileContent: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x,
+        reducer: z => z,
         default: () => ''
     }),
     filePath: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x,
+        reducer: z => z,
         default: () => ''
     }),
     testFileContent: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x,
+        reducer: z => z,
         default: () => ''
     }),
     testFilePath: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x,
+        reducer: z => z,
         default: () => ''
     }),
     testResults: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x,
+        reducer: z => z,
         default: () => null
     }),
     testSummary: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x,
+        reducer: z => z,
         default: () => null
     })
 });
