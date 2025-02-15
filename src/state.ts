@@ -8,7 +8,7 @@ export const GraphState = Annotation.Root({
     default: () => []
   }),
   iteration: Annotation<number>({
-    reducer: z => z,
+    reducer: x => x,
     default: () => 0
   }),
   hasError: Annotation<boolean>({
