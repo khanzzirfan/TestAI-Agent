@@ -95,25 +95,13 @@ export const TestResultAnalyzerTools = [
                 pct: testResults.coverage.branches.pct
               }
             }
-          },
-          messages: [
-            new ToolMessage({
-              content: `Test results analyzed: ${totalPassed} passed, ${totalFailed} failed, ${totalSkipped} skipped`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          }
         };
       } catch (error: unknown | any) {
         return {
           testSummary: {
             error: error.message
-          },
-          messages: [
-            new ToolMessage({
-              content: `Error analyzing test results: ${error.message}`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          }
         };
       }
     }

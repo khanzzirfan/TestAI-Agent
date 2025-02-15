@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { promisify } from 'util';
 import { exec } from 'child_process';
-import { ToolMessage } from '@langchain/core/messages';
 
 const nodeExecutor = promisify(exec);
 
@@ -47,14 +46,7 @@ export const TestTools = [
         const { stdout, stderr } = await nodeExecutor(fullCommand);
 
         return {
-          testResults: { success: true, output: stdout },
-          messages: [
-            new ToolMessage({
-              content: `Test execution completed successfully`,
-              tool_call_id: runManager?.toolCall?.id,
-              additional_kwargs: { stdout }
-            })
-          ]
+          testResults: { success: true, output: stdout }
         };
       } catch (error: unknown | any) {
         return {
@@ -63,14 +55,7 @@ export const TestTools = [
             success: false,
             error: error.message,
             output: error.stdout || ''
-          },
-          messages: [
-            new ToolMessage({
-              content: `Test execution failed: ${error.message}`,
-              tool_call_id: runManager?.toolCall?.id,
-              additional_kwargs: { error: error.message }
-            })
-          ]
+          }
         };
       }
     }

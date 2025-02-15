@@ -8,8 +8,6 @@ const tools = [...CustomTools];
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 
 export const toolExecutor = async (state: typeof GraphState.State) => {
-  // debug state
-  console.log('tool executor state', JSON.stringify(state));
   const message = state.messages.at(-1);
   // @ts-ignore
   if (!isAIMessage(message) || message.tool_calls === undefined || message.tool_calls.length === 0) {
@@ -89,7 +87,8 @@ export const toolExecutor = async (state: typeof GraphState.State) => {
       ...restResult,
       messages: [
         new ToolMessage({
-          content: typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolMessage, null, 2),
+          content:
+            typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result, null, 2),
           // @ts-ignore
           tool_call_id: toolCall.id,
           additional_kwargs: { result: toolResult.result }
@@ -115,6 +114,6 @@ export const toolExecutor = async (state: typeof GraphState.State) => {
   return {
     ...state,
     ...restStateUpdates,
-    messages: [...state.messages, ...stateUpdateReducer.messages]
+    messages: updatedMessages
   };
 };

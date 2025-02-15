@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import fs from 'fs';
 import path from 'path';
-import { ToolMessage } from '@langchain/core/messages';
 
 // Configuration constants
 const DEFAULT_EXCLUDE_DIRS = ['node_modules', 'public', 'dist', 'coverage', '.git', 'build'];
@@ -157,13 +156,7 @@ export const FileFolderTools = [
             file_operation: {
               success: false,
               error: 'File already exists and overwrite is not enabled'
-            },
-            messages: [
-              new ToolMessage({
-                content: 'File creation failed: File already exists and overwrite is not enabled',
-                tool_call_id: runManager?.toolCall?.id
-              })
-            ]
+            }
           };
         }
 
@@ -175,26 +168,14 @@ export const FileFolderTools = [
             success: true,
             path: fullPath,
             message: `File created successfully at ${fullPath}`
-          },
-          messages: [
-            new ToolMessage({
-              content: `File created successfully at ${fullPath}`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          }
         };
       } catch (error: unknown | any) {
         return {
           file_operation: {
             success: false,
             error: error.message
-          },
-          messages: [
-            new ToolMessage({
-              content: `File creation failed: ${error.message}`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          }
         };
       }
     }
@@ -235,26 +216,12 @@ export const FileFolderTools = [
 
         return {
           success: true,
-          path: fullPath,
-          //// message: `File ${appendContent ? "updated" : "written"} successfully`,
-          /// Tool messages are now handled by the ToolMessage class
-          messages: [
-            new ToolMessage({
-              content: `File write successfull. File ${appendContent ? 'updated' : 'written'} successfully`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          path: fullPath
         };
       } catch (error: unknown | any) {
         return {
           success: false,
-          error: error.message,
-          messages: [
-            new ToolMessage({
-              content: `File write failed: ${error.message}`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          error: error.message
         };
       }
     }
@@ -283,14 +250,7 @@ export const FileFolderTools = [
         if (!includeDetails) {
           return {
             success: true,
-            files: files.map(f => f.path),
-            messages: [
-              new ToolMessage({
-                content: `Files listed successfully in ${dirPath}`,
-                additional_kwargs: { files: files.map(f => f.path) },
-                tool_call_id: runManager?.toolCall?.id
-              })
-            ]
+            files: files.map(f => f.path)
           };
         }
 
@@ -298,25 +258,12 @@ export const FileFolderTools = [
 
         return {
           success: true,
-          files: files,
-          messages: [
-            new ToolMessage({
-              content: `Files listed successfully in ${fileDirPath}`,
-              additional_kwargs: { files },
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          files: files
         };
       } catch (error: unknown | any) {
         return {
           success: false,
-          error: error.message,
-          messages: [
-            new ToolMessage({
-              content: `Failed to list files: ${error.message}`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          error: error.message
         };
       }
     }
@@ -352,27 +299,14 @@ export const FileFolderTools = [
           file_content: {
             success: true,
             ...result
-          },
-          messages: [
-            new ToolMessage({
-              content: `File read successfully: ${filePath}`,
-              tool_call_id: runManager?.toolCall?.id,
-              additional_kwargs: result
-            })
-          ]
+          }
         };
       } catch (error: unknown | any) {
         return {
           file_content: {
             success: false,
             error: error.message
-          },
-          messages: [
-            new ToolMessage({
-              content: `Failed to read file: ${error.message}`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          }
         };
       }
     }
@@ -434,29 +368,14 @@ export const FileFolderTools = [
 
         return {
           fileContent: result.files?.map(f => f.content).join('\n'),
-          filePath: result.files?.map(f => f.path).join('\n'),
-          messages: [
-            new ToolMessage({
-              content: `Found: ${result.message} \n 
-              filepath: ${result.files?.map(f => f.path).join('\n')} \n
-              filecontent: ${result.files?.map(f => f.content).join('\n')}
-              `,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          filePath: result.files?.map(f => f.path).join('\n')
         };
       } catch (error: any) {
         return {
           file_check: {
             exists: false,
             error: error.message
-          },
-          messages: [
-            new ToolMessage({
-              content: `Error: ${error.message}`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          }
         };
       }
     }
@@ -532,28 +451,11 @@ export const FileFolderTools = [
         return {
           testFileContent: testFile ? testFile.content : null,
           testFilePath: testFile ? testFile.path : null,
-          testFileName: testFile ? path.basename(testFile.path) : null,
-          messages: [
-            new ToolMessage({
-              content: testFile
-                ? `Found test file: ${testFile.path} \nContent: ${JSON.stringify(testFile.content)}`.replace(
-                    /\s+/g,
-                    ' '
-                  )
-                : `No test file found for ${sourceFileName}`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          testFileName: testFile ? path.basename(testFile.path) : null
         };
       } catch (error: any) {
         return {
-          testFileContent: null,
-          messages: [
-            new ToolMessage({
-              content: `Error finding test file: ${error.message}`,
-              tool_call_id: runManager?.toolCall?.id
-            })
-          ]
+          testFileContent: null
         };
       }
     }
