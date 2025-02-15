@@ -24,6 +24,7 @@ IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
   const res = await llm.invoke(formattedPrompt);
   return {
     ...state,
+    // @ts-ignore
     messages: [res]
   };
 };

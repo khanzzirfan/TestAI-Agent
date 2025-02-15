@@ -21,6 +21,7 @@ export const checkFileExists = async (state: State): Promise<Update> => {
 
   const res = await llm.invoke(formattedPrompt);
   return {
+    // @ts-ignore
     messages: [res]
   };
 };

@@ -47,6 +47,7 @@ export const fixErrors = async (state: State): Promise<Update> => {
 
   const res = await llm.invoke(formattedPrompt);
   return {
+    // @ts-ignore
     messages: [res],
     iteration: state.iteration + 1,
     // reset error flags

@@ -1,0 +1,139 @@
+name: Missing-Translations-Finder
+
+on:
+  schedule:
+    - cron: "0 * * * *" # Runs every hour
+  workflow_dispatch: # Allows manual triggering
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  fetch-appinsights:
+    runs-on: ubuntu-latest
+    env:
+      AZURE_APPINSIGHTS_APP_ID: ${{ secrets.AZURE_APPINSIGHTS_APP_ID }}
+      AZURE_APPINSIGHTS_API_KEY: ${{ secrets.AZURE_APPINSIGHTS_API_KEY }}
+      GH_TOKEN: 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
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Fetch Application Insights Logs
+        run: |
+          echo "Fetching MissingTranslation logs from Azure App Insights..."
+          curl -X POST "https://api.applicationinsights.io/v1/apps/${{ secrets.AZURE_APPINSIGHTS_APP_ID }}/query" \
+            -H "x-api-key: ${{ secrets.AZURE_APPINSIGHTS_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data '{"query": "customEvents | where name == \"MissingTranslation\" and timestamp > ago(20h) | project timestamp, name, customDimensions"}' \
+            -o appInsights.json
+
+      - name: Display Logs
+        run: cat appInsights.json || echo "No logs found."
+
+      - name: Define Localization Paths
+        run: |
+          export LOCALE_PATH="./VineaNovaWebProject/public/locales"
+          echo "LOCALE_PATH=$LOCALE_PATH" >> $GITHUB_ENV
+          echo "EN_LOCALE=$LOCALE_PATH/en/translation.json" >> $GITHUB_ENV
+          echo "FR_LOCALE=$LOCALE_PATH/fr/translation.json" >> $GITHUB_ENV
+          echo "ES_LOCALE=$LOCALE_PATH/es/translation.json" >> $GITHUB_ENV
+          echo "DE_LOCALE=$LOCALE_PATH/de/translation.json" >> $GITHUB_ENV
+
+      - name: Ensure Localization Files Exist
+        run: |
+          mkdir -p "$(dirname $EN_LOCALE)"
+          mkdir -p "$(dirname $FR_LOCALE)"
+          mkdir -p "$(dirname $ES_LOCALE)"
+          mkdir -p "$(dirname $DE_LOCALE)"
+
+          touch $EN_LOCALE $FR_LOCALE $ES_LOCALE $DE_LOCALE
+
+          # Initialize if empty
+          [ -s $EN_LOCALE ] || echo "{}" > $EN_LOCALE
+          [ -s $FR_LOCALE ] || echo "{}" > $FR_LOCALE
+          [ -s $ES_LOCALE ] || echo "{}" > $ES_LOCALE
+          [ -s $DE_LOCALE ] || echo "{}" > $DE_LOCALE
+
+      - name: Iterate Over JSON and Translate
+        run: |
+          # Extract rows directly
+          TOTAL_ENTRIES=$(jq '.tables[0].rows | length' appInsights.json)
+
+          if [[ $TOTAL_ENTRIES -eq 0 ]]; then
+            echo "No logs found in appInsights.json"
+            exit 0
+          fi
+
+          for ((i=0; i<$TOTAL_ENTRIES; i++)); do
+            ROW=$(jq -c ".tables[0].rows[$i]" appInsights.json)
+            CUSTOM_DIMENSIONS=$(echo "$ROW" | jq -r '.[2]')
+
+            # Convert customDimensions to JSON format
+            PARSED_CUSTOM_DIMENSIONS=$(echo "$CUSTOM_DIMENSIONS" | jq -c '.')
+
+            # Extract translation key
+            KEY=$(echo "$PARSED_CUSTOM_DIMENSIONS" | jq -r '.key // empty')
+
+            if [[ -n "$KEY" ]]; then
+              echo "Processing translation key: $KEY"
+
+              # Check if the key already exists in en.json
+              if jq -e --arg key "$KEY" 'has($key)' "$EN_LOCALE" > /dev/null; then
+                echo "Key '$KEY' already exists, skipping..."
+                continue
+              fi
+
+              OPENAI_PARAMS="{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"Translate this to French, Spanish, and German:\nEnglish: $KEY\nFrench:\nSpanish:\nGerman:\"}]}"
+              RESPONSE=$(curl -s -X POST "https://api.openai.com/v1/chat/completions" \
+                -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+                -H "Content-Type: application/json" \
+                --data "$OPENAI_PARAMS")
+
+              TRANSLATED_TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+
+              # Extract translations from OpenAI response
+              FR_TEXT=$(echo "$TRANSLATED_TEXT" | grep -oP 'French: \K.*')
+              ES_TEXT=$(echo "$TRANSLATED_TEXT" | grep -oP 'Spanish: \K.*')
+              DE_TEXT=$(echo "$TRANSLATED_TEXT" | grep -oP 'German: \K.*')
+
+              # Default to original key if translation fails
+              FR_TEXT=${FR_TEXT:-$KEY}
+              ES_TEXT=${ES_TEXT:-$KEY}
+              DE_TEXT=${DE_TEXT:-$KEY}
+
+              # Append new keys to respective locale files
+              jq --arg key "$KEY" --arg value "$KEY" '. + {($key): $value}' $EN_LOCALE > temp.json && mv temp.json $EN_LOCALE
+              jq --arg key "$KEY" --arg value "$FR_TEXT" '. + {($key): $value}' $FR_LOCALE > temp.json && mv temp.json $FR_LOCALE
+              jq --arg key "$KEY" --arg value "$ES_TEXT" '. + {($key): $value}' $ES_LOCALE > temp.json && mv temp.json $ES_LOCALE
+              jq --arg key "$KEY" --arg value "$DE_TEXT" '. + {($key): $value}' $DE_LOCALE > temp.json && mv temp.json $DE_LOCALE
+
+              echo "Added translation for '$KEY': FR='$FR_TEXT', ES='$ES_TEXT', DE='$DE_TEXT'"
+            else
+              echo "No key found in entry $i, skipping..."
+            fi
+          done
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b update-locales
+
+          git add $EN_LOCALE $FR_LOCALE $ES_LOCALE $DE_LOCALE
+          git commit -m "Update localization files with new missing keys"
+
+          git push origin update-locales --force
+          git push https://${{ env.GH_TOKEN }}@github.com/infopowernz/vineanova.git update-locales --force
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: update-locales
+          title: "Update Localization Files"
+          body: "Added missing translation keys to en.json, fr.json, es.json, and de.json."
+          base: main

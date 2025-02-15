@@ -9,7 +9,7 @@ const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 
 export const toolExecutor = async (state: typeof GraphState.State) => {
   // debug state
-  console.log(state);
+  console.log('tool executor state', JSON.stringify(state));
   const message = state.messages.at(-1);
   // @ts-ignore
   if (!isAIMessage(message) || message.tool_calls === undefined || message.tool_calls.length === 0) {

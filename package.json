@@ -34,7 +34,9 @@
     "package": "npx ncc build src/index.ts -o dist --source-map --license licenses.txt",
     "package:watch": "npm run package -- --watch",
     "test": "npx jest",
-    "all": "npm run format:write && npm run lint && npm run test && npm run coverage && npm run package"
+    "test:only": "npx jest graph-agent.test.ts --no-coverage",
+    "all": "npm run format:write && npm run lint && npm run test && npm run coverage && npm run package",
+    "start:dev": "npx ts-node src/testapp/test-agent-v2.ts"
   },
   "license": "MIT",
   "jest": {
@@ -64,6 +66,9 @@
     "collectCoverage": true,
     "collectCoverageFrom": [
       "./src/**"
+    ],
+    "setupFiles": [
+      "dotenv/config"
     ]
   },
   "dependencies": {
