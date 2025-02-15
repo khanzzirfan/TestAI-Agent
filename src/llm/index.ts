@@ -15,15 +15,30 @@ export function initializeLLM(modelName: string, tools: any[]) {
   const model = new ChatOpenAI({
     model: modelName,
     temperature: 0,
-    verbose: true
+    verbose: false
   });
 
   // const toolNode = new ToolNode(tools);
   return model.bindTools(tools);
 }
 
+export function initializeReactAgent(modelName: string, tools: any[]) {
+  const model = new ChatOpenAI({
+    model: modelName,
+    temperature: 0,
+    verbose: false
+  });
+
+  // const toolNode = new ToolNode(tools);
+  return createReactAgent({
+    llm: model,
+    tools: tools,
+    checkpointSaver: checkpointer
+  });
+}
+
 export const llm = new ChatOpenAI({
   model: 'gpt-4o',
   temperature: 0,
-  verbose: true
+  verbose: false
 }).bindTools(tools);

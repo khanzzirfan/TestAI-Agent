@@ -2,14 +2,14 @@
  * Unit tests for mini-agent.test.ts
  */
 import { expect } from '@jest/globals';
-import { initializeLLM } from '../src/llm';
+import { initializeReactAgent } from '../src/llm';
 import { testSearch } from '../src/tools/testing-tools';
 import { AIMessage } from '@langchain/core/messages';
 
 describe('llm agent test', () => {
-  const llm = initializeLLM('gpt-4o', [testSearch]);
+  const llm = initializeReactAgent('gpt-4o', [testSearch]);
 
-  it('should return the result ', async () => {
+  it.only('should return the result ', async () => {
     // Use the agent
     const result = await llm.invoke(
       {
