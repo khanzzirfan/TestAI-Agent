@@ -146,6 +146,13 @@ class Serializable {
     get lc_aliases() {
         return undefined;
     }
+    /**
+     * A manual list of keys that should be serialized.
+     * If not overridden, all fields passed into the constructor will be serialized.
+     */
+    get lc_serializable_keys() {
+        return undefined;
+    }
     constructor(kwargs, ..._args) {
         Object.defineProperty(this, "lc_serializable", {
             enumerable: true,
@@ -159,7 +166,12 @@ class Serializable {
             writable: true,
             value: void 0
         });
-        this.lc_kwargs = kwargs || {};
+        if (this.lc_serializable_keys !== undefined) {
+            this.lc_kwargs = Object.fromEntries(Object.entries(kwargs || {}).filter(([key]) => this.lc_serializable_keys?.includes(key)));
+        }
+        else {
+            this.lc_kwargs = kwargs ?? {};
+        }
     }
     toJSON() {
         if (!this.lc_serializable) {
@@ -1546,6 +1558,14 @@ function _constructMessageFromParams(params) {
             className === "SystemMessageChunk") {
             type = "system";
         }
+        else if (className === "FunctionMessage" ||
+            className === "FunctionMessageChunk") {
+            type = "function";
+        }
+        else if (className === "ToolMessage" ||
+            className === "ToolMessageChunk") {
+            type = "tool";
+        }
         else {
             type = "unknown";
         }
@@ -1981,6 +2001,22 @@ class BasePromptTemplate extends _runnables_base_js__WEBPACK_IMPORTED_MODULE_0__
             writable: true,
             value: void 0
         });
+        /**
+         * Metadata to be used for tracing.
+         */
+        Object.defineProperty(this, "metadata", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        /** Tags to be used for tracing. */
+        Object.defineProperty(this, "tags", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
         const { inputVariables } = input;
         if (inputVariables.includes("stop")) {
             throw new Error("Cannot have an input variable named 'stop', as it is used internally, please rename.");
@@ -2016,7 +2052,12 @@ class BasePromptTemplate extends _runnables_base_js__WEBPACK_IMPORTED_MODULE_0__
      * @returns A Promise that resolves to the output of the prompt template.
      */
     async invoke(input, options) {
-        return this._callWithConfig((input) => this.formatPromptValue(input), input, { ...options, runType: "prompt" });
+        const metadata = {
+            ...this.metadata,
+            ...options?.metadata,
+        };
+        const tags = [...(this.tags ?? []), ...(options?.tags ?? [])];
+        return this._callWithConfig((input) => this.formatPromptValue(input), input, { ...options, tags, metadata, runType: "prompt" });
     }
     /**
      * Return a json-like object representing this prompt template.
@@ -13082,6 +13123,9 @@ class BaseCallbackHandler extends BaseCallbackHandlerMethodsClass {
     get lc_aliases() {
         return undefined;
     }
+    get lc_serializable_keys() {
+        return undefined;
+    }
     /**
      * The name of the serializable. Override to provide an alias or
      * to preserve the serialized module name in minified environments.
@@ -13379,7 +13423,7 @@ class BaseTracer extends BaseCallbackHandler {
         await this.onLLMStart?.(run);
         return run;
     }
-    async handleLLMEnd(output, runId) {
+    async handleLLMEnd(output, runId, _parentRunId, _tags, extraParams) {
         const run = this.runMap.get(runId);
         if (!run || run?.run_type !== "llm") {
             throw new Error("No LLM run to end.");
@@ -13390,11 +13434,12 @@ class BaseTracer extends BaseCallbackHandler {
             name: "end",
             time: new Date(run.end_time).toISOString(),
         });
+        run.extra = { ...run.extra, ...extraParams };
         await this.onLLMEnd?.(run);
         await this._endTrace(run);
         return run;
     }
-    async handleLLMError(error, runId) {
+    async handleLLMError(error, runId, _parentRunId, _tags, extraParams) {
         const run = this.runMap.get(runId);
         if (!run || run?.run_type !== "llm") {
             throw new Error("No LLM run to end.");
@@ -13405,6 +13450,7 @@ class BaseTracer extends BaseCallbackHandler {
             name: "error",
             time: new Date(run.end_time).toISOString(),
         });
+        run.extra = { ...run.extra, ...extraParams };
         await this.onLLMError?.(run);
         await this._endTrace(run);
         return run;
@@ -13999,6 +14045,7 @@ class tracer_langchain_LangChainTracer extends BaseTracer {
             trace_id: run.trace_id,
             dotted_order: run.dotted_order,
             parent_run_id: run.parent_run_id,
+            extra: run.extra,
         };
         await this.client.updateRun(run.id, runUpdate);
     }
@@ -14553,11 +14600,11 @@ class CallbackManagerForLLMRun extends BaseRunManager {
             }
         }, handler.awaitHandlers)));
     }
-    async handleLLMError(err) {
+    async handleLLMError(err, _runId, _parentRunId, _tags, extraParams) {
         await Promise.all(this.handlers.map((handler) => consumeCallback(async () => {
             if (!handler.ignoreLLM) {
                 try {
-                    await handler.handleLLMError?.(err, this.runId, this._parentRunId, this.tags);
+                    await handler.handleLLMError?.(err, this.runId, this._parentRunId, this.tags, extraParams);
                 }
                 catch (err) {
                     const logFunction = handler.raiseError
@@ -14571,11 +14618,11 @@ class CallbackManagerForLLMRun extends BaseRunManager {
             }
         }, handler.awaitHandlers)));
     }
-    async handleLLMEnd(output) {
+    async handleLLMEnd(output, _runId, _parentRunId, _tags, extraParams) {
         await Promise.all(this.handlers.map((handler) => consumeCallback(async () => {
             if (!handler.ignoreLLM) {
                 try {
-                    await handler.handleLLMEnd?.(output, this.runId, this._parentRunId, this.tags);
+                    await handler.handleLLMEnd?.(output, this.runId, this._parentRunId, this.tags, extraParams);
                 }
                 catch (err) {
                     const logFunction = handler.raiseError
@@ -19539,16 +19586,44 @@ class Runnable extends serializable/* Serializable */.y {
             // eslint-disable-next-line no-param-reassign
             config.callbacks = copiedCallbacks;
         }
+        const abortController = new AbortController();
         // Call the runnable in streaming mode,
         // add each chunk to the output stream
         const outerThis = this;
         async function consumeRunnableStream() {
             try {
-                const runnableStream = await outerThis.stream(input, config);
+                let signal;
+                if (options?.signal) {
+                    if ("any" in AbortSignal) {
+                        // Use native AbortSignal.any() if available (Node 19+)
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        signal = AbortSignal.any([
+                            abortController.signal,
+                            options.signal,
+                        ]);
+                    }
+                    else {
+                        // Fallback for Node 18 and below - just use the provided signal
+                        signal = options.signal;
+                        // Ensure we still abort our controller when the parent signal aborts
+                        options.signal.addEventListener("abort", () => {
+                            abortController.abort();
+                        }, { once: true });
+                    }
+                }
+                else {
+                    signal = abortController.signal;
+                }
+                const runnableStream = await outerThis.stream(input, {
+                    ...config,
+                    signal,
+                });
                 const tappedStream = eventStreamer.tapOutputIterable(runId, runnableStream);
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 for await (const _ of tappedStream) {
                     // Just iterate so that the callback handler picks up events
+                    if (abortController.signal.aborted)
+                        break;
                 }
             }
             finally {
@@ -19583,6 +19658,7 @@ class Runnable extends serializable/* Serializable */.y {
             }
         }
         finally {
+            abortController.abort();
             await runnableStreamConsumePromise;
         }
     }
