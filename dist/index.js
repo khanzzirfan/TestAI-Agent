@@ -41818,6 +41818,11 @@ exports.analyzeExistingTests = analyzeExistingTests;
 const analyzeExistingTestEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
+        // check tool call names
+        const toolCallNames = lastMessage.tool_calls.map(call => call.name);
+        if (toolCallNames.includes('read-file')) {
+            return 'tools-read-file';
+        }
         return 'tools-write-tests';
     }
     return 'run-tests';
@@ -42385,6 +42390,7 @@ const MainGraphRun = async () => {
         .addNode('fix-errors', agents_1.fixErrors)
         .addNode('tools-find-file', toolExecutor)
         .addNode('tools-find-test-file', toolExecutor)
+        .addNode('tools-read-file', toolExecutor)
         .addNode('tools-write-tests', toolExecutor)
         .addNode('tools-run-tests', toolExecutor)
         .addNode('tools-fix-errors', toolExecutor)
@@ -42392,6 +42398,7 @@ const MainGraphRun = async () => {
         .addNode('tools-create-new-tests', toolExecutor)
         // Add edges with fixed flow
         .addEdge('__start__', 'find-file')
+        .addEdge('tools-read-file', 'analyze-existing-tests')
         .addConditionalEdges('find-file', agents_1.checkFileExistsEdges)
         .addConditionalEdges('find-test-file', agents_1.checkTestFileEdges)
         .addConditionalEdges('create-new-tests', agents_1.writeTestsEdges)
