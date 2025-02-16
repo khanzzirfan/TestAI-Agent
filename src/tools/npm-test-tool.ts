@@ -33,7 +33,7 @@ export const TestTools = [
         const testCommandCheck = command.includes('test');
         let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
         // Add options to the command
-        if (options.directory_path) fullCommand += ` --prefix ./appcode`;
+        if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
         // suffix json
         fullCommand += ` -- --json`;
         if (options.coverage) fullCommand += ' --coverage';
@@ -46,7 +46,9 @@ export const TestTools = [
         const { stdout, stderr } = await nodeExecutor(fullCommand);
 
         return {
-          testResults: { success: true, output: stdout }
+          testResults: { success: true, output: JSON.stringify(stdout) },
+          hasError: false,
+          messageValue: stdout
         };
       } catch (error: unknown | any) {
         return {
@@ -55,7 +57,8 @@ export const TestTools = [
             success: false,
             error: error.message,
             output: error.stdout || ''
-          }
+          },
+          messageValue: error.message
         };
       }
     }

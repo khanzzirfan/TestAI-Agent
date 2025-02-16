@@ -41764,6 +41764,523 @@ exports.NEVER = parseUtil_1.INVALID;
 
 /***/ }),
 
+/***/ 51867:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.analyzeExistingTestEdges = exports.analyzeExistingTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const analyzeExistingTests = async (state) => {
+    const template = `
+    All necessary test cases and component details are included below.
+    Analyze the existing test cases for {fileName} and determine if they are sufficient.
+    If the tests are inadequate, create new test cases to improve coverage.
+
+    ### Test File Name: {testFileName}
+    ### Test file path: {testFilePath}
+    ### **Existing Test Content:**
+    {testFileContent}
+
+    ### **Component Content:**
+    {fileContent}
+
+    ### **Guidelines:**
+    - **Analyze** the existing test cases for coverage and accuracy.
+    - **Identify** any gaps or missing test scenarios.
+    - **Create** new test cases to improve coverage if necessary.
+    - **Maintain** consistency with existing test structure.
+    - **Ensure** the tests are accurate, reliable, and compatible with the component.
+
+    ### **Output:**
+    - Return the updated test file content only.
+    - If new test cases are created, use write-file tool call to save the test file.
+  `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        testFileName: state.testFileName,
+        testFilePath: state.testFilePath,
+        testFileContent: state.testFileContent,
+        fileContent: state.fileContent,
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.analyzeExistingTests = analyzeExistingTests;
+// edge
+const analyzeExistingTestEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        // check tool call names
+        const toolCallNames = lastMessage.tool_calls.map(call => call.name);
+        if (toolCallNames.includes('read-file')) {
+            return 'tools-read-file';
+        }
+        return 'tools-write-tests';
+    }
+    return 'run-tests';
+};
+exports.analyzeExistingTestEdges = analyzeExistingTestEdges;
+
+
+/***/ }),
+
+/***/ 40860:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.analyzeTestResultsEdges = exports.analyzeTestResults = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const analyzeTestResults = async (state) => {
+    const template = `
+Analyze the test results and return the parsed JSON output for further reporting.
+IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
+Note: Ignore the warning messages and focus on the test results only and fix the errors if any.
+
+### **Test Results:**  
+{testResults}
+
+`;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages,
+        testResults: JSON.stringify(state.testResults, null, 2)
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        messages: [res]
+    };
+};
+exports.analyzeTestResults = analyzeTestResults;
+// examin test results edges
+const analyzeTestResultsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        const toolCallNames = lastMessage.tool_calls.map(call => call.name);
+        if (toolCallNames.includes('write-file')) {
+            return 'tools-write-tests';
+        }
+        return 'tools-examine-test-results';
+    }
+    else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
+        return 'fix-errors';
+    }
+    else if (!state.testSummary) {
+        return 'run-tests';
+    }
+    return 'final-notes';
+};
+exports.analyzeTestResultsEdges = analyzeTestResultsEdges;
+
+
+/***/ }),
+
+/***/ 35486:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.checkFileExistsEdges = exports.checkFileExists = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const checkFileExists = async (state) => {
+    const template = `
+    Given the filename {fileName}, verify it exists in the codebase.
+    Use the available tool: find-file.
+    Current time: {time}
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        time: new Date().toISOString(),
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.checkFileExists = checkFileExists;
+// Edge
+// Edge definitions
+const checkFileExistsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-find-file';
+    }
+    if (state.fileContent === null) {
+        return 'find-file';
+    }
+    else if (state.testFileName && state.testFileContent) {
+        return 'analyze-existing-tests';
+    }
+    else
+        return 'find-test-file';
+};
+exports.checkFileExistsEdges = checkFileExistsEdges;
+
+
+/***/ }),
+
+/***/ 91198:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.checkTestFileEdges = exports.checkTestFile = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const checkTestFile = async (state) => {
+    const template = `
+    Your task is to check if a test file exists for {fileName}.
+    
+    ### **Guidelines:**
+    1. Look for both .test.tsx and .spec.tsx extensions.
+    2. If found, read and store the existing test content.
+    
+    ### **Tools:**
+    - Use the available tool: find-test-file.
+    
+    ### **Expected Output:**
+    1. Return the content of the test file if found.
+    2. If no test file is found, indicate that no test file exists.
+    
+    Current time: {time}
+    IMPORTANT: Strictly follow the provided guidelines.
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        time: new Date().toISOString(),
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.checkTestFile = checkTestFile;
+// Edge
+const checkTestFileEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-find-test-file';
+    }
+    // Route based on whether test file exists
+    return state.testFileContent ? 'analyze-existing-tests' : 'create-new-tests';
+};
+exports.checkTestFileEdges = checkTestFileEdges;
+
+
+/***/ }),
+
+/***/ 38768:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createNewTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const createNewTests = async (state) => {
+    const template = `
+    Your task is to create comprehensive test cases for the component specified in {fileName}.
+    The component's content is provided below:
+
+    Component content: {fileContent}
+    
+    Guidelines:
+    1. Write tests that thoroughly cover the component's functionality.
+    2. Test all possible inputs and their variations.
+    3. Include tests for user interactions and edge cases.
+    4. Ensure robust error handling and test boundary conditions.
+    5. Aim for a test coverage of over 80%.
+    
+    Use modern testing practices and frameworks that are appropriate for the language of the component.
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        fileContent: state.fileContent,
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.createNewTests = createNewTests;
+
+
+/***/ }),
+
+/***/ 26757:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.fixErrorsEdges = exports.fixErrors = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const fixErrors = async (state) => {
+    const template = `
+    Fix and update test cases for {fileName}, then save the updated file.
+    
+    ### **Test Failures:**  
+    {failureReasons}
+    
+    ### **Instructions:**  
+    - **Analyze** test failures and identify root causes.  
+    - **Fix errors** and update test cases accordingly.  
+    - **Ensure tests remain accurate, reliable, and compatible.**  
+    - **Maintain best practices** and follow existing test structure.  
+    
+    ### **Test File Name:**  
+    {testFileName}
+    
+    ### **Test File Path:**  
+    {testFilePath}
+    
+    ### **Existing Test Content:**  
+    {testFileContent}
+    
+    ### **Component Content:**  
+    {fileContent}
+    
+    ### **Output:**  
+    1. Return the **fully updated test file**, ready to run.  
+    2. **Use the 'write-file' tool call** to save the updated test file.  
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        testFileName: state.testFileName,
+        testFilePath: state.testFilePath,
+        fileContent: state.fileContent,
+        testFileContent: state.testFileContent,
+        failureReasons: state.testResults ? JSON.stringify(state.testResults.failures, null, 2) : 'No test results found',
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res],
+        iteration: state.iteration + 1,
+        // reset error flags
+        hasError: false,
+        testResults: null,
+        testSummary: null
+    };
+};
+exports.fixErrors = fixErrors;
+// Edge
+const fixErrorsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-fix-errors';
+    }
+    if (state.iteration > 5) {
+        return '__end__';
+    }
+    return 'run-tests';
+};
+exports.fixErrorsEdges = fixErrorsEdges;
+
+
+/***/ }),
+
+/***/ 36758:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(51867), exports);
+__exportStar(__nccwpck_require__(35486), exports);
+__exportStar(__nccwpck_require__(91198), exports);
+__exportStar(__nccwpck_require__(87810), exports);
+__exportStar(__nccwpck_require__(40860), exports);
+__exportStar(__nccwpck_require__(26757), exports);
+__exportStar(__nccwpck_require__(74780), exports);
+__exportStar(__nccwpck_require__(38768), exports);
+__exportStar(__nccwpck_require__(87086), exports);
+
+
+/***/ }),
+
+/***/ 74780:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.runTestsEdges = exports.runTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const runTests = async (state) => {
+    const template = `
+    ### Task: Run Tests and Analyze Results
+
+    Execute the test suite using the appropriate **npm test command**.
+
+    use the **tool call** npm-test to run the tests.
+    
+    Output:
+    - Return a summary of the test results, highlighting any failures.
+    - Include coverage information if available.;
+  `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res],
+        hasError: false,
+        testResults: null,
+        testSummary: null
+    };
+};
+exports.runTests = runTests;
+// edge
+const runTestsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-run-tests';
+    }
+    return 'analyze-results';
+};
+exports.runTestsEdges = runTestsEdges;
+
+
+/***/ }),
+
+/***/ 87810:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.saveTestsEdges = exports.writeTestsEdges = exports.saveTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const saveTests = async (state) => {
+    const template = `
+    Save the generated test content to a file with correct naming convention and path.
+
+### **File Naming Rules:**
+- Use the appropriate test file extension: **'.test.tsx'** or **.spec.tsx**.
+- Maintain the same directory structure as {fileName}.
+- Ensure consistency with existing test files.
+
+### **Expected Action:**
+- Save the file using a **tool call** write-file with the correct **file path and name**.
+- Test file path: **{testFilePath}**
+
+ `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages,
+        testFilePath: state.testFilePath
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.saveTests = saveTests;
+const writeTestsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-create-new-tests';
+    }
+    return 'find-test-file';
+};
+exports.writeTestsEdges = writeTestsEdges;
+// Define a separate edge handler for save tests
+const saveTestsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools-write-tests';
+    }
+    return 'run-tests'; // After saving, proceed to run tests
+};
+exports.saveTestsEdges = saveTestsEdges;
+
+
+/***/ }),
+
+/***/ 87086:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.finalNotesAgent = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const finalNotesAgent = async (state) => {
+    const template = `
+    ### Task: Write Summary of the Test Results
+    
+    - file: **{fileName}**
+    - Test Results: **{testResults}**
+
+    Summarize the test results and provide a detailed report of the test coverage and accuracy.      
+ `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages,
+        testResults: state.testResults
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.finalNotesAgent = finalNotesAgent;
+
+
+/***/ }),
+
 /***/ 168:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -41808,72 +42325,20 @@ const langgraph_1 = __nccwpck_require__(39405);
 const messages_1 = __nccwpck_require__(62776);
 const core = __importStar(__nccwpck_require__(37484));
 const langgraph_2 = __nccwpck_require__(39405);
-const langgraph_3 = __nccwpck_require__(39405);
 const messages_2 = __nccwpck_require__(62776);
 const messages_3 = __nccwpck_require__(62776);
-const langgraph_4 = __nccwpck_require__(39405);
+const langgraph_3 = __nccwpck_require__(39405);
 const tools_1 = __nccwpck_require__(72003);
-const prompts_1 = __nccwpck_require__(45425);
-const llm_1 = __nccwpck_require__(26627);
+const state_1 = __nccwpck_require__(2462);
 const tools = [...tools_1.CustomTools];
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
+const agents_1 = __nccwpck_require__(36758);
 const MainGraphRun = async () => {
     // Initialize memory to persist state between graph runs
     const checkpointer = new langgraph_1.MemorySaver();
     const inMemoryStore = new langgraph_1.InMemoryStore();
     const filename = core.getInput('file_name');
     const toolNames = tools_1.CustomTools.map(tool => tool.name).join(', ');
-    // Define the graph state with additional properties
-    const GraphState = langgraph_3.Annotation.Root({
-        messages: (0, langgraph_3.Annotation)({
-            reducer: (x, y) => x.concat(y),
-            default: () => []
-        }),
-        iteration: (0, langgraph_3.Annotation)({
-            reducer: x => x,
-            default: () => 0
-        }),
-        hasError: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => false
-        }),
-        fileName: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => ''
-        }),
-        testFileName: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => ''
-        }),
-        fileContent: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => ''
-        }),
-        filePath: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => ''
-        }),
-        testFileContent: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => ''
-        }),
-        testFilePath: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => ''
-        }),
-        testFileFound: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => false
-        }),
-        testResults: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => null
-        }),
-        testSummary: (0, langgraph_3.Annotation)({
-            reducer: z => z,
-            default: () => null
-        })
-    });
     const toolExecutor = async (state) => {
         const message = state.messages.at(-1);
         // @ts-ignore
@@ -41881,94 +42346,52 @@ const MainGraphRun = async () => {
             throw new Error('Most recent message must be an AIMessage with a tool call.');
         }
         // Execute all tool calls in parallel with proper error handling
-        const toolResults = (await Promise.allSettled(message.tool_calls.map(async (toolCall) => {
+        const toolResults = (await Promise.all(message.tool_calls.map(async (toolCall) => {
             try {
                 const tool = toolMap.get(toolCall.name);
                 if (!tool) {
                     throw new Error(`Tool ${toolCall.name} not found`);
                 }
                 const result = await tool.invoke(toolCall.args);
-                return {
-                    success: true,
-                    result
-                };
+                const { messageValue = {}, ...restResult } = result;
+                return new langgraph_1.Command({
+                    update: {
+                        ...restResult,
+                        messages: [
+                            new messages_3.ToolMessage({
+                                content: JSON.stringify(messageValue, null, 2),
+                                tool_call_id: toolCall.id,
+                                additional_kwargs: { result }
+                            })
+                        ]
+                    }
+                });
             }
             catch (error) {
-                return {
-                    success: false,
-                    result: null,
-                    error: error instanceof Error ? error.message : String(error)
-                };
+                return new langgraph_1.Command({
+                    update: {
+                        messages: [
+                            new messages_3.ToolMessage({
+                                content: `Tool ${toolCall.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+                                tool_call_id: toolCall.id,
+                                additional_kwargs: { error }
+                            })
+                        ]
+                    }
+                });
             }
         })));
-        // Process results and create state updates
-        const stateUpdates = toolResults.map((result, index) => {
-            // @ts-ignore
-            const toolCall = message?.tool_calls[index];
-            if (result.status === 'rejected') {
-                // Handle promise rejection
-                return {
-                    update: {
-                        messages: [
-                            new messages_3.ToolMessage({
-                                content: `Tool execution failed: ${result.reason}`,
-                                // @ts-ignore
-                                tool_call_id: toolCall.id,
-                                additional_kwargs: { error: result.reason }
-                            })
-                        ]
-                    }
-                };
+        // Handle mixed Command and non-Command outputs
+        const combinedOutputs = toolResults.map(output => {
+            if ((0, langgraph_3.isCommand)(output)) {
+                console.log('running  command output', output);
+                return output;
             }
-            const toolResult = result.value;
-            if (!toolResult.success) {
-                // Handle tool execution error
-                return {
-                    update: {
-                        messages: [
-                            new messages_3.ToolMessage({
-                                content: `Tool execution failed: ${toolResult.error}`,
-                                // @ts-ignore
-                                tool_call_id: toolCall.id,
-                                additional_kwargs: { error: toolResult.error }
-                            })
-                        ]
-                    }
-                };
-            }
-            // Handle successful tool execution
-            if ((0, langgraph_4.isCommand)(toolResult.result)) {
-                return toolResult.result;
-            }
-            const { messages: toolMessage, ...restResult } = toolResult.result;
-            // Convert regular tool output to Command
-            return {
-                ...restResult,
-                messages: [
-                    new messages_3.ToolMessage({
-                        content: typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result, null, 2),
-                        // @ts-ignore
-                        tool_call_id: toolCall.id,
-                        additional_kwargs: { result: toolResult.result }
-                    })
-                ]
-            };
+            // Tool invocation result is a string, convert it to a ToolMessage
+            return { messages: [output] };
         });
-        const stateUpdateReducer = stateUpdates.reduce((acc, update) => {
-            const { messages, ...restUpdate } = update;
-            return {
-                ...restUpdate,
-                messages: [...acc.messages, ...messages]
-            };
-        }, { fileContent: null, filePath: null, messages: [] });
-        const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
-        // Combine all state updates
-        console.log('stateUpdateReducer', JSON.stringify(stateUpdateReducer, null, 2));
-        return {
-            ...state,
-            ...restStateUpdates,
-            messages: updatedMessages
-        };
+        // Return an array of values instead of an object
+        return combinedOutputs;
     };
     const callToolsEdge = async (state) => {
         const lastMessage = state.messages[state.messages.length - 1];
@@ -41995,355 +42418,53 @@ const MainGraphRun = async () => {
         if (hasBothFiles) {
             return 'analyze-existing-tests';
         }
-        else if (state.fileName && state.filePath && !state.testFileFound) {
-            return 'create-new-tests';
-        }
         if (state.filePath) {
             // found source file, now find test file
             return 'find-test-file';
         }
         return 'find-file';
     };
-    const analyzeExistingTests = async (state) => {
-        const template = `
-    All necessary test cases and component details are included below.
-    Analyze the existing test cases for {fileName} and determine if they are sufficient.
-    If the tests are inadequate, create new test cases to improve coverage.
-
-    ### Test File Name: {testFileName}
-    ### Test file path: {testFilePath}
-    ### **Existing Test Content:**
-    {testFileContent}
-
-    ### **Component Content:**
-    {fileContent}
-
-    ### **Guidelines:**
-    - **Analyze** the existing test cases for coverage and accuracy.
-    - **Identify** any gaps or missing test scenarios.
-    - **Create** new test cases to improve coverage if necessary.
-    - **Maintain** consistency with existing test structure.
-    - **Ensure** the tests are accurate, reliable, and compatible with the component.
-
-    ### **Output:**
-    - Return the updated test file content only.
-    - If new test cases are created, use write-file tool call to save the test file.
-  `;
-        const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
-        const formattedPrompt = await prompt.formatMessages({
-            fileName: state.fileName,
-            testFileName: state.testFileName,
-            testFilePath: state.testFilePath,
-            testFileContent: state.testFileContent,
-            fileContent: state.fileContent,
-            messages: state.messages
-        });
-        const res = await llm_1.llm.invoke(formattedPrompt);
-        return {
-            // @ts-ignore
-            messages: [res]
-        };
-    };
-    // edge
-    const analyzeExistingTestEdges = async (state) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        if (lastMessage.tool_calls?.length) {
-            return 'tools';
-        }
-        return 'run-tests';
-    };
-    const analyzeTestResults = async (state) => {
-        const template = `
-Analyze the test results and return the parsed JSON output for further reporting.
-IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
-
-### **Test Results:**  
-{testResults}
-
-`;
-        const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
-        const formattedPrompt = await prompt.formatMessages({
-            fileName: state.fileName,
-            messages: state.messages,
-            testResults: JSON.stringify(state.testResults, null, 2)
-        });
-        const res = await llm_1.llm.invoke(formattedPrompt);
-        return {
-            ...state,
-            // @ts-ignore
-            messages: [res]
-        };
-    };
-    // examin test results edges
-    const analyzeTestResultsEdges = async (state) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        if (lastMessage.tool_calls?.length) {
-            return 'tools';
-        }
-        else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
-            return 'fix-errors';
-        }
-        return '__end__';
-    };
-    const checkFileExists = async (state) => {
-        const template = `
-    Given the filename {fileName}, verify it exists in the codebase.
-    Use the available tool: find-file.
-    Current time: {time}
-    `;
-        const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
-        const formattedPrompt = await prompt.formatMessages({
-            fileName: state.fileName,
-            time: new Date().toISOString(),
-            messages: state.messages
-        });
-        const res = await llm_1.llm.invoke(formattedPrompt);
-        return {
-            // @ts-ignore
-            messages: [res]
-        };
-    };
-    // Edge
-    const checkFileExistsEdges = async (state) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        if (lastMessage.tool_calls?.length) {
-            return 'tools';
-        }
-        if (state.fileContent === null) {
-            return 'find-file';
-        }
-        else if (state.testFileName && state.testFileContent) {
-            return 'analyze-existing-tests';
-        }
-        else
-            return 'find-test-file';
-    };
-    const checkTestFile = async (state) => {
-        const template = `
-    Your task is to check if a test file exists for {fileName}.
-    
-    ### **Guidelines:**
-    1. Look for both .test.tsx and .spec.tsx extensions.
-    2. If found, read and store the existing test content.
-    
-    ### **Tools:**
-    - Use the available tool: find-test-file.
-    
-    ### **Expected Output:**
-    1. Return the content of the test file if found.
-    2. If no test file is found, indicate that no test file exists.
-    
-    Current time: {time}
-    IMPORTANT: Strictly follow the provided guidelines.
-    `;
-        const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
-        const formattedPrompt = await prompt.formatMessages({
-            fileName: state.fileName,
-            time: new Date().toISOString(),
-            messages: state.messages
-        });
-        const res = await llm_1.llm.invoke(formattedPrompt);
-        return {
-            // @ts-ignore
-            messages: [res]
-        };
-    };
-    // Edge
-    const checkTestFileEdges = async (state) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        if (lastMessage.tool_calls?.length) {
-            return 'tools';
-        }
-        // Route based on whether test file exists
-        return state.testFileContent ? 'analyze-existing-tests' : 'create-new-tests';
-    };
-    const createNewTests = async (state) => {
-        const template = `
-    Your task is to create comprehensive test cases for the component specified in {fileName}.
-    The component's content is provided below:
-
-    Component content: {fileContent}
-    
-    Guidelines:
-    1. Write tests that thoroughly cover the component's functionality.
-    2. Test all possible inputs and their variations.
-    3. Include tests for user interactions and edge cases.
-    4. Ensure robust error handling and test boundary conditions.
-    5. Aim for a test coverage of over 80%.
-    
-    Use modern testing practices and frameworks that are appropriate for the language of the component.
-    `;
-        const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
-        const formattedPrompt = await prompt.formatMessages({
-            fileName: state.fileName,
-            fileContent: state.fileContent,
-            messages: state.messages
-        });
-        const res = await llm_1.llm.invoke(formattedPrompt);
-        return {
-            // @ts-ignore
-            messages: [res]
-        };
-    };
-    const fixErrors = async (state) => {
-        const template = `
-    Fix and update test cases for {fileName}, then save the updated file.
-    
-    ### **Test Failures:**  
-    {failureReasons}
-    
-    ### **Instructions:**  
-    - **Analyze** test failures and identify root causes.  
-    - **Fix errors** and update test cases accordingly.  
-    - **Ensure tests remain accurate, reliable, and compatible.**  
-    - **Maintain best practices** and follow existing test structure.  
-    
-    ### **Test File Name:**  
-    {testFileName}
-    
-    ### **Test File Path:**  
-    {testFilePath}
-    
-    ### **Existing Test Content:**  
-    {testFileContent}
-    
-    ### **Component Content:**  
-    {fileContent}
-    
-    ### **Output:**  
-    1. Return the **fully updated test file**, ready to run.  
-    2. **Use the 'write-file' tool call** to save the updated test file.  
-    `;
-        const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
-        const formattedPrompt = await prompt.formatMessages({
-            fileName: state.fileName,
-            testFileName: state.testFileName,
-            testFilePath: state.testFilePath,
-            fileContent: state.fileContent,
-            testFileContent: state.testFileContent,
-            failureReasons: state.testResults ? JSON.stringify(state.testResults.failures, null, 2) : 'No test results found',
-            messages: state.messages
-        });
-        const res = await llm_1.llm.invoke(formattedPrompt);
-        return {
-            // @ts-ignore
-            messages: [res],
-            iteration: state.iteration + 1,
-            // reset error flags
-            hasError: false,
-            testResults: null,
-            testSummary: null
-        };
-    };
-    // Edge
-    const fixErrorsEdges = async (state) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        if (lastMessage.tool_calls?.length) {
-            return 'tools';
-        }
-        if (state.iteration > 5) {
-            return '__end__';
-        }
-        return 'run-tests';
-    };
-    const runTests = async (state) => {
-        const template = `
-    ### Task: Run Tests and Analyze Results
-
-    Execute the test suite using the appropriate **npm test command**.
-
-    use the **tool call** npm-test to run the tests.
-    
-    Output:
-    - Return a summary of the test results, highlighting any failures.
-    - Include coverage information if available.;
-  `;
-        const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
-        const formattedPrompt = await prompt.formatMessages({
-            fileName: state.fileName,
-            messages: state.messages
-        });
-        const res = await llm_1.llm.invoke(formattedPrompt);
-        return {
-            // @ts-ignore
-            messages: [res]
-        };
-    };
-    // edge
-    const runTestsEdges = async (state) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        if (lastMessage.tool_calls?.length) {
-            return 'tools';
-        }
-        return 'analyze-results';
-    };
-    const saveTests = async (state) => {
-        const template = `
-    Save the generated test content to a file with correct naming convention and path.
-
-### **File Naming Rules:**
-- Use the appropriate test file extension: **'.test.tsx'** or **.spec.tsx**.
-- Maintain the same directory structure as {fileName}.
-- Ensure consistency with existing test files.
-
-### **Expected Action:**
-- Save the file using a **tool call** write-file with the correct **file path and name**.
-- Test file path: **{testFilePath}**
-
- `;
-        const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
-        const formattedPrompt = await prompt.formatMessages({
-            fileName: state.fileName,
-            messages: state.messages,
-            testFilePath: state.testFilePath
-        });
-        const res = await llm_1.llm.invoke(formattedPrompt);
-        return {
-            // @ts-ignore
-            messages: [res]
-        };
-    };
-    const writeTestsEdges = async (state) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        if (lastMessage.tool_calls?.length) {
-            return 'tools';
-        }
-        return 'find-test-file';
-    };
-    // Define a separate edge handler for save tests
-    const saveTestsEdges = async (state) => {
-        const lastMessage = state.messages[state.messages.length - 1];
-        if (lastMessage.tool_calls?.length) {
-            return 'tools';
-        }
-        return 'run-tests'; // After saving, proceed to run tests
-    };
     // Create and compile the graph
-    const workflow = new langgraph_2.StateGraph(GraphState)
+    const workflow = new langgraph_2.StateGraph(state_1.GraphState)
         // Add nodes
-        .addNode('find-file', checkFileExists)
-        .addNode('tools', toolExecutor)
-        .addNode('find-test-file', checkTestFile)
-        .addNode('create-new-tests', createNewTests)
-        .addNode('analyze-existing-tests', analyzeExistingTests)
-        .addNode('save-tests', saveTests)
-        .addNode('run-tests', runTests)
-        .addNode('analyze-results', analyzeTestResults)
-        .addNode('fix-errors', fixErrors)
+        .addNode('find-file', agents_1.checkFileExists)
+        .addNode('find-test-file', agents_1.checkTestFile)
+        .addNode('create-new-tests', agents_1.createNewTests)
+        .addNode('analyze-existing-tests', agents_1.analyzeExistingTests)
+        .addNode('save-tests', agents_1.saveTests)
+        .addNode('run-tests', agents_1.runTests)
+        .addNode('analyze-results', agents_1.analyzeTestResults)
+        .addNode('fix-errors', agents_1.fixErrors)
+        .addNode('tools-find-file', toolExecutor)
+        .addNode('tools-find-test-file', toolExecutor)
+        .addNode('tools-read-file', toolExecutor)
+        .addNode('tools-write-tests', toolExecutor)
+        .addNode('tools-run-tests', toolExecutor)
+        .addNode('tools-fix-errors', toolExecutor)
+        .addNode('tools-examine-test-results', toolExecutor)
+        .addNode('tools-create-new-tests', toolExecutor)
+        .addNode('final-notes', agents_1.finalNotesAgent)
         // Add edges with fixed flow
         .addEdge('__start__', 'find-file')
-        .addConditionalEdges('find-file', checkFileExistsEdges)
-        .addConditionalEdges('find-test-file', checkTestFileEdges)
-        .addConditionalEdges('create-new-tests', writeTestsEdges)
-        .addConditionalEdges('analyze-existing-tests', analyzeExistingTestEdges)
-        .addConditionalEdges('save-tests', saveTestsEdges) // Use new edge handler
-        .addConditionalEdges('run-tests', runTestsEdges)
-        .addConditionalEdges('analyze-results', analyzeTestResultsEdges)
-        .addConditionalEdges('fix-errors', fixErrorsEdges)
-        .addConditionalEdges('tools', callToolsEdge)
-        .addEdge('analyze-results', '__end__');
+        .addEdge('tools-read-file', 'analyze-existing-tests')
+        .addConditionalEdges('find-file', agents_1.checkFileExistsEdges)
+        .addConditionalEdges('find-test-file', agents_1.checkTestFileEdges)
+        .addConditionalEdges('create-new-tests', agents_1.writeTestsEdges)
+        .addConditionalEdges('analyze-existing-tests', agents_1.analyzeExistingTestEdges)
+        .addConditionalEdges('save-tests', agents_1.saveTestsEdges) // Use new edge handler
+        .addConditionalEdges('run-tests', agents_1.runTestsEdges)
+        .addConditionalEdges('analyze-results', agents_1.analyzeTestResultsEdges)
+        .addConditionalEdges('fix-errors', agents_1.fixErrorsEdges)
+        .addConditionalEdges('tools-write-tests', agents_1.saveTestsEdges) // Route
+        .addConditionalEdges('tools-find-file', agents_1.checkFileExistsEdges)
+        .addConditionalEdges('tools-find-test-file', agents_1.checkTestFileEdges)
+        .addConditionalEdges('tools-run-tests', agents_1.runTestsEdges)
+        .addConditionalEdges('tools-fix-errors', agents_1.fixErrorsEdges)
+        .addConditionalEdges('tools-create-new-tests', agents_1.writeTestsEdges)
+        .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges)
+        .addEdge('final-notes', '__end__');
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
-    console.log('app version', 'v0.1.52-alpha.5');
+    console.log('app version', 'v0.1.54-alpha.10');
     const query = `
   You are a coding assistant with expertise in test automation.
   Generate and execute tests for ${filename}.
@@ -42405,7 +42526,7 @@ function initializeReactAgent(modelName, tools) {
     const model = new openai_1.ChatOpenAI({
         model: modelName,
         temperature: 0,
-        verbose: false
+        verbose: true
     });
     // const toolNode = new ToolNode(tools);
     return (0, prebuilt_1.createReactAgent)({
@@ -42417,7 +42538,7 @@ function initializeReactAgent(modelName, tools) {
 exports.llm = new openai_1.ChatOpenAI({
     model: 'gpt-4o',
     temperature: 0,
-    verbose: false
+    verbose: true
 }).bindTools(tools);
 
 
@@ -42534,6 +42655,58 @@ async function run() {
         core.warning(`Failed to commit changes: ${error}`);
     }
 }
+
+
+/***/ }),
+
+/***/ 2462:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GraphState = void 0;
+const langgraph_1 = __nccwpck_require__(39405);
+// Define the graph state with additional properties
+exports.GraphState = langgraph_1.Annotation.Root({
+    messages: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => x.concat(y)
+    }),
+    iteration: (0, langgraph_1.Annotation)({
+        reducer: x => x,
+        default: () => 0
+    }),
+    hasError: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    }),
+    fileName: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    }),
+    testFileName: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    }),
+    fileContent: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    }),
+    filePath: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    }),
+    testFileContent: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    }),
+    testFilePath: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    }),
+    testFileFound: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    }),
+    testResults: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    }),
+    testSummary: (0, langgraph_1.Annotation)({
+        reducer: z => z
+    })
+});
 
 
 /***/ }),
@@ -42662,7 +42835,7 @@ exports.FileFolderTools = [
                         testFilePath: fullPath,
                         testFileContent: fileContent,
                         testFileFound: true,
-                        file_operation: {
+                        messageValue: {
                             success: false,
                             error: 'File already exists and overwrite is not enabled'
                         }
@@ -42675,7 +42848,7 @@ exports.FileFolderTools = [
                     testFilePath: fullPath,
                     testFileContent: content,
                     testFileFound: true,
-                    file_operation: {
+                    messageValue: {
                         success: true,
                         path: fullPath,
                         message: `File created successfully at ${fullPath}`
@@ -42721,14 +42894,13 @@ exports.FileFolderTools = [
                     fs_1.default.writeFileSync(fullPath, content, 'utf-8');
                 }
                 return {
-                    success: true,
-                    path: fullPath
+                    messageValue: fullPath
                 };
             }
             catch (error) {
                 return {
                     success: false,
-                    error: error.message
+                    messageValue: error.message
                 };
             }
         }
@@ -42751,19 +42923,21 @@ exports.FileFolderTools = [
                 if (!includeDetails) {
                     return {
                         success: true,
-                        files: files.map(f => f.path)
+                        messageValue: {
+                            files: files.map(f => f.path)
+                        }
                     };
                 }
                 const fileDirPath = path_1.default.dirname(absolutePath);
                 return {
                     success: true,
-                    files: files
+                    messageValue: files
                 };
             }
             catch (error) {
                 return {
                     success: false,
-                    error: error.message
+                    messageValue: error.message
                 };
             }
         }
@@ -42793,7 +42967,7 @@ exports.FileFolderTools = [
                     };
                 }
                 return {
-                    file_content: {
+                    messageValue: {
                         success: true,
                         ...result
                     }
@@ -42801,7 +42975,7 @@ exports.FileFolderTools = [
             }
             catch (error) {
                 return {
-                    file_content: {
+                    messageValue: {
                         success: false,
                         error: error.message
                     }
@@ -42854,12 +43028,13 @@ exports.FileFolderTools = [
                 return {
                     fileName: result.files?.map(f => f.fileName).join('\n'),
                     fileContent: result.files?.map(f => f.content).join('\n'),
-                    filePath: result.files?.map(f => f.path).join('\n')
+                    filePath: result.files?.map(f => f.path).join('\n'),
+                    messageValue: result
                 };
             }
             catch (error) {
                 return {
-                    file_check: {
+                    messageValue: {
                         exists: false,
                         error: error.message
                     }
@@ -42925,12 +43100,20 @@ exports.FileFolderTools = [
                     testFileContent: testFile ? testFile.content : null,
                     testFilePath: testFile ? testFile.path : null,
                     testFileName: testFile ? path_1.default.basename(testFile.path) : null,
-                    testFileFound
+                    testFileFound,
+                    messageValue: {
+                        success: testFileFound,
+                        message: testFileFound ? 'Test file found' : 'Test file not found'
+                    }
                 };
             }
             catch (error) {
                 return {
-                    testFileContent: null
+                    testFileContent: null,
+                    messageValue: {
+                        success: false,
+                        error: error.message
+                    }
                 };
             }
         }
@@ -42994,7 +43177,7 @@ exports.TestTools = [
                 let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
                 // Add options to the command
                 if (options.directory_path)
-                    fullCommand += ` --prefix ./appcode`;
+                    fullCommand += ` --prefix ${options.directory_path}`;
                 // suffix json
                 fullCommand += ` -- --json`;
                 if (options.coverage)
@@ -43008,7 +43191,9 @@ exports.TestTools = [
                 // fullCommand += " --silent 2>/dev/null";
                 const { stdout, stderr } = await nodeExecutor(fullCommand);
                 return {
-                    testResults: { success: true, output: stdout }
+                    testResults: { success: true, output: JSON.stringify(stdout) },
+                    hasError: false,
+                    messageValue: stdout
                 };
             }
             catch (error) {
@@ -43018,7 +43203,8 @@ exports.TestTools = [
                         success: false,
                         error: error.message,
                         output: error.stdout || ''
-                    }
+                    },
+                    messageValue: error.message
                 };
             }
         }
@@ -43129,14 +43315,16 @@ exports.TestResultAnalyzerTools = [
                                 pct: testResults.coverage.branches.pct
                             }
                         }
-                    }
+                    },
+                    messageValue: `Total tests: ${totalTests}, Passed: ${totalPassed}, Failed: ${totalFailed}, Skipped: ${totalSkipped}`
                 };
             }
             catch (error) {
                 return {
                     testSummary: {
                         error: error.message
-                    }
+                    },
+                    messageValue: error.message
                 };
             }
         }

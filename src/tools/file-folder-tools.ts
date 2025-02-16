@@ -159,7 +159,7 @@ export const FileFolderTools = [
             testFilePath: fullPath,
             testFileContent: fileContent,
             testFileFound: true,
-            file_operation: {
+            messageValue: {
               success: false,
               error: 'File already exists and overwrite is not enabled'
             }
@@ -174,7 +174,7 @@ export const FileFolderTools = [
           testFilePath: fullPath,
           testFileContent: content,
           testFileFound: true,
-          file_operation: {
+          messageValue: {
             success: true,
             path: fullPath,
             message: `File created successfully at ${fullPath}`
@@ -225,13 +225,12 @@ export const FileFolderTools = [
         }
 
         return {
-          success: true,
-          path: fullPath
+          messageValue: fullPath
         };
       } catch (error: unknown | any) {
         return {
           success: false,
-          error: error.message
+          messageValue: error.message
         };
       }
     }
@@ -260,7 +259,9 @@ export const FileFolderTools = [
         if (!includeDetails) {
           return {
             success: true,
-            files: files.map(f => f.path)
+            messageValue: {
+              files: files.map(f => f.path)
+            }
           };
         }
 
@@ -268,12 +269,12 @@ export const FileFolderTools = [
 
         return {
           success: true,
-          files: files
+          messageValue: files
         };
       } catch (error: unknown | any) {
         return {
           success: false,
-          error: error.message
+          messageValue: error.message
         };
       }
     }
@@ -306,14 +307,14 @@ export const FileFolderTools = [
         }
 
         return {
-          file_content: {
+          messageValue: {
             success: true,
             ...result
           }
         };
       } catch (error: unknown | any) {
         return {
-          file_content: {
+          messageValue: {
             success: false,
             error: error.message
           }
@@ -380,11 +381,12 @@ export const FileFolderTools = [
         return {
           fileName: result.files?.map(f => f.fileName).join('\n'),
           fileContent: result.files?.map(f => f.content).join('\n'),
-          filePath: result.files?.map(f => f.path).join('\n')
+          filePath: result.files?.map(f => f.path).join('\n'),
+          messageValue: result
         };
       } catch (error: any) {
         return {
-          file_check: {
+          messageValue: {
             exists: false,
             error: error.message
           }
@@ -465,11 +467,19 @@ export const FileFolderTools = [
           testFileContent: testFile ? testFile.content : null,
           testFilePath: testFile ? testFile.path : null,
           testFileName: testFile ? path.basename(testFile.path) : null,
-          testFileFound
+          testFileFound,
+          messageValue: {
+            success: testFileFound,
+            message: testFileFound ? 'Test file found' : 'Test file not found'
+          }
         };
       } catch (error: any) {
         return {
-          testFileContent: null
+          testFileContent: null,
+          messageValue: {
+            success: false,
+            error: error.message
+          }
         };
       }
     }

@@ -63,7 +63,7 @@ const toolExecutor = async (state: State) => {
     throw new Error('Most recent message must be an AIMessage with a tool call.');
   }
   // Execute all tool calls in parallel with proper error handling
-  const toolResults = (await Promise.allSettled(
+  const toolResults = (await Promise.all(
     message.tool_calls.map(async (toolCall: any) => {
       try {
         const tool = toolMap.get(toolCall.name);
@@ -72,98 +72,128 @@ const toolExecutor = async (state: State) => {
         }
 
         const result = await tool.invoke(toolCall.args);
-        return {
-          success: true,
-          result
-        };
+        const { value, ...restResult } = result;
+        return new Command({
+          update: {
+            ...restResult,
+            messages: [
+              new ToolMessage({
+                content: JSON.stringify(value, null, 2),
+                tool_call_id: toolCall.id,
+                additional_kwargs: { result }
+              })
+            ]
+          }
+        });
       } catch (error) {
-        return {
-          success: false,
-          result: null,
-          error: error instanceof Error ? error.message : String(error)
-        };
+        return new Command({
+          update: {
+            messages: [
+              new ToolMessage({
+                content: `Tool ${toolCall.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+                tool_call_id: toolCall.id,
+                additional_kwargs: { error }
+              })
+            ]
+          }
+        });
       }
     })
   )) as any[];
 
-  // Process results and create state updates
-  const stateUpdates = toolResults.map((result: any, index: number) => {
-    // @ts-ignore
-    const toolCall = message?.tool_calls[index];
-
-    if (result.status === 'rejected') {
-      // Handle promise rejection
-      return {
-        update: {
-          messages: [
-            new ToolMessage({
-              content: `Tool execution failed: ${result.reason}`,
-              // @ts-ignore
-              tool_call_id: toolCall.id,
-              additional_kwargs: { error: result.reason }
-            })
-          ]
-        }
-      };
+  // Handle mixed Command and non-Command outputs
+  const combinedOutputs = toolResults.map(output => {
+    if (isCommand(output)) {
+      return output;
     }
-
-    const toolResult = result.value;
-    if (!toolResult.success) {
-      // Handle tool execution error
-      return {
-        update: {
-          messages: [
-            new ToolMessage({
-              content: `Tool execution failed: ${toolResult.error}`,
-              // @ts-ignore
-              tool_call_id: toolCall.id,
-              additional_kwargs: { error: toolResult.error }
-            })
-          ]
-        }
-      };
+    // Tool invocation result is a ToolMessage, return a normal state update
+    if (output.messages?.length) {
+      return { messages: output.messages };
     }
-
-    // Handle successful tool execution
-    if (isCommand(toolResult.result)) {
-      return toolResult.result;
-    }
-
-    const { messages: toolMessage, ...restResult } = toolResult.result;
-    // Convert regular tool output to Command
-    return {
-      ...restResult,
-      messages: [
-        new ToolMessage({
-          content:
-            typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result, null, 2),
-          // @ts-ignore
-          tool_call_id: toolCall.id,
-          additional_kwargs: { result: toolResult.result }
-        })
-      ]
-    };
+    // Tool invocation result is a string, convert it to a ToolMessage
+    return { messages: [output] };
   });
+  // Return an array of values instead of an object
+  return combinedOutputs;
 
-  const stateUpdateReducer = stateUpdates.reduce(
-    (acc, update) => {
-      const { messages, ...restUpdate } = update;
-      return {
-        ...restUpdate,
-        messages: [...acc.messages, ...messages]
-      };
-    },
-    { fileContent: null, filePath: null, messages: [] }
-  );
+  // // Process results and create state updates
+  // const stateUpdates = toolResults.map((result: any, index: number) => {
+  //   // @ts-ignore
+  //   const toolCall = message?.tool_calls[index];
 
-  const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
+  //   if (result.status === 'rejected') {
+  //     // Handle promise rejection
+  //     return {
+  //       update: {
+  //         messages: [
+  //           new ToolMessage({
+  //             content: `Tool execution failed: ${result.reason}`,
+  //             // @ts-ignore
+  //             tool_call_id: toolCall.id,
+  //             additional_kwargs: { error: result.reason }
+  //           })
+  //         ]
+  //       }
+  //     };
+  //   }
 
-  // Combine all state updates
-  return {
-    ...state,
-    ...restStateUpdates,
-    messages: updatedMessages
-  };
+  //   const toolResult = result.value;
+  //   if (!toolResult.success) {
+  //     // Handle tool execution error
+  //     return {
+  //       update: {
+  //         messages: [
+  //           new ToolMessage({
+  //             content: `Tool execution failed: ${toolResult.error}`,
+  //             // @ts-ignore
+  //             tool_call_id: toolCall.id,
+  //             additional_kwargs: { error: toolResult.error }
+  //           })
+  //         ]
+  //       }
+  //     };
+  //   }
+
+  //   // Handle successful tool execution
+  //   if (isCommand(toolResult.result)) {
+  //     return toolResult.result;
+  //   }
+
+  //   const { messages: toolMessage, ...restResult } = toolResult.result;
+  //   // Convert regular tool output to Command
+  //   return {
+  //     ...restResult,
+  //     messages: [
+  //       new ToolMessage({
+  //         content:
+  //           typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result, null, 2),
+  //         // @ts-ignore
+  //         tool_call_id: toolCall.id,
+  //         additional_kwargs: { result: toolResult.result }
+  //       })
+  //     ]
+  //   };
+  // });
+
+  // const stateUpdateReducer = stateUpdates.reduce(
+  //   (acc, update) => {
+  //     const { messages, ...restUpdate } = update;
+  //     return {
+  //       ...restUpdate,
+  //       messages: [...acc.messages, ...messages]
+  //     };
+  //   },
+  //   { fileContent: null, filePath: null, messages: [] }
+  // );
+
+  // const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
+
+  // // Combine all state updates
+  // return {
+  //   ...state,
+  //   ...restStateUpdates,
+  //   messages: updatedMessages
+  // };
 };
 
 const getCitiLibraryEdge = async (state: State) => {
@@ -238,8 +268,7 @@ const getCities = async (state: State): Promise<Update> => {
   const res = await model.invoke(formattedPrompt);
   return {
     // @ts-ignore
-    messages: [res],
-    hasCity: true
+    messages: [res]
   };
 };
 
@@ -258,8 +287,7 @@ const getRestaurants = async (state: State): Promise<Update> => {
   const res = await model.invoke(formattedPrompt);
   return {
     // @ts-ignore
-    messages: [res],
-    hasCityRestaurants: true
+    messages: [res]
   };
 };
 
@@ -278,8 +306,7 @@ const getCityMonument = async (state: State): Promise<Update> => {
   const res = await model.invoke(formattedPrompt);
   return {
     // @ts-ignore
-    messages: [res],
-    hasCityMonuments: true
+    messages: [res]
   };
 };
 
