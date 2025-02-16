@@ -41881,95 +41881,55 @@ const MainGraphRun = async () => {
             throw new Error('Most recent message must be an AIMessage with a tool call.');
         }
         // Execute all tool calls in parallel with proper error handling
-        const toolResults = (await Promise.allSettled(message.tool_calls.map(async (toolCall) => {
+        const toolResults = (await Promise.all(message.tool_calls.map(async (toolCall) => {
             try {
                 const tool = toolMap.get(toolCall.name);
                 if (!tool) {
                     throw new Error(`Tool ${toolCall.name} not found`);
                 }
                 const result = await tool.invoke(toolCall.args);
-                return {
-                    success: true,
-                    result
-                };
+                const { messageValue, ...restResult } = result;
+                return new langgraph_1.Command({
+                    update: {
+                        ...restResult,
+                        messages: [
+                            new messages_3.ToolMessage({
+                                content: JSON.stringify(messageValue, null, 2),
+                                tool_call_id: toolCall.id,
+                                additional_kwargs: { result }
+                            })
+                        ]
+                    }
+                });
             }
             catch (error) {
-                return {
-                    success: false,
-                    result: null,
-                    error: error instanceof Error ? error.message : String(error)
-                };
+                return new langgraph_1.Command({
+                    update: {
+                        messages: [
+                            new messages_3.ToolMessage({
+                                content: `Tool ${toolCall.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+                                tool_call_id: toolCall.id,
+                                additional_kwargs: { error }
+                            })
+                        ]
+                    }
+                });
             }
         })));
-        // Process results and create state updates
-        const stateUpdates = toolResults.map((result, index) => {
-            // @ts-ignore
-            const toolCall = message?.tool_calls[index];
-            if (result.status === 'rejected') {
-                // Handle promise rejection
-                return new langgraph_1.Command({
-                    update: {
-                        messages: [
-                            new messages_3.ToolMessage({
-                                content: `Tool execution failed: ${result.reason}`,
-                                // @ts-ignore
-                                tool_call_id: toolCall.id,
-                                additional_kwargs: { error: result.reason }
-                            })
-                        ]
-                    }
-                });
+        // Handle mixed Command and non-Command outputs
+        const combinedOutputs = toolResults.map(output => {
+            if ((0, langgraph_4.isCommand)(output)) {
+                return output;
             }
-            const toolResult = result.value;
-            if (!toolResult.success) {
-                // Handle tool execution error
-                return new langgraph_1.Command({
-                    update: {
-                        messages: [
-                            new messages_3.ToolMessage({
-                                content: `Tool execution failed: ${toolResult.error}`,
-                                // @ts-ignore
-                                tool_call_id: toolCall.id,
-                                additional_kwargs: { error: toolResult.error }
-                            })
-                        ]
-                    }
-                });
+            // Tool invocation result is a ToolMessage, return a normal state update
+            if (output.messages?.length) {
+                return { messages: output.messages };
             }
-            // Handle successful tool execution
-            if ((0, langgraph_4.isCommand)(toolResult.result)) {
-                return toolResult.result;
-            }
-            const { messages: toolMessage, ...restResult } = toolResult.result;
-            // Convert regular tool output to Command
-            return new langgraph_1.Command({
-                ...restResult,
-                messages: [
-                    new messages_3.ToolMessage({
-                        content: typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result, null, 2),
-                        // @ts-ignore
-                        tool_call_id: toolCall.id,
-                        additional_kwargs: { result: toolResult.result }
-                    })
-                ]
-            });
+            // Tool invocation result is a string, convert it to a ToolMessage
+            return { messages: [output] };
         });
-        // after tool call execution, update the state
-        const stateUpdateReducer = stateUpdates.reduce((acc, update) => {
-            const { messages, ...restUpdate } = update;
-            return {
-                ...restUpdate,
-                messages: [...acc.messages, ...messages]
-            };
-        }, { fileContent: null, filePath: null, messages: [] });
-        const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
-        // Combine all state updates
-        console.log('stateUpdateReducer', JSON.stringify(stateUpdateReducer, null, 2));
-        return {
-            ...state,
-            ...restStateUpdates,
-            messages: updatedMessages
-        };
+        // Return an array of values instead of an object
+        return combinedOutputs;
     };
     const callToolsEdge = async (state) => {
         const lastMessage = state.messages[state.messages.length - 1];
@@ -42406,7 +42366,7 @@ function initializeReactAgent(modelName, tools) {
     const model = new openai_1.ChatOpenAI({
         model: modelName,
         temperature: 0,
-        verbose: false
+        verbose: true
     });
     // const toolNode = new ToolNode(tools);
     return (0, prebuilt_1.createReactAgent)({
@@ -42418,7 +42378,7 @@ function initializeReactAgent(modelName, tools) {
 exports.llm = new openai_1.ChatOpenAI({
     model: 'gpt-4o',
     temperature: 0,
-    verbose: false
+    verbose: true
 }).bindTools(tools);
 
 
@@ -42663,7 +42623,7 @@ exports.FileFolderTools = [
                         testFilePath: fullPath,
                         testFileContent: fileContent,
                         testFileFound: true,
-                        file_operation: {
+                        messageValue: {
                             success: false,
                             error: 'File already exists and overwrite is not enabled'
                         }
@@ -42676,7 +42636,7 @@ exports.FileFolderTools = [
                     testFilePath: fullPath,
                     testFileContent: content,
                     testFileFound: true,
-                    file_operation: {
+                    messageValue: {
                         success: true,
                         path: fullPath,
                         message: `File created successfully at ${fullPath}`
@@ -42722,14 +42682,13 @@ exports.FileFolderTools = [
                     fs_1.default.writeFileSync(fullPath, content, 'utf-8');
                 }
                 return {
-                    success: true,
-                    path: fullPath
+                    messageValue: fullPath
                 };
             }
             catch (error) {
                 return {
                     success: false,
-                    error: error.message
+                    messageValue: error.message
                 };
             }
         }
@@ -42752,19 +42711,21 @@ exports.FileFolderTools = [
                 if (!includeDetails) {
                     return {
                         success: true,
-                        files: files.map(f => f.path)
+                        messageValue: {
+                            files: files.map(f => f.path)
+                        }
                     };
                 }
                 const fileDirPath = path_1.default.dirname(absolutePath);
                 return {
                     success: true,
-                    files: files
+                    messageValue: files
                 };
             }
             catch (error) {
                 return {
                     success: false,
-                    error: error.message
+                    messageValue: error.message
                 };
             }
         }
@@ -42794,7 +42755,7 @@ exports.FileFolderTools = [
                     };
                 }
                 return {
-                    file_content: {
+                    messageValue: {
                         success: true,
                         ...result
                     }
@@ -42802,7 +42763,7 @@ exports.FileFolderTools = [
             }
             catch (error) {
                 return {
-                    file_content: {
+                    messageValue: {
                         success: false,
                         error: error.message
                     }
@@ -42855,12 +42816,13 @@ exports.FileFolderTools = [
                 return {
                     fileName: result.files?.map(f => f.fileName).join('\n'),
                     fileContent: result.files?.map(f => f.content).join('\n'),
-                    filePath: result.files?.map(f => f.path).join('\n')
+                    filePath: result.files?.map(f => f.path).join('\n'),
+                    messageValue: result
                 };
             }
             catch (error) {
                 return {
-                    file_check: {
+                    messageValue: {
                         exists: false,
                         error: error.message
                     }
@@ -42926,12 +42888,20 @@ exports.FileFolderTools = [
                     testFileContent: testFile ? testFile.content : null,
                     testFilePath: testFile ? testFile.path : null,
                     testFileName: testFile ? path_1.default.basename(testFile.path) : null,
-                    testFileFound
+                    testFileFound,
+                    messageValue: {
+                        success: testFileFound,
+                        message: testFileFound ? 'Test file found' : 'Test file not found'
+                    }
                 };
             }
             catch (error) {
                 return {
-                    testFileContent: null
+                    testFileContent: null,
+                    messageValue: {
+                        success: false,
+                        error: error.message
+                    }
                 };
             }
         }
@@ -42995,7 +42965,7 @@ exports.TestTools = [
                 let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
                 // Add options to the command
                 if (options.directory_path)
-                    fullCommand += ` --prefix ./appcode`;
+                    fullCommand += ` --prefix ${options.directory_path}`;
                 // suffix json
                 fullCommand += ` -- --json`;
                 if (options.coverage)
@@ -43009,7 +42979,8 @@ exports.TestTools = [
                 // fullCommand += " --silent 2>/dev/null";
                 const { stdout, stderr } = await nodeExecutor(fullCommand);
                 return {
-                    testResults: { success: true, output: stdout }
+                    testResults: { success: true, output: stdout },
+                    messageValue: stdout
                 };
             }
             catch (error) {
@@ -43019,7 +42990,8 @@ exports.TestTools = [
                         success: false,
                         error: error.message,
                         output: error.stdout || ''
-                    }
+                    },
+                    messageValue: error.message
                 };
             }
         }
@@ -43130,14 +43102,16 @@ exports.TestResultAnalyzerTools = [
                                 pct: testResults.coverage.branches.pct
                             }
                         }
-                    }
+                    },
+                    messageValue: `Total tests: ${totalTests}, Passed: ${totalPassed}, Failed: ${totalFailed}, Skipped: ${totalSkipped}`
                 };
             }
             catch (error) {
                 return {
                     testSummary: {
                         error: error.message
-                    }
+                    },
+                    messageValue: error.message
                 };
             }
         }

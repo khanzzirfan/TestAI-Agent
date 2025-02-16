@@ -85,7 +85,7 @@ export const MainGraphRun = async () => {
     }
 
     // Execute all tool calls in parallel with proper error handling
-    const toolResults = (await Promise.allSettled(
+    const toolResults = (await Promise.all(
       message.tool_calls.map(async (toolCall: any) => {
         try {
           const tool = toolMap.get(toolCall.name);
@@ -94,111 +94,49 @@ export const MainGraphRun = async () => {
           }
 
           const result = await tool.invoke(toolCall.args);
-          return {
-            success: true,
-            result
-          };
+          const { messageValue, ...restResult } = result;
+          return new Command({
+            update: {
+              ...restResult,
+              messages: [
+                new ToolMessage({
+                  content: JSON.stringify(messageValue, null, 2),
+                  tool_call_id: toolCall.id,
+                  additional_kwargs: { result }
+                })
+              ]
+            }
+          });
         } catch (error) {
-          return {
-            success: false,
-            result: null,
-            error: error instanceof Error ? error.message : String(error)
-          };
+          return new Command({
+            update: {
+              messages: [
+                new ToolMessage({
+                  content: `Tool ${toolCall.name} failed: ${error instanceof Error ? error.message : String(error)}`,
+                  tool_call_id: toolCall.id,
+                  additional_kwargs: { error }
+                })
+              ]
+            }
+          });
         }
       })
     )) as any[];
 
-    // Process results and create state updates
-    const stateUpdates = toolResults.map((result: any, index: number) => {
-      // @ts-ignore
-      const toolCall = message?.tool_calls[index];
-
-      if (result.status === 'rejected') {
-        // Handle promise rejection
-        return new Command({
-          update: {
-            messages: [
-              new ToolMessage({
-                content: `Tool execution failed: ${result.reason}`,
-                // @ts-ignore
-                tool_call_id: toolCall.id,
-                additional_kwargs: { error: result.reason }
-              })
-            ]
-          }
-        });
-      }
-
-      const toolResult = result.value;
-      if (!toolResult.success) {
-        // Handle tool execution error
-        return new Command({
-          update: {
-            messages: [
-              new ToolMessage({
-                content: `Tool execution failed: ${toolResult.error}`,
-                // @ts-ignore
-                tool_call_id: toolCall.id,
-                additional_kwargs: { error: toolResult.error }
-              })
-            ]
-          }
-        });
-      }
-
-      // Handle successful tool execution
-      if (isCommand(toolResult.result)) {
-        return toolResult.result;
-      }
-
-      const { messages: xmsg, ...restResult } = toolResult.result;
-      // Convert regular tool output to Command
-      return new Command({
-        ...restResult,
-        messages: [
-          new ToolMessage({
-            content:
-              typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result, null, 2),
-            // @ts-ignore
-            tool_call_id: toolCall.id,
-            additional_kwargs: { result: toolResult.result }
-          })
-        ]
-      });
-    });
-
     // Handle mixed Command and non-Command outputs
-    const combinedOutputs = stateUpdates.map(output => {
+    const combinedOutputs = toolResults.map(output => {
       if (isCommand(output)) {
         return output;
       }
       // Tool invocation result is a ToolMessage, return a normal state update
+      if (output.messages?.length) {
+        return { messages: output.messages };
+      }
+      // Tool invocation result is a string, convert it to a ToolMessage
       return { messages: [output] };
     });
     // Return an array of values instead of an object
     return combinedOutputs;
-
-    // // after tool call execution, update the state
-    // const stateUpdateReducer = stateUpdates.reduce(
-    //   (acc, update) => {
-    //     const { messages, ...restUpdate } = update;
-    //     return {
-    //       ...restUpdate,
-    //       messages: [...acc.messages, ...messages]
-    //     };
-    //   },
-    //   { fileContent: null, filePath: null, messages: [] }
-    // );
-
-    // const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
-
-    // // Combine all state updates
-    // console.log('stateUpdateReducer', JSON.stringify(stateUpdateReducer, null, 2));
-    // return {
-    //   ...state,
-    //   ...restStateUpdates,
-    //   messages: updatedMessages
-    // };
   };
 
   const callToolsEdge = async (state: State) => {

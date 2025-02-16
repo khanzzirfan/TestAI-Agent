@@ -95,13 +95,15 @@ export const TestResultAnalyzerTools = [
                 pct: testResults.coverage.branches.pct
               }
             }
-          }
+          },
+          messageValue: `Total tests: ${totalTests}, Passed: ${totalPassed}, Failed: ${totalFailed}, Skipped: ${totalSkipped}`
         };
       } catch (error: unknown | any) {
         return {
           testSummary: {
             error: error.message
-          }
+          },
+          messageValue: error.message
         };
       }
     }
