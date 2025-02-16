@@ -63,7 +63,7 @@ jobs:
         id: npm-ci-test
         run: npm run ci-test
         env:
-          LANGCHAIN_TRACING_V2: true
+          LANGCHAIN_TRACING_V2: false
           LANGCHAIN_ENDPOINT: 'https://api.smith.langchain.com'
           LANGCHAIN_PROJECT: 'jest-test'
           LANGCHAIN_API_KEY: ${{ env.LANGCHAIN_API_KEY }}
