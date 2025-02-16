@@ -41868,14 +41868,9 @@ const analyzeTestResultsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
         const toolCallNames = lastMessage.tool_calls.map(call => call.name);
-        if (toolCallNames.includes('read-file')) {
-            return 'tools-read-file';
-        }
         if (toolCallNames.includes('write-file')) {
             return 'tools-write-tests';
         }
-    }
-    if (lastMessage.tool_calls?.length) {
         return 'tools-examine-test-results';
     }
     else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
@@ -42173,7 +42168,10 @@ const runTests = async (state) => {
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
         // @ts-ignore
-        messages: [res]
+        messages: [res],
+        hasError: false,
+        testResults: null,
+        testSummary: null
     };
 };
 exports.runTests = runTests;
@@ -42428,7 +42426,7 @@ const MainGraphRun = async () => {
         .addConditionalEdges('tools-create-new-tests', agents_1.writeTestsEdges)
         .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges);
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
-    console.log('app version', 'v0.1.52-alpha.5');
+    console.log('app version', 'v0.1.54-alpha.10');
     const query = `
   You are a coding assistant with expertise in test automation.
   Generate and execute tests for ${filename}.
@@ -43155,7 +43153,8 @@ exports.TestTools = [
                 // fullCommand += " --silent 2>/dev/null";
                 const { stdout, stderr } = await nodeExecutor(fullCommand);
                 return {
-                    testResults: { success: true, output: stdout },
+                    testResults: { success: true, output: JSON.stringify(stdout) },
+                    hasError: false,
                     messageValue: stdout
                 };
             }

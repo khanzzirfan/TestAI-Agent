@@ -46,7 +46,8 @@ export const TestTools = [
         const { stdout, stderr } = await nodeExecutor(fullCommand);
 
         return {
-          testResults: { success: true, output: stdout },
+          testResults: { success: true, output: JSON.stringify(stdout) },
+          hasError: false,
           messageValue: stdout
         };
       } catch (error: unknown | any) {

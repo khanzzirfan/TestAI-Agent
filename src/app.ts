@@ -175,7 +175,7 @@ export const MainGraphRun = async () => {
     .addConditionalEdges('tools-examine-test-results', analyzeTestResultsEdges);
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
-  console.log('app version', 'v0.1.52-alpha.5');
+  console.log('app version', 'v0.1.54-alpha.10');
 
   const query = `
   You are a coding assistant with expertise in test automation.
