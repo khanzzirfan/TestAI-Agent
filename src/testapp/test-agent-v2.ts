@@ -47,15 +47,7 @@ const tools = [
   getCityRestaurants,
   getCityZipCodes
 ];
-const toolNode = new ToolNode<typeof AgentState.State>([
-  testSearch,
-  getCoolestCities,
-  getCityBeaches,
-  getCityMonuments,
-  getCityLibraries,
-  getCityRestaurants,
-  getCityZipCodes
-]);
+
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 // Initialize the LLM
 const model = initializeLLM('gpt-4o', tools);
@@ -179,6 +171,10 @@ const getCitiLibraryEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+
+  const { messages, ...restOfTheState } = state;
+  console.log('getCitiLibraryEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return 'getbeaches';
 };
 
@@ -187,6 +183,10 @@ const getCitiBeachesEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+
+  const { messages, ...restOfTheState } = state;
+  console.log('getCitiBeachesEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return '__end__';
 };
 
@@ -195,6 +195,9 @@ const getCitiEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+  const { messages, ...restOfTheState } = state;
+  console.log('getCitiEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return 'getrestaurants';
 };
 
@@ -203,6 +206,9 @@ const getRestaurantsEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+  const { messages, ...restOfTheState } = state;
+  console.log('getRestaurantsEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return 'getmonuments';
 };
 
@@ -211,6 +217,9 @@ const getCityMonumentEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+  const { messages, ...restOfTheState } = state;
+  console.log('getCityMonumentEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return 'getlibraries';
 };
 
@@ -316,6 +325,9 @@ const callToolsEdge = async (state: State) => {
     return 'tools';
   }
 
+  const { messages, ...restOfTheState } = state;
+  console.log('callToolsEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   if (state.hasCityBeaches) {
     return END;
   }
@@ -342,6 +354,10 @@ const routeShouldContinue = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+
+  const { messages, ...restOfTheState } = state;
+  console.log('routeShouldContinue state params', JSON.stringify(restOfTheState, null, 2));
+
   if (state.hasCityBeaches) {
     return END;
   }
