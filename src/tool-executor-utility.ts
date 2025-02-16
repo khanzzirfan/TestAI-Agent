@@ -111,6 +111,7 @@ export const toolExecutor = async (state: typeof GraphState.State) => {
   const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
 
   // Combine all state updates
+  console.log('stateUpdateReducer', JSON.stringify(stateUpdateReducer, null, 2));
   return {
     ...state,
     ...restStateUpdates,
