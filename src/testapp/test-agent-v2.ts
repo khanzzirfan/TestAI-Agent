@@ -171,6 +171,10 @@ const getCitiLibraryEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+
+  const { messages, ...restOfTheState } = state;
+  console.log('getCitiLibraryEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return 'getbeaches';
 };
 
@@ -179,6 +183,10 @@ const getCitiBeachesEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+
+  const { messages, ...restOfTheState } = state;
+  console.log('getCitiBeachesEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return '__end__';
 };
 
@@ -187,6 +195,9 @@ const getCitiEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+  const { messages, ...restOfTheState } = state;
+  console.log('getCitiEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return 'getrestaurants';
 };
 
@@ -195,6 +206,9 @@ const getRestaurantsEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+  const { messages, ...restOfTheState } = state;
+  console.log('getRestaurantsEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return 'getmonuments';
 };
 
@@ -203,6 +217,9 @@ const getCityMonumentEdge = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+  const { messages, ...restOfTheState } = state;
+  console.log('getCityMonumentEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   return 'getlibraries';
 };
 
@@ -337,6 +354,10 @@ const routeShouldContinue = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools';
   }
+
+  const { messages, ...restOfTheState } = state;
+  console.log('routeShouldContinue state params', JSON.stringify(restOfTheState, null, 2));
+
   if (state.hasCityBeaches) {
     return END;
   }
