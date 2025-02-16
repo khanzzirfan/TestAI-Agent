@@ -29,6 +29,11 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
+      - name: print node and npm versions
+        run: |
+          node --version
+          npm --version
+
       - name: Install Dependencies
         id: npm-ci
         run: npm ci
