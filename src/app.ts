@@ -9,28 +9,10 @@ import { isAIMessage } from '@langchain/core/messages';
 import { ToolMessage } from '@langchain/core/messages';
 import { isCommand } from '@langchain/langgraph';
 import { CustomTools } from './tools';
-
+import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
+import { llm } from './llm';
 const tools = [...CustomTools];
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
-
-import {
-  checkFileExists,
-  createNewTests,
-  analyzeExistingTestEdges,
-  analyzeTestResults,
-  checkTestFile,
-  saveTests,
-  saveTestsEdges,
-  runTests,
-  runTestsEdges,
-  analyzeExistingTests,
-  fixErrors,
-  fixErrorsEdges,
-  checkFileExistsEdges,
-  checkTestFileEdges,
-  writeTestsEdges,
-  analyzeTestResultsEdges
-} from './agents';
 
 export const MainGraphRun = async () => {
   // Initialize memory to persist state between graph runs
@@ -244,6 +226,357 @@ export const MainGraphRun = async () => {
     }
 
     return 'find-file';
+  };
+
+  const analyzeExistingTests = async (state: State): Promise<Update> => {
+    const template = `
+    All necessary test cases and component details are included below.
+    Analyze the existing test cases for {fileName} and determine if they are sufficient.
+    If the tests are inadequate, create new test cases to improve coverage.
+
+    ### Test File Name: {testFileName}
+    ### Test file path: {testFilePath}
+    ### **Existing Test Content:**
+    {testFileContent}
+
+    ### **Component Content:**
+    {fileContent}
+
+    ### **Guidelines:**
+    - **Analyze** the existing test cases for coverage and accuracy.
+    - **Identify** any gaps or missing test scenarios.
+    - **Create** new test cases to improve coverage if necessary.
+    - **Maintain** consistency with existing test structure.
+    - **Ensure** the tests are accurate, reliable, and compatible with the component.
+
+    ### **Output:**
+    - Return the updated test file content only.
+    - If new test cases are created, use write-file tool call to save the test file.
+  `;
+
+    const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
+
+    const formattedPrompt = await prompt.formatMessages({
+      fileName: state.fileName,
+      testFileName: state.testFileName,
+      testFilePath: state.testFilePath,
+      testFileContent: state.testFileContent,
+      fileContent: state.fileContent,
+      messages: state.messages
+    });
+
+    const res = await llm.invoke(formattedPrompt);
+    return {
+      // @ts-ignore
+      messages: [res]
+    };
+  };
+
+  // edge
+  const analyzeExistingTestEdges = async (state: State) => {
+    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+    if (lastMessage.tool_calls?.length) {
+      return 'tools';
+    }
+    return 'run-tests';
+  };
+
+  const analyzeTestResults = async (state: State): Promise<Update> => {
+    const template = `
+Analyze the test results and return the parsed JSON output for further reporting.
+IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
+
+### **Test Results:**  
+{testResults}
+
+`;
+
+    const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
+
+    const formattedPrompt = await prompt.formatMessages({
+      fileName: state.fileName,
+      messages: state.messages,
+      testResults: JSON.stringify(state.testResults, null, 2)
+    });
+
+    const res = await llm.invoke(formattedPrompt);
+    return {
+      ...state,
+      // @ts-ignore
+      messages: [res]
+    };
+  };
+
+  // examin test results edges
+  const analyzeTestResultsEdges = async (state: State) => {
+    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+    if (lastMessage.tool_calls?.length) {
+      return 'tools';
+    } else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
+      return 'fix-errors';
+    }
+    return '__end__';
+  };
+
+  const checkFileExists = async (state: State): Promise<Update> => {
+    const template = `
+    Given the filename {fileName}, verify it exists in the codebase.
+    Use the available tool: find-file.
+    Current time: {time}
+    `;
+
+    const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
+
+    const formattedPrompt = await prompt.formatMessages({
+      fileName: state.fileName,
+      time: new Date().toISOString(),
+      messages: state.messages
+    });
+
+    const res = await llm.invoke(formattedPrompt);
+    return {
+      // @ts-ignore
+      messages: [res]
+    };
+  };
+
+  // Edge
+  const checkFileExistsEdges = async (state: State) => {
+    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+    if (lastMessage.tool_calls?.length) {
+      return 'tools';
+    }
+    if (state.fileContent === null) {
+      return 'find-file';
+    } else if (state.testFileName && state.testFileContent) {
+      return 'analyze-existing-tests';
+    } else return 'find-test-file';
+  };
+
+  const checkTestFile = async (state: State): Promise<Update> => {
+    const template = `
+    Your task is to check if a test file exists for {fileName}.
+    
+    ### **Guidelines:**
+    1. Look for both .test.tsx and .spec.tsx extensions.
+    2. If found, read and store the existing test content.
+    
+    ### **Tools:**
+    - Use the available tool: find-test-file.
+    
+    ### **Expected Output:**
+    1. Return the content of the test file if found.
+    2. If no test file is found, indicate that no test file exists.
+    
+    Current time: {time}
+    IMPORTANT: Strictly follow the provided guidelines.
+    `;
+
+    const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
+
+    const formattedPrompt = await prompt.formatMessages({
+      fileName: state.fileName,
+      time: new Date().toISOString(),
+      messages: state.messages
+    });
+
+    const res = await llm.invoke(formattedPrompt);
+    return {
+      // @ts-ignore
+      messages: [res]
+    };
+  };
+
+  // Edge
+  const checkTestFileEdges = async (state: State) => {
+    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+    if (lastMessage.tool_calls?.length) {
+      return 'tools';
+    }
+
+    // Route based on whether test file exists
+    return state.testFileContent ? 'analyze-existing-tests' : 'create-new-tests';
+  };
+
+  const createNewTests = async (state: State): Promise<Update> => {
+    const template = `
+    Your task is to create comprehensive test cases for the component specified in {fileName}.
+    The component's content is provided below:
+
+    Component content: {fileContent}
+    
+    Guidelines:
+    1. Write tests that thoroughly cover the component's functionality.
+    2. Test all possible inputs and their variations.
+    3. Include tests for user interactions and edge cases.
+    4. Ensure robust error handling and test boundary conditions.
+    5. Aim for a test coverage of over 80%.
+    
+    Use modern testing practices and frameworks that are appropriate for the language of the component.
+    `;
+
+    const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
+
+    const formattedPrompt = await prompt.formatMessages({
+      fileName: state.fileName,
+      fileContent: state.fileContent,
+      messages: state.messages
+    });
+
+    const res = await llm.invoke(formattedPrompt);
+    return {
+      // @ts-ignore
+      messages: [res]
+    };
+  };
+
+  const fixErrors = async (state: State): Promise<Update> => {
+    const template = `
+    Fix and update test cases for {fileName}, then save the updated file.
+    
+    ### **Test Failures:**  
+    {failureReasons}
+    
+    ### **Instructions:**  
+    - **Analyze** test failures and identify root causes.  
+    - **Fix errors** and update test cases accordingly.  
+    - **Ensure tests remain accurate, reliable, and compatible.**  
+    - **Maintain best practices** and follow existing test structure.  
+    
+    ### **Test File Name:**  
+    {testFileName}
+    
+    ### **Test File Path:**  
+    {testFilePath}
+    
+    ### **Existing Test Content:**  
+    {testFileContent}
+    
+    ### **Component Content:**  
+    {fileContent}
+    
+    ### **Output:**  
+    1. Return the **fully updated test file**, ready to run.  
+    2. **Use the 'write-file' tool call** to save the updated test file.  
+    `;
+
+    const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
+
+    const formattedPrompt = await prompt.formatMessages({
+      fileName: state.fileName,
+      testFileName: state.testFileName,
+      testFilePath: state.testFilePath,
+      fileContent: state.fileContent,
+      testFileContent: state.testFileContent,
+      failureReasons: state.testResults ? JSON.stringify(state.testResults.failures, null, 2) : 'No test results found',
+      messages: state.messages
+    });
+
+    const res = await llm.invoke(formattedPrompt);
+    return {
+      // @ts-ignore
+      messages: [res],
+      iteration: state.iteration + 1,
+      // reset error flags
+      hasError: false,
+      testResults: null,
+      testSummary: null
+    };
+  };
+
+  // Edge
+  const fixErrorsEdges = async (state: State) => {
+    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+    if (lastMessage.tool_calls?.length) {
+      return 'tools';
+    }
+    if (state.iteration > 5) {
+      return '__end__';
+    }
+    return 'run-tests';
+  };
+
+  const runTests = async (state: State): Promise<Update> => {
+    const template = `
+    ### Task: Run Tests and Analyze Results
+
+    Execute the test suite using the appropriate **npm test command**.
+
+    use the **tool call** npm-test to run the tests.
+    
+    Output:
+    - Return a summary of the test results, highlighting any failures.
+    - Include coverage information if available.;
+  `;
+
+    const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
+
+    const formattedPrompt = await prompt.formatMessages({
+      fileName: state.fileName,
+      messages: state.messages
+    });
+
+    const res = await llm.invoke(formattedPrompt);
+    return {
+      // @ts-ignore
+      messages: [res]
+    };
+  };
+
+  // edge
+  const runTestsEdges = async (state: State) => {
+    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+    if (lastMessage.tool_calls?.length) {
+      return 'tools';
+    }
+    return 'analyze-results';
+  };
+
+  const saveTests = async (state: State): Promise<Update> => {
+    const template = `
+    Save the generated test content to a file with correct naming convention and path.
+
+### **File Naming Rules:**
+- Use the appropriate test file extension: **'.test.tsx'** or **.spec.tsx**.
+- Maintain the same directory structure as {fileName}.
+- Ensure consistency with existing test files.
+
+### **Expected Action:**
+- Save the file using a **tool call** write-file with the correct **file path and name**.
+- Test file path: **{testFilePath}**
+
+ `;
+
+    const prompt = ChatPromptTemplate.fromMessages([['system', template], new MessagesPlaceholder('messages')]);
+
+    const formattedPrompt = await prompt.formatMessages({
+      fileName: state.fileName,
+      messages: state.messages,
+      testFilePath: state.testFilePath
+    });
+
+    const res = await llm.invoke(formattedPrompt);
+    return {
+      // @ts-ignore
+      messages: [res]
+    };
+  };
+
+  const writeTestsEdges = async (state: State) => {
+    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+    if (lastMessage.tool_calls?.length) {
+      return 'tools';
+    }
+    return 'find-test-file';
+  };
+
+  // Define a separate edge handler for save tests
+  const saveTestsEdges = async (state: State) => {
+    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
+    if (lastMessage.tool_calls?.length) {
+      return 'tools';
+    }
+    return 'run-tests'; // After saving, proceed to run tests
   };
 
   // Create and compile the graph
