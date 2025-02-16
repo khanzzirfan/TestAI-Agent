@@ -7,6 +7,7 @@ export const analyzeTestResults = async (state: State): Promise<Update> => {
   const template = `
 Analyze the test results and return the parsed JSON output for further reporting.
 IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
+Note: Ignore the warning messages and focus on the test results only and fix the errors if any.
 
 ### **Test Results:**  
 {testResults}
