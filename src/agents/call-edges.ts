@@ -30,7 +30,8 @@ export const callToolsEdge = async (state: State) => {
     return 'create-new-tests';
   }
 
-  if (state.fileName && state.filePath && !state.testFileFound) {
+  if (state.filePath) {
+    // found source file, now find test file
     return 'find-test-file';
   }
 
