@@ -51,7 +51,7 @@ export const analyzeExistingTests = async (state: State): Promise<Update> => {
 export const analyzeExistingTestEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
-    return 'tools';
+    return 'tools-write-tests';
   }
   return 'run-tests';
 };

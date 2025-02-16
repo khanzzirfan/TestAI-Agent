@@ -41818,7 +41818,7 @@ exports.analyzeExistingTests = analyzeExistingTests;
 const analyzeExistingTestEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools';
+        return 'tools-write-tests';
     }
     return 'run-tests';
 };
@@ -41853,8 +41853,6 @@ IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        ...state,
-        // @ts-ignore
         messages: [res]
     };
 };
@@ -41863,7 +41861,7 @@ exports.analyzeTestResults = analyzeTestResults;
 const analyzeTestResultsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools';
+        return 'tools-examine-test-results';
     }
     else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
         return 'fix-errors';
@@ -41908,7 +41906,7 @@ exports.checkFileExists = checkFileExists;
 const checkFileExistsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools';
+        return 'tools-find-file';
     }
     if (state.fileContent === null) {
         return 'find-file';
@@ -41968,7 +41966,7 @@ exports.checkTestFile = checkTestFile;
 const checkTestFileEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools';
+        return 'tools-find-test-file';
     }
     // Route based on whether test file exists
     return state.testFileContent ? 'analyze-existing-tests' : 'create-new-tests';
@@ -42084,7 +42082,7 @@ exports.fixErrors = fixErrors;
 const fixErrorsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools';
+        return 'tools-fix-errors';
     }
     if (state.iteration > 5) {
         return '__end__';
@@ -42165,7 +42163,7 @@ exports.runTests = runTests;
 const runTestsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools';
+        return 'tools-run-tests';
     }
     return 'analyze-results';
 };
@@ -42213,7 +42211,7 @@ exports.saveTests = saveTests;
 const writeTestsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools';
+        return 'tools-create-new-tests';
     }
     return 'find-test-file';
 };
@@ -42222,7 +42220,7 @@ exports.writeTestsEdges = writeTestsEdges;
 const saveTestsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools';
+        return 'tools-write-tests';
     }
     return 'run-tests'; // After saving, proceed to run tests
 };
@@ -42368,9 +42366,6 @@ const MainGraphRun = async () => {
         if (hasBothFiles) {
             return 'analyze-existing-tests';
         }
-        else if (state.fileName && state.filePath && !state.testFileFound) {
-            return 'create-new-tests';
-        }
         if (state.filePath) {
             // found source file, now find test file
             return 'find-test-file';
@@ -42381,7 +42376,6 @@ const MainGraphRun = async () => {
     const workflow = new langgraph_2.StateGraph(state_1.GraphState)
         // Add nodes
         .addNode('find-file', agents_1.checkFileExists)
-        .addNode('tools', toolExecutor)
         .addNode('find-test-file', agents_1.checkTestFile)
         .addNode('create-new-tests', agents_1.createNewTests)
         .addNode('analyze-existing-tests', agents_1.analyzeExistingTests)
@@ -42389,6 +42383,13 @@ const MainGraphRun = async () => {
         .addNode('run-tests', agents_1.runTests)
         .addNode('analyze-results', agents_1.analyzeTestResults)
         .addNode('fix-errors', agents_1.fixErrors)
+        .addNode('tools-find-file', toolExecutor)
+        .addNode('tools-find-test-file', toolExecutor)
+        .addNode('tools-write-tests', toolExecutor)
+        .addNode('tools-run-tests', toolExecutor)
+        .addNode('tools-fix-errors', toolExecutor)
+        .addNode('tools-examine-test-results', toolExecutor)
+        .addNode('tools-create-new-tests', toolExecutor)
         // Add edges with fixed flow
         .addEdge('__start__', 'find-file')
         .addConditionalEdges('find-file', agents_1.checkFileExistsEdges)
@@ -42399,8 +42400,13 @@ const MainGraphRun = async () => {
         .addConditionalEdges('run-tests', agents_1.runTestsEdges)
         .addConditionalEdges('analyze-results', agents_1.analyzeTestResultsEdges)
         .addConditionalEdges('fix-errors', agents_1.fixErrorsEdges)
-        .addConditionalEdges('tools', callToolsEdge)
-        .addEdge('analyze-results', '__end__');
+        .addConditionalEdges('tools-write-tests', agents_1.saveTestsEdges) // Route
+        .addConditionalEdges('tools-find-file', agents_1.checkFileExistsEdges)
+        .addConditionalEdges('tools-find-test-file', agents_1.checkTestFileEdges)
+        .addConditionalEdges('tools-run-tests', agents_1.runTestsEdges)
+        .addConditionalEdges('tools-fix-errors', agents_1.fixErrorsEdges)
+        .addConditionalEdges('tools-create-new-tests', agents_1.writeTestsEdges)
+        .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges);
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
     console.log('app version', 'v0.1.52-alpha.5');
     const query = `

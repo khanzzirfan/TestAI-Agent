@@ -23,8 +23,6 @@ IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
 
   const res = await llm.invoke(formattedPrompt);
   return {
-    ...state,
-    // @ts-ignore
     messages: [res]
   };
 };
@@ -33,7 +31,7 @@ IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
 export const analyzeTestResultsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
-    return 'tools';
+    return 'tools-examine-test-results';
   } else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
     return 'fix-errors';
   }

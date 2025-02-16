@@ -36,7 +36,7 @@ export const saveTests = async (state: State): Promise<Update> => {
 export const writeTestsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
-    return 'tools';
+    return 'tools-create-new-tests';
   }
   return 'find-test-file';
 };
@@ -45,7 +45,7 @@ export const writeTestsEdges = async (state: State) => {
 export const saveTestsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
-    return 'tools';
+    return 'tools-write-tests';
   }
   return 'run-tests'; // After saving, proceed to run tests
 };

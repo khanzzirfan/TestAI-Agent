@@ -125,8 +125,6 @@ export const MainGraphRun = async () => {
 
     if (hasBothFiles) {
       return 'analyze-existing-tests';
-    } else if (state.fileName && state.filePath && !state.testFileFound) {
-      return 'create-new-tests';
     }
 
     if (state.filePath) {
@@ -141,7 +139,6 @@ export const MainGraphRun = async () => {
   const workflow = new StateGraph(GraphState)
     // Add nodes
     .addNode('find-file', checkFileExists)
-    .addNode('tools', toolExecutor)
     .addNode('find-test-file', checkTestFile)
     .addNode('create-new-tests', createNewTests)
     .addNode('analyze-existing-tests', analyzeExistingTests)
@@ -149,6 +146,13 @@ export const MainGraphRun = async () => {
     .addNode('run-tests', runTests)
     .addNode('analyze-results', analyzeTestResults)
     .addNode('fix-errors', fixErrors)
+    .addNode('tools-find-file', toolExecutor)
+    .addNode('tools-find-test-file', toolExecutor)
+    .addNode('tools-write-tests', toolExecutor)
+    .addNode('tools-run-tests', toolExecutor)
+    .addNode('tools-fix-errors', toolExecutor)
+    .addNode('tools-examine-test-results', toolExecutor)
+    .addNode('tools-create-new-tests', toolExecutor)
 
     // Add edges with fixed flow
     .addEdge('__start__', 'find-file')
@@ -160,8 +164,13 @@ export const MainGraphRun = async () => {
     .addConditionalEdges('run-tests', runTestsEdges)
     .addConditionalEdges('analyze-results', analyzeTestResultsEdges)
     .addConditionalEdges('fix-errors', fixErrorsEdges)
-    .addConditionalEdges('tools', callToolsEdge)
-    .addEdge('analyze-results', '__end__');
+    .addConditionalEdges('tools-write-tests', saveTestsEdges) // Route
+    .addConditionalEdges('tools-find-file', checkFileExistsEdges)
+    .addConditionalEdges('tools-find-test-file', checkTestFileEdges)
+    .addConditionalEdges('tools-run-tests', runTestsEdges)
+    .addConditionalEdges('tools-fix-errors', fixErrorsEdges)
+    .addConditionalEdges('tools-create-new-tests', writeTestsEdges)
+    .addConditionalEdges('tools-examine-test-results', analyzeTestResultsEdges);
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
   console.log('app version', 'v0.1.52-alpha.5');
