@@ -32,9 +32,20 @@ Note: Ignore the warning messages and focus on the test results only and fix the
 export const analyzeTestResultsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
+    const toolCallNames = lastMessage.tool_calls.map(call => call.name);
+    if (toolCallNames.includes('read-file')) {
+      return 'tools-read-file';
+    }
+    if (toolCallNames.includes('write-file')) {
+      return 'tools-write-tests';
+    }
+  }
+  if (lastMessage.tool_calls?.length) {
     return 'tools-examine-test-results';
   } else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
     return 'fix-errors';
+  } else if (!state.testSummary) {
+    return 'run-tests';
   }
   return '__end__';
 };
