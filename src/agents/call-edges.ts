@@ -10,6 +10,8 @@ export const callToolsEdge = async (state: State) => {
   const hasTestFile = state.testFileName && state.testFilePath;
   const hasBothFiles = hasFile && hasTestFile;
 
+  console.log('callToolsEdge state params', JSON.stringify(state, null, 2));
+
   if (state.iteration > 5) {
     return '__end__';
   }
