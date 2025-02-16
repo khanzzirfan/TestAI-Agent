@@ -152,7 +152,13 @@ export const FileFolderTools = [
         }
 
         if (fs.existsSync(fullPath) && !overwrite) {
+          // read file content
+          const fileContent = fs.readFileSync(fullPath, 'utf-8');
           return {
+            testFileName: fileName,
+            testFilePath: fullPath,
+            testFileContent: fileContent,
+            testFileFound: true,
             file_operation: {
               success: false,
               error: 'File already exists and overwrite is not enabled'
@@ -164,6 +170,10 @@ export const FileFolderTools = [
         fs.writeFileSync(fullPath, content, 'utf-8');
 
         return {
+          testFileName: fileName,
+          testFilePath: fullPath,
+          testFileContent: content,
+          testFileFound: true,
           file_operation: {
             success: true,
             path: fullPath,
@@ -447,11 +457,13 @@ export const FileFolderTools = [
         };
 
         const testFile = findTestFile(rootDir);
+        const testFileFound = !!testFile;
 
         return {
           testFileContent: testFile ? testFile.content : null,
           testFilePath: testFile ? testFile.path : null,
-          testFileName: testFile ? path.basename(testFile.path) : null
+          testFileName: testFile ? path.basename(testFile.path) : null,
+          testFileFound
         };
       } catch (error: any) {
         return {

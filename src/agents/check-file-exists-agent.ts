@@ -32,7 +32,7 @@ export const checkFileExists = async (state: State): Promise<Update> => {
 export const checkFileExistsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
-    return 'tools-find-file';
+    return 'tools';
   }
   if (state.fileContent === null) {
     return 'find-file';

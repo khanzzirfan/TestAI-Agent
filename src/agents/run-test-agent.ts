@@ -34,12 +34,7 @@ export const runTests = async (state: State): Promise<Update> => {
 export const runTestsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
-    return 'tools-run-tests';
+    return 'tools';
   }
-
-  // if (state.hasError) {
-  //   return "fix-errors";
-  // }
   return 'analyze-results';
-  // return "__end__";
 };

@@ -39,6 +39,10 @@ export const GraphState = Annotation.Root({
     reducer: z => z,
     default: () => ''
   }),
+  testFileFound: Annotation<boolean>({
+    reducer: z => z,
+    default: () => false
+  }),
   testResults: Annotation<any>({
     reducer: z => z,
     default: () => null

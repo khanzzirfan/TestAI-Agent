@@ -33,7 +33,7 @@ IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
 export const analyzeTestResultsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
-    return 'tools-examine-test-results';
+    return 'tools';
   } else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
     return 'fix-errors';
   }

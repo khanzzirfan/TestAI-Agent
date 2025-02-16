@@ -6,3 +6,4 @@ export * from './analyze-test-results-agent';
 export * from './fix-errors-agent';
 export * from './run-test-agent';
 export * from './create-new-test-agent';
+export * from './call-edges';

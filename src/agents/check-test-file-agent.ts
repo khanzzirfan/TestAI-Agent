@@ -42,7 +42,7 @@ export const checkTestFile = async (state: State): Promise<Update> => {
 export const checkTestFileEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
-    return 'tools-find-test-file';
+    return 'tools';
   }
 
   // Route based on whether test file exists

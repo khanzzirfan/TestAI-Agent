@@ -61,7 +61,7 @@ export const fixErrors = async (state: State): Promise<Update> => {
 export const fixErrorsEdges = async (state: State) => {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
   if (lastMessage.tool_calls?.length) {
-    return 'tools-fix-errors';
+    return 'tools';
   }
   if (state.iteration > 5) {
     return '__end__';
