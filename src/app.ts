@@ -606,7 +606,7 @@ IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
     .addEdge('analyze-results', '__end__');
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
-  console.log('app version', 'v0.1.51-alpha.4');
+  console.log('app version', 'v0.1.52-alpha.5');
 
   const query = `
   You are a coding assistant with expertise in test automation.
