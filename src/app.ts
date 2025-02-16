@@ -151,7 +151,7 @@ export const MainGraphRun = async () => {
         return toolResult.result;
       }
 
-      const { messages: toolMessage, ...restResult } = toolResult.result;
+      const { messages: xmsg, ...restResult } = toolResult.result;
       // Convert regular tool output to Command
       return new Command({
         ...restResult,
@@ -167,27 +167,38 @@ export const MainGraphRun = async () => {
       });
     });
 
-    // after tool call execution, update the state
-    const stateUpdateReducer = stateUpdates.reduce(
-      (acc, update) => {
-        const { messages, ...restUpdate } = update;
-        return {
-          ...restUpdate,
-          messages: [...acc.messages, ...messages]
-        };
-      },
-      { fileContent: null, filePath: null, messages: [] }
-    );
+    // Handle mixed Command and non-Command outputs
+    const combinedOutputs = stateUpdates.map(output => {
+      if (isCommand(output)) {
+        return output;
+      }
+      // Tool invocation result is a ToolMessage, return a normal state update
+      return { messages: [output] };
+    });
+    // Return an array of values instead of an object
+    return combinedOutputs;
 
-    const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
+    // // after tool call execution, update the state
+    // const stateUpdateReducer = stateUpdates.reduce(
+    //   (acc, update) => {
+    //     const { messages, ...restUpdate } = update;
+    //     return {
+    //       ...restUpdate,
+    //       messages: [...acc.messages, ...messages]
+    //     };
+    //   },
+    //   { fileContent: null, filePath: null, messages: [] }
+    // );
 
-    // Combine all state updates
-    console.log('stateUpdateReducer', JSON.stringify(stateUpdateReducer, null, 2));
-    return {
-      ...state,
-      ...restStateUpdates,
-      messages: updatedMessages
-    };
+    // const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
+
+    // // Combine all state updates
+    // console.log('stateUpdateReducer', JSON.stringify(stateUpdateReducer, null, 2));
+    // return {
+    //   ...state,
+    //   ...restStateUpdates,
+    //   messages: updatedMessages
+    // };
   };
 
   const callToolsEdge = async (state: State) => {

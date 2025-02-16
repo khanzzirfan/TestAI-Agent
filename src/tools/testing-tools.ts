@@ -46,7 +46,7 @@ export const getCoolestCities = tool(
     const city = examples[state.toLowerCase()] || `List of coolest cities in ${state}`;
     return {
       // update the state keys
-      city: city,
+      value: city,
       hasCity: true
     };
   },
@@ -62,13 +62,15 @@ export const getCoolestCities = tool(
 const getCityRestaurants = tool(
   ({ city }, config) => {
     const examples: Record<string, string[]> = {
-      ny: ['Le Bernardin', 'Katzs Delicatessen', 'Peter Luger Steak House'],
-      sf: ['Tartine Bakery', 'Zuni Café', 'House of Prime Rib']
+      'Los Angeles': ['Le Bernardin', 'Katzs Delicatessen', 'Peter Luger Steak House'],
+      'San Francisco': ['Tartine Bakery', 'Zuni Café', 'House of Prime Rib'],
+      'New York': ['In-N-Out Burger', 'Taco Bell', 'McDonalds'],
+      'San Diego': ['The French Laundry', 'Per Se', 'Eleven Madison Park']
     };
     const givenCity = city.toLowerCase();
     const resturant = examples[givenCity] || `List of popular restaurants in ${city}`;
     return {
-      resturant: resturant,
+      value: resturant,
       hasCityRestaurants: true
     };
   },
@@ -84,14 +86,16 @@ const getCityRestaurants = tool(
 const getCityLibraries = tool(
   ({ city }, config) => {
     const examples: Record<string, string[]> = {
-      ny: ['New York Public Library', 'Brooklyn Public Library', 'Queens Library'],
-      sf: ['San Francisco Public Library', 'Mission Bay Library', 'Chinatown Branch Library']
+      'New York': ['New York Public Library', 'Brooklyn Public Library', 'Queens Library'],
+      'San Francisco': ['San Francisco Public Library', 'Mission Bay Library', 'Chinatown Branch Library'],
+      'Los Angeles': ['Los Angeles Public Library', 'Central Library', 'West Valley Regional Branch Library'],
+      'San Diego': ['San Diego Public Library', 'Central Library', 'Mission Valley Branch Library']
     };
     const libraries = examples[city.toLowerCase()] || `List of public libraries in ${city}`;
     // Populated when a tool is called with a tool call from a model as input
     return {
       // update the state keys
-      libraries: libraries,
+      value: libraries,
       hasCityLibraries: true
     };
   },
@@ -107,14 +111,16 @@ const getCityLibraries = tool(
 const getCityMonuments = tool(
   ({ city }, config) => {
     const examples: Record<string, string[]> = {
-      ny: ['Statue of Liberty', 'Empire State Building', 'Brooklyn Bridge'],
-      sf: ['Golden Gate Bridge', 'Coit Tower', 'Alcatraz Island']
+      'New York': ['Statue of Liberty', 'Empire State Building', 'Brooklyn Bridge'],
+      'San Francisco': ['Golden Gate Bridge', 'Coit Tower', 'Alcatraz Island'],
+      'Los Angeles': ['Hollywood Sign', 'Griffith Observatory', 'Los Angeles City Hall'],
+      'San Diego': ['USS Midway Museum', 'Cabrillo National Monument', 'Old Point Loma Lighthouse']
     };
     const monuments = examples[city.toLowerCase()] || `List of famous monuments in ${city}`;
     // Populated when a tool is called with a tool call from a model as input
     return {
       // update the state keys
-      monuments: monuments,
+      value: monuments,
       hasCityMonuments: true
     };
   },
@@ -130,11 +136,13 @@ const getCityMonuments = tool(
 const getCityZipCodes = tool(
   ({ city }) => {
     const examples: Record<string, string[]> = {
-      ny: ['10001', '10011', '10022'],
-      sf: ['94102', '94103', '94109']
+      'New York': ['10001', '10011', '10022'],
+      'San Francisco': ['94102', '94103', '94109'],
+      'Los Angeles': ['90001', '90011', '90022'],
+      'San Diego': ['92101', '92111', '92122']
     };
     return {
-      zipcodes: examples[city.toLowerCase()] || `List of zip codes in ${city}`,
+      value: examples[city.toLowerCase()] || `List of zip codes in ${city}`,
       hasCityZipCodes: true
     };
   },
@@ -150,11 +158,13 @@ const getCityZipCodes = tool(
 const getCityBeaches = tool(
   ({ city }) => {
     const examples: Record<string, string[]> = {
-      ny: ['Coney Island Beach', 'Rockaway Beach', 'Brighton Beach'],
-      sf: ['Baker Beach', 'Ocean Beach', 'China Beach']
+      'New York': ['Coney Island Beach', 'Rockaway Beach', 'Brighton Beach'],
+      'San Francisco': ['Baker Beach', 'Ocean Beach', 'China Beach'],
+      'Los Angeles': ['Venice Beach', 'Santa Monica Beach', 'Malibu Beach'],
+      'San Diego': ['La Jolla Cove', 'Coronado Beach', 'Pacific Beach']
     };
     return {
-      beaches: examples[city.toLowerCase()] || `List of beautiful beaches in ${city}`,
+      value: examples[city.toLowerCase()] || `List of beautiful beaches in ${city}`,
       hasCityBeaches: true
     };
   },

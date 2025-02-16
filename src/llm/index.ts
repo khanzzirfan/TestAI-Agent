@@ -26,7 +26,7 @@ export function initializeReactAgent(modelName: string, tools: any[]) {
   const model = new ChatOpenAI({
     model: modelName,
     temperature: 0,
-    verbose: false
+    verbose: true
   });
 
   // const toolNode = new ToolNode(tools);
@@ -40,5 +40,5 @@ export function initializeReactAgent(modelName: string, tools: any[]) {
 export const llm = new ChatOpenAI({
   model: 'gpt-4o',
   temperature: 0,
-  verbose: false
+  verbose: true
 }).bindTools(tools);
