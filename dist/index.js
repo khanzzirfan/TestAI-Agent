@@ -41875,52 +41875,6 @@ exports.analyzeTestResultsEdges = analyzeTestResultsEdges;
 
 /***/ }),
 
-/***/ 24779:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.callToolsEdge = void 0;
-const callToolsEdge = async (state) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage.tool_calls?.length) {
-        return 'tools';
-    }
-    const hasFile = state.fileName && state.filePath;
-    const hasTestFile = state.testFileName && state.testFilePath;
-    const hasBothFiles = hasFile && hasTestFile;
-    const { messages, ...restOfTheState } = state;
-    console.log('callToolsEdge state params', JSON.stringify(restOfTheState, null, 2));
-    if (state.iteration > 5) {
-        return '__end__';
-    }
-    if (state.testSummary && state.testSummary?.failureReasons?.length > 0) {
-        return 'fix-errors';
-    }
-    else if (state.testSummary && state.testSummary?.failureReasons?.length === 0) {
-        return '__end__';
-    }
-    if (state.testResults) {
-        return 'analyze-results';
-    }
-    if (hasBothFiles) {
-        return 'analyze-existing-tests';
-    }
-    else if (state.fileName && state.filePath && !state.testFileFound) {
-        return 'create-new-tests';
-    }
-    if (state.filePath) {
-        // found source file, now find test file
-        return 'find-test-file';
-    }
-    return 'find-file';
-};
-exports.callToolsEdge = callToolsEdge;
-
-
-/***/ }),
-
 /***/ 35486:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -42170,7 +42124,6 @@ __exportStar(__nccwpck_require__(40860), exports);
 __exportStar(__nccwpck_require__(26757), exports);
 __exportStar(__nccwpck_require__(74780), exports);
 __exportStar(__nccwpck_require__(38768), exports);
-__exportStar(__nccwpck_require__(24779), exports);
 
 
 /***/ }),
@@ -42332,6 +42285,7 @@ const MainGraphRun = async () => {
     // This compiles it into a LangChain Runnable,
     // meaning you can use it as you would any other runnable
     const app = graph_1.workflow.compile({ checkpointer });
+    console.log('app version', 'v0.1.51-alpha.2');
     const query = `
   You are a coding assistant with expertise in test automation.
   Generate and execute tests for ${filename}.
@@ -42351,7 +42305,7 @@ const MainGraphRun = async () => {
     const outputContent = await app.invoke({
         messages: [new messages_1.HumanMessage(query)],
         fileName: filename
-    }, { recursionLimit: 100, configurable: { thread_id: currentDate } });
+    }, { recursionLimit: 100, configurable: { thread_id: 1001 } });
     console.log('result of graph for a threadId:', currentDate);
     // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
     console.log(outputContent);
@@ -42367,16 +42321,204 @@ exports.MainGraphRun = MainGraphRun;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.workflow = void 0;
+exports.workflow = exports.callToolsEdge = exports.toolExecutor = exports.GraphState = void 0;
 const langgraph_1 = __nccwpck_require__(39405);
-const state_1 = __nccwpck_require__(2462);
+const langgraph_2 = __nccwpck_require__(39405);
+const messages_1 = __nccwpck_require__(62776);
+const messages_2 = __nccwpck_require__(62776);
+const langgraph_3 = __nccwpck_require__(39405);
+const tools_1 = __nccwpck_require__(72003);
+const tools = [...tools_1.CustomTools];
+const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 const agents_1 = __nccwpck_require__(36758);
-const tool_executor_utility_1 = __nccwpck_require__(74226);
+// Define the graph state with additional properties
+exports.GraphState = langgraph_2.Annotation.Root({
+    messages: (0, langgraph_2.Annotation)({
+        reducer: (x, y) => x.concat(y),
+        default: () => []
+    }),
+    iteration: (0, langgraph_2.Annotation)({
+        reducer: x => x,
+        default: () => 0
+    }),
+    hasError: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => false
+    }),
+    fileName: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    testFileName: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    fileContent: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    filePath: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    testFileContent: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    testFilePath: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    testFileFound: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => false
+    }),
+    testResults: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => null
+    }),
+    testSummary: (0, langgraph_2.Annotation)({
+        reducer: z => z,
+        default: () => null
+    })
+});
+const toolExecutor = async (state) => {
+    const message = state.messages.at(-1);
+    // @ts-ignore
+    if (!(0, messages_1.isAIMessage)(message) || message.tool_calls === undefined || message.tool_calls.length === 0) {
+        throw new Error('Most recent message must be an AIMessage with a tool call.');
+    }
+    // Execute all tool calls in parallel with proper error handling
+    const toolResults = (await Promise.allSettled(message.tool_calls.map(async (toolCall) => {
+        try {
+            const tool = toolMap.get(toolCall.name);
+            if (!tool) {
+                throw new Error(`Tool ${toolCall.name} not found`);
+            }
+            const result = await tool.invoke(toolCall.args);
+            return {
+                success: true,
+                result
+            };
+        }
+        catch (error) {
+            return {
+                success: false,
+                result: null,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    })));
+    // Process results and create state updates
+    const stateUpdates = toolResults.map((result, index) => {
+        // @ts-ignore
+        const toolCall = message?.tool_calls[index];
+        if (result.status === 'rejected') {
+            // Handle promise rejection
+            return {
+                update: {
+                    messages: [
+                        new messages_2.ToolMessage({
+                            content: `Tool execution failed: ${result.reason}`,
+                            // @ts-ignore
+                            tool_call_id: toolCall.id,
+                            additional_kwargs: { error: result.reason }
+                        })
+                    ]
+                }
+            };
+        }
+        const toolResult = result.value;
+        if (!toolResult.success) {
+            // Handle tool execution error
+            return {
+                update: {
+                    messages: [
+                        new messages_2.ToolMessage({
+                            content: `Tool execution failed: ${toolResult.error}`,
+                            // @ts-ignore
+                            tool_call_id: toolCall.id,
+                            additional_kwargs: { error: toolResult.error }
+                        })
+                    ]
+                }
+            };
+        }
+        // Handle successful tool execution
+        if ((0, langgraph_3.isCommand)(toolResult.result)) {
+            return toolResult.result;
+        }
+        const { messages: toolMessage, ...restResult } = toolResult.result;
+        // Convert regular tool output to Command
+        return {
+            ...restResult,
+            messages: [
+                new messages_2.ToolMessage({
+                    content: typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result, null, 2),
+                    // @ts-ignore
+                    tool_call_id: toolCall.id,
+                    additional_kwargs: { result: toolResult.result }
+                })
+            ]
+        };
+    });
+    const stateUpdateReducer = stateUpdates.reduce((acc, update) => {
+        const { messages, ...restUpdate } = update;
+        return {
+            ...restUpdate,
+            messages: [...acc.messages, ...messages]
+        };
+    }, { fileContent: null, filePath: null, messages: [] });
+    const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
+    // Combine all state updates
+    console.log('stateUpdateReducer', JSON.stringify(stateUpdateReducer, null, 2));
+    return {
+        ...state,
+        ...restStateUpdates,
+        messages: updatedMessages
+    };
+};
+exports.toolExecutor = toolExecutor;
+const callToolsEdge = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    const hasFile = state.fileName && state.filePath;
+    const hasTestFile = state.testFileName && state.testFilePath;
+    const hasBothFiles = hasFile && hasTestFile;
+    const { messages, ...restOfTheState } = state;
+    console.log('callToolsEdge state params', JSON.stringify(restOfTheState, null, 2));
+    if (state.iteration > 5) {
+        return '__end__';
+    }
+    if (state.testSummary && state.testSummary?.failureReasons?.length > 0) {
+        return 'fix-errors';
+    }
+    else if (state.testSummary && state.testSummary?.failureReasons?.length === 0) {
+        return '__end__';
+    }
+    if (state.testResults) {
+        return 'analyze-results';
+    }
+    if (hasBothFiles) {
+        return 'analyze-existing-tests';
+    }
+    else if (state.fileName && state.filePath && !state.testFileFound) {
+        return 'create-new-tests';
+    }
+    if (state.filePath) {
+        // found source file, now find test file
+        return 'find-test-file';
+    }
+    return 'find-file';
+};
+exports.callToolsEdge = callToolsEdge;
 // Create and compile the graph
-const workflow = new langgraph_1.StateGraph(state_1.GraphState)
+const workflow = new langgraph_1.StateGraph(exports.GraphState)
     // Add nodes
     .addNode('find-file', agents_1.checkFileExists)
-    .addNode('tools', tool_executor_utility_1.toolExecutor)
+    .addNode('tools', exports.toolExecutor)
     .addNode('find-test-file', agents_1.checkTestFile)
     .addNode('create-new-tests', agents_1.createNewTests)
     .addNode('analyze-existing-tests', agents_1.analyzeExistingTests)
@@ -42394,7 +42536,7 @@ const workflow = new langgraph_1.StateGraph(state_1.GraphState)
     .addConditionalEdges('run-tests', agents_1.runTestsEdges)
     .addConditionalEdges('analyze-results', agents_1.analyzeTestResultsEdges)
     .addConditionalEdges('fix-errors', agents_1.fixErrorsEdges)
-    .addConditionalEdges('tools', agents_1.callToolsEdge)
+    .addConditionalEdges('tools', exports.callToolsEdge)
     .addEdge('analyze-results', '__end__');
 exports.workflow = workflow;
 
@@ -42562,183 +42704,6 @@ async function run() {
         core.warning(`Failed to commit changes: ${error}`);
     }
 }
-
-
-/***/ }),
-
-/***/ 2462:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.GraphState = void 0;
-const langgraph_1 = __nccwpck_require__(39405);
-// Define the graph state with additional properties
-exports.GraphState = langgraph_1.Annotation.Root({
-    messages: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => x.concat(y),
-        default: () => []
-    }),
-    iteration: (0, langgraph_1.Annotation)({
-        reducer: x => x,
-        default: () => 0
-    }),
-    hasError: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => false
-    }),
-    fileName: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => ''
-    }),
-    testFileName: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => ''
-    }),
-    fileContent: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => ''
-    }),
-    filePath: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => ''
-    }),
-    testFileContent: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => ''
-    }),
-    testFilePath: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => ''
-    }),
-    testFileFound: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => false
-    }),
-    testResults: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => null
-    }),
-    testSummary: (0, langgraph_1.Annotation)({
-        reducer: z => z,
-        default: () => null
-    })
-});
-
-
-/***/ }),
-
-/***/ 74226:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.toolExecutor = void 0;
-const messages_1 = __nccwpck_require__(62776);
-const messages_2 = __nccwpck_require__(62776);
-const langgraph_1 = __nccwpck_require__(39405);
-const tools_1 = __nccwpck_require__(72003);
-const tools = [...tools_1.CustomTools];
-const toolMap = new Map(tools.map(tool => [tool.name, tool]));
-const toolExecutor = async (state) => {
-    const message = state.messages.at(-1);
-    // @ts-ignore
-    if (!(0, messages_1.isAIMessage)(message) || message.tool_calls === undefined || message.tool_calls.length === 0) {
-        throw new Error('Most recent message must be an AIMessage with a tool call.');
-    }
-    // Execute all tool calls in parallel with proper error handling
-    const toolResults = (await Promise.allSettled(message.tool_calls.map(async (toolCall) => {
-        try {
-            const tool = toolMap.get(toolCall.name);
-            if (!tool) {
-                throw new Error(`Tool ${toolCall.name} not found`);
-            }
-            const result = await tool.invoke(toolCall.args);
-            return {
-                success: true,
-                result
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                result: null,
-                error: error instanceof Error ? error.message : String(error)
-            };
-        }
-    })));
-    // Process results and create state updates
-    const stateUpdates = toolResults.map((result, index) => {
-        // @ts-ignore
-        const toolCall = message?.tool_calls[index];
-        if (result.status === 'rejected') {
-            // Handle promise rejection
-            return {
-                update: {
-                    messages: [
-                        new messages_2.ToolMessage({
-                            content: `Tool execution failed: ${result.reason}`,
-                            // @ts-ignore
-                            tool_call_id: toolCall.id,
-                            additional_kwargs: { error: result.reason }
-                        })
-                    ]
-                }
-            };
-        }
-        const toolResult = result.value;
-        if (!toolResult.success) {
-            // Handle tool execution error
-            return {
-                update: {
-                    messages: [
-                        new messages_2.ToolMessage({
-                            content: `Tool execution failed: ${toolResult.error}`,
-                            // @ts-ignore
-                            tool_call_id: toolCall.id,
-                            additional_kwargs: { error: toolResult.error }
-                        })
-                    ]
-                }
-            };
-        }
-        // Handle successful tool execution
-        if ((0, langgraph_1.isCommand)(toolResult.result)) {
-            return toolResult.result;
-        }
-        const { messages: toolMessage, ...restResult } = toolResult.result;
-        // Convert regular tool output to Command
-        return {
-            ...restResult,
-            messages: [
-                new messages_2.ToolMessage({
-                    content: typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result, null, 2),
-                    // @ts-ignore
-                    tool_call_id: toolCall.id,
-                    additional_kwargs: { result: toolResult.result }
-                })
-            ]
-        };
-    });
-    const stateUpdateReducer = stateUpdates.reduce((acc, update) => {
-        const { messages, ...restUpdate } = update;
-        return {
-            ...restUpdate,
-            messages: [...acc.messages, ...messages]
-        };
-    }, { fileContent: null, filePath: null, messages: [] });
-    const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
-    // Combine all state updates
-    console.log('stateUpdateReducer', JSON.stringify(stateUpdateReducer, null, 2));
-    return {
-        ...state,
-        ...restStateUpdates,
-        messages: updatedMessages
-    };
-};
-exports.toolExecutor = toolExecutor;
 
 
 /***/ }),
