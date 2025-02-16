@@ -42286,6 +42286,7 @@ const agents_1 = __nccwpck_require__(36758);
 const MainGraphRun = async () => {
     // Initialize memory to persist state between graph runs
     const checkpointer = new langgraph_1.MemorySaver();
+    const inMemoryStore = new langgraph_1.InMemoryStore();
     const filename = core.getInput('file_name');
     const toolNames = tools_1.CustomTools.map(tool => tool.name).join(', ');
     // Define the graph state with additional properties
@@ -42493,8 +42494,8 @@ const MainGraphRun = async () => {
         .addConditionalEdges('fix-errors', agents_1.fixErrorsEdges)
         .addConditionalEdges('tools', callToolsEdge)
         .addEdge('analyze-results', '__end__');
-    const app = workflow.compile({ checkpointer });
-    console.log('app version', 'v0.1.51-alpha.3');
+    const app = workflow.compile({ checkpointer, store: inMemoryStore });
+    console.log('app version', 'v0.1.51-alpha.4');
     const query = `
   You are a coding assistant with expertise in test automation.
   Generate and execute tests for ${filename}.

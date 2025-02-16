@@ -1,4 +1,4 @@
-import { MemorySaver } from '@langchain/langgraph';
+import { MemorySaver, InMemoryStore } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
 import * as core from '@actions/core';
 import { StateGraph } from '@langchain/langgraph';
@@ -35,6 +35,8 @@ import {
 export const MainGraphRun = async () => {
   // Initialize memory to persist state between graph runs
   const checkpointer = new MemorySaver();
+  const inMemoryStore = new InMemoryStore();
+
   const filename: string = core.getInput('file_name');
   const toolNames = CustomTools.map(tool => tool.name).join(', ');
 
@@ -270,8 +272,8 @@ export const MainGraphRun = async () => {
     .addConditionalEdges('tools', callToolsEdge)
     .addEdge('analyze-results', '__end__');
 
-  const app = workflow.compile({ checkpointer });
-  console.log('app version', 'v0.1.51-alpha.3');
+  const app = workflow.compile({ checkpointer, store: inMemoryStore });
+  console.log('app version', 'v0.1.51-alpha.4');
 
   const query = `
   You are a coding assistant with expertise in test automation.
