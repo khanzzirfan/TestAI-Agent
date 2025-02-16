@@ -47,15 +47,7 @@ const tools = [
   getCityRestaurants,
   getCityZipCodes
 ];
-const toolNode = new ToolNode<typeof AgentState.State>([
-  testSearch,
-  getCoolestCities,
-  getCityBeaches,
-  getCityMonuments,
-  getCityLibraries,
-  getCityRestaurants,
-  getCityZipCodes
-]);
+
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 // Initialize the LLM
 const model = initializeLLM('gpt-4o', tools);

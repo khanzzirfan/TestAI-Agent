@@ -36,7 +36,7 @@ export const MainGraphRun = async () => {
       messages: [new HumanMessage(query)],
       fileName: filename
     },
-    { recursionLimit: 100, configurable: { thread_id: currentDate } }
+    { recursionLimit: 100, configurable: { thread_id: 1001 } }
   );
 
   console.log('result of graph for a threadId:', currentDate);
