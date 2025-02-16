@@ -1,4 +1,4 @@
-import { MemorySaver, InMemoryStore } from '@langchain/langgraph';
+import { MemorySaver, InMemoryStore, Command } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
 import * as core from '@actions/core';
 import { StateGraph } from '@langchain/langgraph';
@@ -115,7 +115,7 @@ export const MainGraphRun = async () => {
 
       if (result.status === 'rejected') {
         // Handle promise rejection
-        return {
+        return new Command({
           update: {
             messages: [
               new ToolMessage({
@@ -126,13 +126,13 @@ export const MainGraphRun = async () => {
               })
             ]
           }
-        };
+        });
       }
 
       const toolResult = result.value;
       if (!toolResult.success) {
         // Handle tool execution error
-        return {
+        return new Command({
           update: {
             messages: [
               new ToolMessage({
@@ -143,7 +143,7 @@ export const MainGraphRun = async () => {
               })
             ]
           }
-        };
+        });
       }
 
       // Handle successful tool execution
@@ -153,7 +153,7 @@ export const MainGraphRun = async () => {
 
       const { messages: toolMessage, ...restResult } = toolResult.result;
       // Convert regular tool output to Command
-      return {
+      return new Command({
         ...restResult,
         messages: [
           new ToolMessage({
@@ -164,9 +164,10 @@ export const MainGraphRun = async () => {
             additional_kwargs: { result: toolResult.result }
           })
         ]
-      };
+      });
     });
 
+    // after tool call execution, update the state
     const stateUpdateReducer = stateUpdates.reduce(
       (acc, update) => {
         const { messages, ...restUpdate } = update;

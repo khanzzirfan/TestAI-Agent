@@ -1,7 +1,7 @@
 {
   "name": "testifyai-agent",
   "description": "GitHub Actions for TestifyAI. This action is used to generate codegaurd to TestifyAI tests.",
-  "version": "v0.1.52-alpha.5",
+  "version": "v0.1.53-alpha.3",
   "author": "khanzzirfan",
   "private": true,
   "homepage": "https://github.com/khanzzirfan/TestAI-Agent.git",

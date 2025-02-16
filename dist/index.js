@@ -41907,7 +41907,7 @@ const MainGraphRun = async () => {
             const toolCall = message?.tool_calls[index];
             if (result.status === 'rejected') {
                 // Handle promise rejection
-                return {
+                return new langgraph_1.Command({
                     update: {
                         messages: [
                             new messages_3.ToolMessage({
@@ -41918,12 +41918,12 @@ const MainGraphRun = async () => {
                             })
                         ]
                     }
-                };
+                });
             }
             const toolResult = result.value;
             if (!toolResult.success) {
                 // Handle tool execution error
-                return {
+                return new langgraph_1.Command({
                     update: {
                         messages: [
                             new messages_3.ToolMessage({
@@ -41934,7 +41934,7 @@ const MainGraphRun = async () => {
                             })
                         ]
                     }
-                };
+                });
             }
             // Handle successful tool execution
             if ((0, langgraph_4.isCommand)(toolResult.result)) {
@@ -41942,7 +41942,7 @@ const MainGraphRun = async () => {
             }
             const { messages: toolMessage, ...restResult } = toolResult.result;
             // Convert regular tool output to Command
-            return {
+            return new langgraph_1.Command({
                 ...restResult,
                 messages: [
                     new messages_3.ToolMessage({
@@ -41952,8 +41952,9 @@ const MainGraphRun = async () => {
                         additional_kwargs: { result: toolResult.result }
                     })
                 ]
-            };
+            });
         });
+        // after tool call execution, update the state
         const stateUpdateReducer = stateUpdates.reduce((acc, update) => {
             const { messages, ...restUpdate } = update;
             return {
