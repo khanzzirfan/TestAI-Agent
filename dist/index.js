@@ -41908,7 +41908,7 @@ const callToolsEdge = async (state) => {
     else if (state.fileName && state.filePath && !state.testFileFound) {
         return 'create-new-tests';
     }
-    if (state.fileName && state.filePath && !state.testFileName) {
+    if (state.fileName && state.filePath && !state.testFileFound) {
         return 'find-test-file';
     }
     return 'find-file';
