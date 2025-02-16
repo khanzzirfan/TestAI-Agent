@@ -13,6 +13,7 @@ export const MainGraphRun = async () => {
   // This compiles it into a LangChain Runnable,
   // meaning you can use it as you would any other runnable
   const app = workflow.compile({ checkpointer });
+  console.log('app version', 'v0.1.51-alpha.2');
 
   const query = `
   You are a coding assistant with expertise in test automation.
