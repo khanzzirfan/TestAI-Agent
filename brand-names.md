@@ -1,5 +1,5 @@
-Here are some brand name ideas for your automated test generation tool that
-cater to developers and convey uniqueness and functionality:
+Here are some brand name ideas for your automated test generation tool that cater to developers and convey uniqueness
+and functionality:
 
 ### Tech-Savvy Names
 
@@ -33,8 +33,7 @@ cater to developers and convey uniqueness and functionality:
 19. **CodeSentinel**
 20. **TestCrafter**
 
-Let me know which style resonates most with you, or if you'd like more tailored
-suggestions.
+Let me know which style resonates most with you, or if you'd like more tailored suggestions.
 
 Here are more brand names inspired by the ones you liked:
 

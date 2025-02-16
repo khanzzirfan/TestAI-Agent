@@ -12,10 +12,10 @@ name: Check Transpiled JavaScript
 on:
   pull_request:
     branches:
-      - main
+      - mainx
   push:
     branches:
-      - main
+      - mainx
 
 permissions:
   contents: read

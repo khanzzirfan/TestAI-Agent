@@ -81,6 +81,7 @@ var tool = __webpack_require__(50434);
 
 
 
+
 const _isMessageType = (msg, types) => {
     const typesAsStrings = [
         ...new Set(types?.map((t) => {
@@ -89,14 +90,14 @@ const _isMessageType = (msg, types) => {
             }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const instantiatedMsgClass = new t({});
-            if (!("_getType" in instantiatedMsgClass) ||
-                typeof instantiatedMsgClass._getType !== "function") {
+            if (!("getType" in instantiatedMsgClass) ||
+                typeof instantiatedMsgClass.getType !== "function") {
                 throw new Error("Invalid type provided.");
             }
-            return instantiatedMsgClass._getType();
+            return instantiatedMsgClass.getType();
         })),
     ];
-    const msgType = msg._getType();
+    const msgType = msg.getType();
     return typesAsStrings.some((t) => t === msgType);
 };
 function filterMessages(messagesOrOptions, options) {
@@ -150,13 +151,13 @@ function _mergeMessageRuns(messages) {
     }
     const merged = [];
     for (const msg of messages) {
-        const curr = msg; // Create a shallow copy of the message
+        const curr = msg;
         const last = merged.pop();
         if (!last) {
             merged.push(curr);
         }
-        else if (curr._getType() === "tool" ||
-            !(curr._getType() === last._getType())) {
+        else if (curr.getType() === "tool" ||
+            !(curr.getType() === last.getType())) {
             merged.push(last, curr);
         }
         else {
@@ -182,7 +183,9 @@ function trimMessages(messagesOrOptions, options) {
     }
     else {
         const trimmerOptions = messagesOrOptions;
-        return RunnableLambda.from((input) => _trimMessagesHelper(input, trimmerOptions));
+        return RunnableLambda.from((input) => _trimMessagesHelper(input, trimmerOptions)).withConfig({
+            runName: "trim_messages",
+        });
     }
 }
 async function _trimMessagesHelper(messages, options) {
@@ -263,7 +266,7 @@ async function _firstMaxTokens(messages, options) {
                     ? reversedContent.slice(0, i)
                     : reversedContent.slice(-i);
                 const fields = Object.fromEntries(Object.entries(excluded).filter(([k]) => k !== "type" && !k.startsWith("lc_")));
-                const updatedMessage = _switchTypeToMessage(excluded._getType(), {
+                const updatedMessage = _switchTypeToMessage(excluded.getType(), {
                     ...fields,
                     content: partialContent,
                 });
@@ -324,17 +327,22 @@ async function _firstMaxTokens(messages, options) {
 }
 async function _lastMaxTokens(messages, options) {
     const { allowPartial = false, includeSystem = false, endOn, startOn, ...rest } = options;
+    // Create a copy of messages to avoid mutation
+    let messagesCopy = messages.map((message) => {
+        const fields = Object.fromEntries(Object.entries(message).filter(([k]) => k !== "type" && !k.startsWith("lc_")));
+        return _switchTypeToMessage(message.getType(), fields, isBaseMessageChunk(message));
+    });
     if (endOn) {
         const endOnArr = Array.isArray(endOn) ? endOn : [endOn];
-        while (messages &&
-            !_isMessageType(messages[messages.length - 1], endOnArr)) {
-            messages.pop();
+        while (messagesCopy.length > 0 &&
+            !_isMessageType(messagesCopy[messagesCopy.length - 1], endOnArr)) {
+            messagesCopy = messagesCopy.slice(0, -1);
         }
     }
-    const swappedSystem = includeSystem && messages[0]._getType() === "system";
+    const swappedSystem = includeSystem && messagesCopy[0]?.getType() === "system";
     let reversed_ = swappedSystem
-        ? messages.slice(0, 1).concat(messages.slice(1).reverse())
-        : messages.reverse();
+        ? messagesCopy.slice(0, 1).concat(messagesCopy.slice(1).reverse())
+        : messagesCopy.reverse();
     reversed_ = await _firstMaxTokens(reversed_, {
         ...rest,
         partialStrategy: allowPartial ? "last" : undefined,
@@ -492,7 +500,7 @@ function _switchTypeToMessage(messageType, fields, returnChunk) {
     throw new Error(`Unrecognized message type ${messageType}`);
 }
 function _chunkToMsg(chunk) {
-    const chunkType = chunk._getType();
+    const chunkType = chunk.getType();
     let msg;
     const fields = Object.fromEntries(Object.entries(chunk).filter(([k]) => !["type", "tool_call_chunks"].includes(k) && !k.startsWith("lc_")));
     if (chunkType in _MSG_CHUNK_MAP) {
@@ -1158,13 +1166,20 @@ function _coerceMessagePromptTemplateLike(messagePromptTemplateLike, extra) {
     if (Array.isArray(messagePromptTemplateLike) &&
         messagePromptTemplateLike[0] === "placeholder") {
         const messageContent = messagePromptTemplateLike[1];
-        if (typeof messageContent !== "string" ||
-            messageContent[0] !== "{" ||
-            messageContent[messageContent.length - 1] !== "}") {
-            throw new Error(`Invalid placeholder template: "${messagePromptTemplateLike[1]}". Expected a variable name surrounded by curly braces.`);
+        if (extra?.templateFormat === "mustache" &&
+            typeof messageContent === "string" &&
+            messageContent.slice(0, 2) === "{{" &&
+            messageContent.slice(-2) === "}}") {
+            const variableName = messageContent.slice(2, -2);
+            return new MessagesPlaceholder({ variableName, optional: true });
         }
-        const variableName = messageContent.slice(1, -1);
-        return new MessagesPlaceholder({ variableName, optional: true });
+        else if (typeof messageContent === "string" &&
+            messageContent[0] === "{" &&
+            messageContent[messageContent.length - 1] === "}") {
+            const variableName = messageContent.slice(1, -1);
+            return new MessagesPlaceholder({ variableName, optional: true });
+        }
+        throw new Error(`Invalid placeholder template for format ${extra?.templateFormat ?? `"f-string"`}: "${messagePromptTemplateLike[1]}". Expected a variable name surrounded by ${extra?.templateFormat === "mustache" ? "double" : "single"} curly braces.`);
     }
     const message = (0,utils/* coerceMessageLikeToMessage */.K0)(messagePromptTemplateLike);
     let templateData;

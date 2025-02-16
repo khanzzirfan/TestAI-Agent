@@ -1,11 +1,8 @@
-import {
-  ChatPromptTemplate,
-  MessagesPlaceholder
-} from '@langchain/core/prompts'
-import { StructuredTool } from '@langchain/core/tools'
-import { convertToOpenAITool } from '@langchain/core/utils/function_calling'
-import { Runnable } from '@langchain/core/runnables'
-import { ChatOpenAI } from '@langchain/openai'
+import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
+import { StructuredTool } from '@langchain/core/tools';
+import { convertToOpenAITool } from '@langchain/core/utils/function_calling';
+import { Runnable } from '@langchain/core/runnables';
+import { ChatOpenAI } from '@langchain/openai';
 
 /**
  * Create an agent that can run a set of tools.
@@ -15,12 +12,12 @@ async function createAgent({
   tools,
   systemMessage
 }: {
-  llm: ChatOpenAI
-  tools: StructuredTool[]
-  systemMessage: string
+  llm: ChatOpenAI;
+  tools: StructuredTool[];
+  systemMessage: string;
 }): Promise<Runnable> {
-  const toolNames = tools.map(tool => tool.name).join(', ')
-  const formattedTools = tools.map(t => convertToOpenAITool(t))
+  const toolNames = tools.map(tool => tool.name).join(', ');
+  const formattedTools = tools.map(t => convertToOpenAITool(t));
 
   let prompt = ChatPromptTemplate.fromMessages([
     [
@@ -34,13 +31,13 @@ async function createAgent({
         ' You have access to the following tools: {tool_names}.\n{system_message}'
     ],
     new MessagesPlaceholder('messages')
-  ])
+  ]);
   prompt = await prompt.partial({
     system_message: systemMessage,
     tool_names: toolNames
-  })
+  });
 
-  return prompt.pipe(llm.bind({ tools: formattedTools }))
+  return prompt.pipe(llm.bind({ tools: formattedTools }));
 }
 
-export { createAgent }
+export { createAgent };

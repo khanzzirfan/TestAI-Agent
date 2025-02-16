@@ -1,36 +1,57 @@
-import { BaseMessage } from '@langchain/core/messages'
-import { Annotation, messagesStateReducer } from '@langchain/langgraph'
+import { BaseMessage } from '@langchain/core/messages';
+import { Annotation } from '@langchain/langgraph';
 
+// Define the graph state with additional properties
 export const GraphState = Annotation.Root({
-  messages: Annotation<any[]>({
-    reducer: messagesStateReducer,
+  messages: Annotation<BaseMessage[]>({
+    reducer: (x, y) => x.concat(y),
     default: () => []
   }),
   iteration: Annotation<number>({
     reducer: x => x,
     default: () => 0
   }),
-  hasError: Annotation<boolean>({ reducer: x => x, default: () => false }),
-  fileName: Annotation<string>({ reducer: x => x, default: () => '' }),
+  hasError: Annotation<boolean>({
+    reducer: z => z,
+    default: () => false
+  }),
+  fileName: Annotation<string>({
+    reducer: z => z,
+    default: () => ''
+  }),
   testFileName: Annotation<string>({
-    reducer: x => x,
+    reducer: z => z,
     default: () => ''
   }),
   fileContent: Annotation<string>({
-    reducer: x => x,
+    reducer: z => z,
     default: () => ''
   }),
-  filePath: Annotation<string>({ reducer: x => x, default: () => '' }),
+  filePath: Annotation<string>({
+    reducer: z => z,
+    default: () => ''
+  }),
   testFileContent: Annotation<string>({
-    reducer: x => x,
+    reducer: z => z,
     default: () => ''
   }),
   testFilePath: Annotation<string>({
-    reducer: x => x,
+    reducer: z => z,
     default: () => ''
   }),
+  testFileFound: Annotation<boolean>({
+    reducer: z => z,
+    default: () => false
+  }),
   testResults: Annotation<any>({
-    reducer: x => x,
-    default: () => undefined
+    reducer: z => z,
+    default: () => null
+  }),
+  testSummary: Annotation<any>({
+    reducer: z => z,
+    default: () => null
   })
-})
+});
+
+export type State = typeof GraphState.State;
+export type Update = typeof GraphState.Update;

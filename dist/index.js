@@ -2446,7 +2446,7 @@ class HttpClient {
         if (this._keepAlive && useProxy) {
             agent = this._proxyAgent;
         }
-        if (this._keepAlive && !useProxy) {
+        if (!useProxy) {
             agent = this._agent;
         }
         // if agent is already assigned use that agent.
@@ -2478,15 +2478,11 @@ class HttpClient {
             agent = tunnelAgent(agentOptions);
             this._proxyAgent = agent;
         }
-        // if reusing agent across request and tunneling agent isn't assigned create a new agent
-        if (this._keepAlive && !agent) {
+        // if tunneling agent isn't assigned create a new agent
+        if (!agent) {
             const options = { keepAlive: this._keepAlive, maxSockets };
             agent = usingSsl ? new https.Agent(options) : new http.Agent(options);
             this._agent = agent;
-        }
-        // if not using private agent and tunnel agent isn't setup then use global agent
-        if (!agent) {
-            agent = usingSsl ? https.globalAgent : http.globalAgent;
         }
         if (usingSsl && this._ignoreSslError) {
             // we don't want to set NODE_TLS_REJECT_UNAUTHORIZED=0 since that will affect request for entire process
@@ -2509,7 +2505,7 @@ class HttpClient {
         }
         const usingSsl = parsedUrl.protocol === 'https:';
         proxyAgent = new undici_1.ProxyAgent(Object.assign({ uri: proxyUrl.href, pipelining: !this._keepAlive ? 0 : 1 }, ((proxyUrl.username || proxyUrl.password) && {
-            token: `${proxyUrl.username}:${proxyUrl.password}`
+            token: `Basic ${Buffer.from(`${proxyUrl.username}:${proxyUrl.password}`).toString('base64')}`
         })));
         this._proxyAgentDispatcher = proxyAgent;
         if (usingSsl && this._ignoreSslError) {
@@ -2623,11 +2619,11 @@ function getProxyUrl(reqUrl) {
     })();
     if (proxyVar) {
         try {
-            return new URL(proxyVar);
+            return new DecodedURL(proxyVar);
         }
         catch (_a) {
             if (!proxyVar.startsWith('http://') && !proxyVar.startsWith('https://'))
-                return new URL(`http://${proxyVar}`);
+                return new DecodedURL(`http://${proxyVar}`);
         }
     }
     else {
@@ -2685,6 +2681,19 @@ function isLoopbackAddress(host) {
         hostLower.startsWith('127.') ||
         hostLower.startsWith('[::1]') ||
         hostLower.startsWith('[0:0:0:0:0:0:0:1]'));
+}
+class DecodedURL extends URL {
+    constructor(url, base) {
+        super(url, base);
+        this._decodedUsername = decodeURIComponent(super.username);
+        this._decodedPassword = decodeURIComponent(super.password);
+    }
+    get username() {
+        return this._decodedUsername;
+    }
+    get password() {
+        return this._decodedPassword;
+    }
 }
 //# sourceMappingURL=proxy.js.map
 
@@ -4294,374 +4303,6 @@ module.exports = function (str, sep) {
 		.replace(/([A-Z]+)([A-Z][a-z\d]+)/g, '$1' + sep + '$2')
 		.toLowerCase();
 };
-
-
-/***/ }),
-
-/***/ 18889:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const fs = __nccwpck_require__(79896)
-const path = __nccwpck_require__(16928)
-const os = __nccwpck_require__(70857)
-const crypto = __nccwpck_require__(76982)
-const packageJson = __nccwpck_require__(80056)
-
-const version = packageJson.version
-
-const LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg
-
-// Parse src into an Object
-function parse (src) {
-  const obj = {}
-
-  // Convert buffer to string
-  let lines = src.toString()
-
-  // Convert line breaks to same format
-  lines = lines.replace(/\r\n?/mg, '\n')
-
-  let match
-  while ((match = LINE.exec(lines)) != null) {
-    const key = match[1]
-
-    // Default undefined or null to empty string
-    let value = (match[2] || '')
-
-    // Remove whitespace
-    value = value.trim()
-
-    // Check if double quoted
-    const maybeQuote = value[0]
-
-    // Remove surrounding quotes
-    value = value.replace(/^(['"`])([\s\S]*)\1$/mg, '$2')
-
-    // Expand newlines if double quoted
-    if (maybeQuote === '"') {
-      value = value.replace(/\\n/g, '\n')
-      value = value.replace(/\\r/g, '\r')
-    }
-
-    // Add to object
-    obj[key] = value
-  }
-
-  return obj
-}
-
-function _parseVault (options) {
-  const vaultPath = _vaultPath(options)
-
-  // Parse .env.vault
-  const result = DotenvModule.configDotenv({ path: vaultPath })
-  if (!result.parsed) {
-    const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`)
-    err.code = 'MISSING_DATA'
-    throw err
-  }
-
-  // handle scenario for comma separated keys - for use with key rotation
-  // example: DOTENV_KEY="dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=prod,dotenv://:key_7890@dotenvx.com/vault/.env.vault?environment=prod"
-  const keys = _dotenvKey(options).split(',')
-  const length = keys.length
-
-  let decrypted
-  for (let i = 0; i < length; i++) {
-    try {
-      // Get full key
-      const key = keys[i].trim()
-
-      // Get instructions for decrypt
-      const attrs = _instructions(result, key)
-
-      // Decrypt
-      decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key)
-
-      break
-    } catch (error) {
-      // last key
-      if (i + 1 >= length) {
-        throw error
-      }
-      // try next key
-    }
-  }
-
-  // Parse decrypted .env string
-  return DotenvModule.parse(decrypted)
-}
-
-function _log (message) {
-  console.log(`[dotenv@${version}][INFO] ${message}`)
-}
-
-function _warn (message) {
-  console.log(`[dotenv@${version}][WARN] ${message}`)
-}
-
-function _debug (message) {
-  console.log(`[dotenv@${version}][DEBUG] ${message}`)
-}
-
-function _dotenvKey (options) {
-  // prioritize developer directly setting options.DOTENV_KEY
-  if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
-    return options.DOTENV_KEY
-  }
-
-  // secondary infra already contains a DOTENV_KEY environment variable
-  if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
-    return process.env.DOTENV_KEY
-  }
-
-  // fallback to empty string
-  return ''
-}
-
-function _instructions (result, dotenvKey) {
-  // Parse DOTENV_KEY. Format is a URI
-  let uri
-  try {
-    uri = new URL(dotenvKey)
-  } catch (error) {
-    if (error.code === 'ERR_INVALID_URL') {
-      const err = new Error('INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development')
-      err.code = 'INVALID_DOTENV_KEY'
-      throw err
-    }
-
-    throw error
-  }
-
-  // Get decrypt key
-  const key = uri.password
-  if (!key) {
-    const err = new Error('INVALID_DOTENV_KEY: Missing key part')
-    err.code = 'INVALID_DOTENV_KEY'
-    throw err
-  }
-
-  // Get environment
-  const environment = uri.searchParams.get('environment')
-  if (!environment) {
-    const err = new Error('INVALID_DOTENV_KEY: Missing environment part')
-    err.code = 'INVALID_DOTENV_KEY'
-    throw err
-  }
-
-  // Get ciphertext payload
-  const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`
-  const ciphertext = result.parsed[environmentKey] // DOTENV_VAULT_PRODUCTION
-  if (!ciphertext) {
-    const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`)
-    err.code = 'NOT_FOUND_DOTENV_ENVIRONMENT'
-    throw err
-  }
-
-  return { ciphertext, key }
-}
-
-function _vaultPath (options) {
-  let possibleVaultPath = null
-
-  if (options && options.path && options.path.length > 0) {
-    if (Array.isArray(options.path)) {
-      for (const filepath of options.path) {
-        if (fs.existsSync(filepath)) {
-          possibleVaultPath = filepath.endsWith('.vault') ? filepath : `${filepath}.vault`
-        }
-      }
-    } else {
-      possibleVaultPath = options.path.endsWith('.vault') ? options.path : `${options.path}.vault`
-    }
-  } else {
-    possibleVaultPath = path.resolve(process.cwd(), '.env.vault')
-  }
-
-  if (fs.existsSync(possibleVaultPath)) {
-    return possibleVaultPath
-  }
-
-  return null
-}
-
-function _resolveHome (envPath) {
-  return envPath[0] === '~' ? path.join(os.homedir(), envPath.slice(1)) : envPath
-}
-
-function _configVault (options) {
-  _log('Loading env from encrypted .env.vault')
-
-  const parsed = DotenvModule._parseVault(options)
-
-  let processEnv = process.env
-  if (options && options.processEnv != null) {
-    processEnv = options.processEnv
-  }
-
-  DotenvModule.populate(processEnv, parsed, options)
-
-  return { parsed }
-}
-
-function configDotenv (options) {
-  const dotenvPath = path.resolve(process.cwd(), '.env')
-  let encoding = 'utf8'
-  const debug = Boolean(options && options.debug)
-
-  if (options && options.encoding) {
-    encoding = options.encoding
-  } else {
-    if (debug) {
-      _debug('No encoding is specified. UTF-8 is used by default')
-    }
-  }
-
-  let optionPaths = [dotenvPath] // default, look for .env
-  if (options && options.path) {
-    if (!Array.isArray(options.path)) {
-      optionPaths = [_resolveHome(options.path)]
-    } else {
-      optionPaths = [] // reset default
-      for (const filepath of options.path) {
-        optionPaths.push(_resolveHome(filepath))
-      }
-    }
-  }
-
-  // Build the parsed data in a temporary object (because we need to return it).  Once we have the final
-  // parsed data, we will combine it with process.env (or options.processEnv if provided).
-  let lastError
-  const parsedAll = {}
-  for (const path of optionPaths) {
-    try {
-      // Specifying an encoding returns a string instead of a buffer
-      const parsed = DotenvModule.parse(fs.readFileSync(path, { encoding }))
-
-      DotenvModule.populate(parsedAll, parsed, options)
-    } catch (e) {
-      if (debug) {
-        _debug(`Failed to load ${path} ${e.message}`)
-      }
-      lastError = e
-    }
-  }
-
-  let processEnv = process.env
-  if (options && options.processEnv != null) {
-    processEnv = options.processEnv
-  }
-
-  DotenvModule.populate(processEnv, parsedAll, options)
-
-  if (lastError) {
-    return { parsed: parsedAll, error: lastError }
-  } else {
-    return { parsed: parsedAll }
-  }
-}
-
-// Populates process.env from .env file
-function config (options) {
-  // fallback to original dotenv if DOTENV_KEY is not set
-  if (_dotenvKey(options).length === 0) {
-    return DotenvModule.configDotenv(options)
-  }
-
-  const vaultPath = _vaultPath(options)
-
-  // dotenvKey exists but .env.vault file does not exist
-  if (!vaultPath) {
-    _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`)
-
-    return DotenvModule.configDotenv(options)
-  }
-
-  return DotenvModule._configVault(options)
-}
-
-function decrypt (encrypted, keyStr) {
-  const key = Buffer.from(keyStr.slice(-64), 'hex')
-  let ciphertext = Buffer.from(encrypted, 'base64')
-
-  const nonce = ciphertext.subarray(0, 12)
-  const authTag = ciphertext.subarray(-16)
-  ciphertext = ciphertext.subarray(12, -16)
-
-  try {
-    const aesgcm = crypto.createDecipheriv('aes-256-gcm', key, nonce)
-    aesgcm.setAuthTag(authTag)
-    return `${aesgcm.update(ciphertext)}${aesgcm.final()}`
-  } catch (error) {
-    const isRange = error instanceof RangeError
-    const invalidKeyLength = error.message === 'Invalid key length'
-    const decryptionFailed = error.message === 'Unsupported state or unable to authenticate data'
-
-    if (isRange || invalidKeyLength) {
-      const err = new Error('INVALID_DOTENV_KEY: It must be 64 characters long (or more)')
-      err.code = 'INVALID_DOTENV_KEY'
-      throw err
-    } else if (decryptionFailed) {
-      const err = new Error('DECRYPTION_FAILED: Please check your DOTENV_KEY')
-      err.code = 'DECRYPTION_FAILED'
-      throw err
-    } else {
-      throw error
-    }
-  }
-}
-
-// Populate process.env with parsed values
-function populate (processEnv, parsed, options = {}) {
-  const debug = Boolean(options && options.debug)
-  const override = Boolean(options && options.override)
-
-  if (typeof parsed !== 'object') {
-    const err = new Error('OBJECT_REQUIRED: Please check the processEnv argument being passed to populate')
-    err.code = 'OBJECT_REQUIRED'
-    throw err
-  }
-
-  // Set process.env
-  for (const key of Object.keys(parsed)) {
-    if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
-      if (override === true) {
-        processEnv[key] = parsed[key]
-      }
-
-      if (debug) {
-        if (override === true) {
-          _debug(`"${key}" is already defined and WAS overwritten`)
-        } else {
-          _debug(`"${key}" is already defined and was NOT overwritten`)
-        }
-      }
-    } else {
-      processEnv[key] = parsed[key]
-    }
-  }
-}
-
-const DotenvModule = {
-  configDotenv,
-  _configVault,
-  _parseVault,
-  config,
-  decrypt,
-  parse,
-  populate
-}
-
-module.exports.configDotenv = DotenvModule.configDotenv
-module.exports._configVault = DotenvModule._configVault
-module.exports._parseVault = DotenvModule._parseVault
-module.exports.config = DotenvModule.config
-module.exports.decrypt = DotenvModule.decrypt
-module.exports.parse = DotenvModule.parse
-module.exports.populate = DotenvModule.populate
-
-module.exports = DotenvModule
 
 
 /***/ }),
@@ -42123,6 +41764,520 @@ exports.NEVER = parseUtil_1.INVALID;
 
 /***/ }),
 
+/***/ 51867:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.analyzeExistingTestEdges = exports.analyzeExistingTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const analyzeExistingTests = async (state) => {
+    const template = `
+    All necessary test cases and component details are included below.
+    Analyze the existing test cases for {fileName} and determine if they are sufficient.
+    If the tests are inadequate, create new test cases to improve coverage.
+
+    ### Test File Name: {testFileName}
+    ### Test file path: {testFilePath}
+    ### **Existing Test Content:**
+    {testFileContent}
+
+    ### **Component Content:**
+    {fileContent}
+
+    ### **Guidelines:**
+    - **Analyze** the existing test cases for coverage and accuracy.
+    - **Identify** any gaps or missing test scenarios.
+    - **Create** new test cases to improve coverage if necessary.
+    - **Maintain** consistency with existing test structure.
+    - **Ensure** the tests are accurate, reliable, and compatible with the component.
+
+    ### **Output:**
+    - Return the updated test file content only.
+    - If new test cases are created, use write-file tool call to save the test file.
+  `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        testFileName: state.testFileName,
+        testFilePath: state.testFilePath,
+        testFileContent: state.testFileContent,
+        fileContent: state.fileContent,
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.analyzeExistingTests = analyzeExistingTests;
+// edge
+const analyzeExistingTestEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    return 'run-tests';
+};
+exports.analyzeExistingTestEdges = analyzeExistingTestEdges;
+
+
+/***/ }),
+
+/***/ 40860:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.analyzeTestResultsEdges = exports.analyzeTestResults = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const analyzeTestResults = async (state) => {
+    const template = `
+Analyze the test results and return the parsed JSON output for further reporting.
+IMPORTANT: Call the tool 'json-test-result-analyzer' with the final json.
+
+### **Test Results:**  
+{testResults}
+
+`;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages,
+        testResults: JSON.stringify(state.testResults, null, 2)
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        ...state,
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.analyzeTestResults = analyzeTestResults;
+// examin test results edges
+const analyzeTestResultsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
+        return 'fix-errors';
+    }
+    return '__end__';
+};
+exports.analyzeTestResultsEdges = analyzeTestResultsEdges;
+
+
+/***/ }),
+
+/***/ 24779:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.callToolsEdge = void 0;
+const callToolsEdge = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    const hasFile = state.fileName && state.filePath;
+    const hasTestFile = state.testFileName && state.testFilePath;
+    const hasBothFiles = hasFile && hasTestFile;
+    const { messages, ...restOfTheState } = state;
+    console.log('callToolsEdge state params', JSON.stringify(restOfTheState, null, 2));
+    if (state.iteration > 5) {
+        return '__end__';
+    }
+    if (state.testSummary && state.testSummary?.failureReasons?.length > 0) {
+        return 'fix-errors';
+    }
+    else if (state.testSummary && state.testSummary?.failureReasons?.length === 0) {
+        return '__end__';
+    }
+    if (state.testResults) {
+        return 'analyze-results';
+    }
+    if (hasBothFiles) {
+        return 'analyze-existing-tests';
+    }
+    else if (state.fileName && state.filePath && !state.testFileFound) {
+        return 'create-new-tests';
+    }
+    if (state.filePath) {
+        // found source file, now find test file
+        return 'find-test-file';
+    }
+    return 'find-file';
+};
+exports.callToolsEdge = callToolsEdge;
+
+
+/***/ }),
+
+/***/ 35486:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.checkFileExistsEdges = exports.checkFileExists = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const checkFileExists = async (state) => {
+    const template = `
+    Given the filename {fileName}, verify it exists in the codebase.
+    Use the available tool: find-file.
+    Current time: {time}
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        time: new Date().toISOString(),
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.checkFileExists = checkFileExists;
+// Edge
+// Edge definitions
+const checkFileExistsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    if (state.fileContent === null) {
+        return 'find-file';
+    }
+    else if (state.testFileName && state.testFileContent) {
+        return 'analyze-existing-tests';
+    }
+    else
+        return 'find-test-file';
+};
+exports.checkFileExistsEdges = checkFileExistsEdges;
+
+
+/***/ }),
+
+/***/ 91198:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.checkTestFileEdges = exports.checkTestFile = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const checkTestFile = async (state) => {
+    const template = `
+    Your task is to check if a test file exists for {fileName}.
+    
+    ### **Guidelines:**
+    1. Look for both .test.tsx and .spec.tsx extensions.
+    2. If found, read and store the existing test content.
+    
+    ### **Tools:**
+    - Use the available tool: find-test-file.
+    
+    ### **Expected Output:**
+    1. Return the content of the test file if found.
+    2. If no test file is found, indicate that no test file exists.
+    
+    Current time: {time}
+    IMPORTANT: Strictly follow the provided guidelines.
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        time: new Date().toISOString(),
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.checkTestFile = checkTestFile;
+// Edge
+const checkTestFileEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    // Route based on whether test file exists
+    return state.testFileContent ? 'analyze-existing-tests' : 'create-new-tests';
+};
+exports.checkTestFileEdges = checkTestFileEdges;
+
+
+/***/ }),
+
+/***/ 38768:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createNewTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const createNewTests = async (state) => {
+    const template = `
+    Your task is to create comprehensive test cases for the component specified in {fileName}.
+    The component's content is provided below:
+
+    Component content: {fileContent}
+    
+    Guidelines:
+    1. Write tests that thoroughly cover the component's functionality.
+    2. Test all possible inputs and their variations.
+    3. Include tests for user interactions and edge cases.
+    4. Ensure robust error handling and test boundary conditions.
+    5. Aim for a test coverage of over 80%.
+    
+    Use modern testing practices and frameworks that are appropriate for the language of the component.
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        fileContent: state.fileContent,
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.createNewTests = createNewTests;
+
+
+/***/ }),
+
+/***/ 26757:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.fixErrorsEdges = exports.fixErrors = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const fixErrors = async (state) => {
+    const template = `
+    Fix and update test cases for {fileName}, then save the updated file.
+    
+    ### **Test Failures:**  
+    {failureReasons}
+    
+    ### **Instructions:**  
+    - **Analyze** test failures and identify root causes.  
+    - **Fix errors** and update test cases accordingly.  
+    - **Ensure tests remain accurate, reliable, and compatible.**  
+    - **Maintain best practices** and follow existing test structure.  
+    
+    ### **Test File Name:**  
+    {testFileName}
+    
+    ### **Test File Path:**  
+    {testFilePath}
+    
+    ### **Existing Test Content:**  
+    {testFileContent}
+    
+    ### **Component Content:**  
+    {fileContent}
+    
+    ### **Output:**  
+    1. Return the **fully updated test file**, ready to run.  
+    2. **Use the 'write-file' tool call** to save the updated test file.  
+    `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        testFileName: state.testFileName,
+        testFilePath: state.testFilePath,
+        fileContent: state.fileContent,
+        testFileContent: state.testFileContent,
+        failureReasons: state.testResults ? JSON.stringify(state.testResults.failures, null, 2) : 'No test results found',
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res],
+        iteration: state.iteration + 1,
+        // reset error flags
+        hasError: false,
+        testResults: null,
+        testSummary: null
+    };
+};
+exports.fixErrors = fixErrors;
+// Edge
+const fixErrorsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    if (state.iteration > 5) {
+        return '__end__';
+    }
+    return 'run-tests';
+};
+exports.fixErrorsEdges = fixErrorsEdges;
+
+
+/***/ }),
+
+/***/ 36758:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(51867), exports);
+__exportStar(__nccwpck_require__(35486), exports);
+__exportStar(__nccwpck_require__(91198), exports);
+__exportStar(__nccwpck_require__(87810), exports);
+__exportStar(__nccwpck_require__(40860), exports);
+__exportStar(__nccwpck_require__(26757), exports);
+__exportStar(__nccwpck_require__(74780), exports);
+__exportStar(__nccwpck_require__(38768), exports);
+__exportStar(__nccwpck_require__(24779), exports);
+
+
+/***/ }),
+
+/***/ 74780:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.runTestsEdges = exports.runTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const runTests = async (state) => {
+    const template = `
+    ### Task: Run Tests and Analyze Results
+
+    Execute the test suite using the appropriate **npm test command**.
+
+    use the **tool call** npm-test to run the tests.
+    
+    Output:
+    - Return a summary of the test results, highlighting any failures.
+    - Include coverage information if available.;
+  `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.runTests = runTests;
+// edge
+const runTestsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    return 'analyze-results';
+};
+exports.runTestsEdges = runTestsEdges;
+
+
+/***/ }),
+
+/***/ 87810:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.saveTestsEdges = exports.writeTestsEdges = exports.saveTests = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const saveTests = async (state) => {
+    const template = `
+    Save the generated test content to a file with correct naming convention and path.
+
+### **File Naming Rules:**
+- Use the appropriate test file extension: **'.test.tsx'** or **.spec.tsx**.
+- Maintain the same directory structure as {fileName}.
+- Ensure consistency with existing test files.
+
+### **Expected Action:**
+- Save the file using a **tool call** write-file with the correct **file path and name**.
+- Test file path: **{testFilePath}**
+
+ `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages,
+        testFilePath: state.testFilePath
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.saveTests = saveTests;
+const writeTestsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    return 'find-test-file';
+};
+exports.writeTestsEdges = writeTestsEdges;
+// Define a separate edge handler for save tests
+const saveTestsEdges = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    return 'run-tests'; // After saving, proceed to run tests
+};
+exports.saveTestsEdges = saveTestsEdges;
+
+
+/***/ }),
+
 /***/ 168:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -42167,656 +42322,41 @@ const langgraph_1 = __nccwpck_require__(39405);
 const messages_1 = __nccwpck_require__(62776);
 const graph_1 = __nccwpck_require__(10931);
 const core = __importStar(__nccwpck_require__(37484));
+const tools_1 = __nccwpck_require__(72003);
 const MainGraphRun = async () => {
     // Initialize memory to persist state between graph runs
     const checkpointer = new langgraph_1.MemorySaver();
     const filename = core.getInput('file_name');
+    const toolNames = tools_1.CustomTools.map(tool => tool.name).join(', ');
     // Finally, we compile it!
     // This compiles it into a LangChain Runnable,
     // meaning you can use it as you would any other runnable
     const app = graph_1.workflow.compile({ checkpointer });
-    const query = `Generate and execute tests for ${filename}.
-  Steps:
+    const query = `
+  You are a coding assistant with expertise in test automation.
+  Generate and execute tests for ${filename}.
+
+  Use the available tools: ${toolNames}.
+  Current time: {time}
+
+  Guidelines:
   1. Verify the source file exists
   2. Check for existing test file
-  3. Create or improve tests
+  3. Improve existing tests or create new tests
   4. Save test file
   5. Run tests with coverage
   6. Fix any failures`;
     // Use the Runnable
-    const finalState = await app.invoke({
+    const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
+    const outputContent = await app.invoke({
         messages: [new messages_1.HumanMessage(query)],
         fileName: filename
-    }, { recursionLimit: 100, configurable: { thread_id: '49' } });
-    console.log('result of graph');
+    }, { recursionLimit: 100, configurable: { thread_id: currentDate } });
+    console.log('result of graph for a threadId:', currentDate);
     // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
-    const outputContent = finalState.messages.map(m => m.content).join('\n');
     console.log(outputContent);
 };
 exports.MainGraphRun = MainGraphRun;
-
-
-/***/ }),
-
-/***/ 49542:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.CustomTools = void 0;
-const zod_1 = __nccwpck_require__(34809);
-const tools_1 = __nccwpck_require__(3477);
-const dotenv_1 = __importDefault(__nccwpck_require__(18889));
-const fs_1 = __importDefault(__nccwpck_require__(79896));
-const path_1 = __importDefault(__nccwpck_require__(16928));
-const util_1 = __nccwpck_require__(39023);
-const child_process_1 = __nccwpck_require__(35317);
-const messages_1 = __nccwpck_require__(62776);
-// 4. Import dotenv for loading environment variables and fs for file system operations
-dotenv_1.default.config();
-// Configuration constants
-const DEFAULT_EXCLUDE_DIRS = [
-    'node_modules',
-    'public',
-    'dist',
-    'coverage',
-    '.git',
-    'build'
-];
-const DEFAULT_FILE_EXTENSIONS = (/* unused pure expression or super */ null && (['.ts', '.tsx', '.js', '.jsx', '.vue']));
-const nodeExecutor = (0, util_1.promisify)(child_process_1.exec);
-const nodeExec = async (command) => {
-    return new Promise((resolve, reject) => {
-        (0, child_process_1.exec)(command, (error, stdout, stderr) => {
-            if (error) {
-                reject(error);
-            }
-            console.log(`npm command success stdout: ${stdout}`);
-            resolve(stdout);
-        });
-    });
-};
-// Enhanced find file function with recursive search
-const findFileRecursively = (searchPath, targetFile, excludeDirs = DEFAULT_EXCLUDE_DIRS) => {
-    let results = [];
-    const search = (currentDir) => {
-        try {
-            const files = fs_1.default.readdirSync(currentDir);
-            for (const file of files) {
-                const filePath = path_1.default.join(currentDir, file);
-                const stat = fs_1.default.statSync(filePath);
-                if (stat.isDirectory()) {
-                    if (!excludeDirs.includes(file)) {
-                        // Recurse into subdirectories that aren't excluded
-                        search(filePath);
-                    }
-                }
-                else if (file === targetFile || filePath.endsWith(targetFile)) {
-                    // Match either exact filename or path ending with the target
-                    results.push({
-                        path: filePath,
-                        isDirectory: false,
-                        metadata: {
-                            size: stat.size,
-                            created: stat.birthtime,
-                            modified: stat.mtime,
-                            accessed: stat.atime
-                        }
-                    });
-                }
-            }
-        }
-        catch (error) {
-            console.error(`Error searching directory ${currentDir}:`, error);
-        }
-    };
-    search(searchPath);
-    return results;
-};
-const listFilesRecursively = (dir, excludeDirs = [
-    'node_modules',
-    'public',
-    'dist',
-    'coverage',
-    '.git'
-], filePattern = null) => {
-    let results = [];
-    const listFiles = (currentDir) => {
-        try {
-            const files = fs_1.default.readdirSync(currentDir);
-            files.forEach(file => {
-                const filePath = path_1.default.join(currentDir, file);
-                const stat = fs_1.default.statSync(filePath);
-                if (stat && stat.isDirectory()) {
-                    if (!excludeDirs.includes(file)) {
-                        listFiles(filePath);
-                    }
-                }
-                else {
-                    if (!filePattern || new RegExp(filePattern).test(file)) {
-                        results.push({
-                            path: filePath,
-                            size: stat.size,
-                            modified: stat.mtime,
-                            created: stat.birthtime
-                        });
-                    }
-                }
-            });
-        }
-        catch (error) {
-            console.error(`Error reading directory ${currentDir}:`, error);
-        }
-    };
-    listFiles(dir);
-    return results;
-};
-const validateFilePath = (filePath) => {
-    if (!filePath)
-        throw new Error('File path is required');
-    const normalizedPath = path_1.default.normalize(filePath);
-    const absolutePath = path_1.default.resolve(normalizedPath);
-    // Security check - ensure path is within project directory
-    const projectRoot = process.cwd();
-    if (!absolutePath.startsWith(projectRoot)) {
-        throw new Error('Access denied: File path must be within project directory');
-    }
-    return absolutePath;
-};
-const getRelativePathFromCwd = (filePath) => {
-    const absolutePath = validateFilePath(filePath);
-    const projectRoot = process.cwd();
-    return path_1.default.relative(projectRoot, absolutePath);
-};
-exports.CustomTools = [
-    new tools_1.DynamicStructuredTool({
-        name: 'npm-test',
-        description: 'Executes npm test commands with support for various options including coverage and watch mode',
-        schema: zod_1.z.object({
-            command: zod_1.z.string().describe('npm command to execute'),
-            options: zod_1.z
-                .object({
-                directory_path: zod_1.z
-                    .string()
-                    .optional()
-                    .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
-                coverage: zod_1.z.boolean().optional().describe('Run tests with coverage'),
-                watch: zod_1.z.boolean().optional().describe('Run tests in watch mode'),
-                testRegex: zod_1.z
-                    .string()
-                    .optional()
-                    .describe('Regular expression to match test files'),
-                updateSnapshots: zod_1.z
-                    .boolean()
-                    .optional()
-                    .describe('Update test snapshots')
-            })
-                .optional()
-        }),
-        func: async ({ command, options = {} }, runManager) => {
-            try {
-                const testCommandCheck = command.includes('test');
-                let fullCommand = !command.startsWith('npm')
-                    ? `npm ${testCommandCheck ? '' : 'test'} ${command}`
-                    : command;
-                // Add options to the command
-                if (options.directory_path)
-                    fullCommand += ` --prefix ${options.directory_path}`;
-                if (options.coverage)
-                    fullCommand += ' --coverage';
-                if (options.watch)
-                    fullCommand += ' --watch';
-                if (options.testRegex)
-                    fullCommand += ` --testRegex="${options.testRegex}"`;
-                if (options.updateSnapshots)
-                    fullCommand += ' -u';
-                const { stdout, stderr } = await nodeExecutor(fullCommand);
-                if (stderr && !stderr.includes('npm notice')) {
-                    throw new Error(stderr);
-                }
-                return {
-                    test_results: { success: true, output: stdout },
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `Test execution completed successfully`,
-                            tool_call_id: runManager?.toolCall?.id,
-                            additional_kwargs: { stdout }
-                        })
-                    ]
-                };
-            }
-            catch (error) {
-                return {
-                    hasError: true,
-                    testResults: {
-                        success: false,
-                        error: error.message,
-                        output: error.stdout || ''
-                    },
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `Test execution failed: ${error.message}`,
-                            tool_call_id: runManager?.toolCall?.id,
-                            additional_kwargs: { error: error.message }
-                        })
-                    ]
-                };
-            }
-        }
-    }),
-    // Enhanced create file tool
-    new tools_1.DynamicStructuredTool({
-        name: 'create-file',
-        description: 'Creates a new file with optional template content and validation',
-        schema: zod_1.z.object({
-            path: zod_1.z.string().describe('path to the file'),
-            fileName: zod_1.z.string().describe('name of the file'),
-            template: zod_1.z.string().optional().describe('template name to use'),
-            overwrite: zod_1.z.boolean().optional().describe('overwrite if file exists')
-        }),
-        func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager) => {
-            try {
-                const normalizedPath = path_1.default.normalize(dirPath);
-                const fullPath = path_1.default.join(normalizedPath, fileName);
-                validateFilePath(fullPath);
-                if (!fs_1.default.existsSync(normalizedPath)) {
-                    fs_1.default.mkdirSync(normalizedPath, { recursive: true });
-                }
-                if (fs_1.default.existsSync(fullPath) && !overwrite) {
-                    return {
-                        file_operation: {
-                            success: false,
-                            error: 'File already exists and overwrite is not enabled'
-                        },
-                        messages: [
-                            new messages_1.ToolMessage({
-                                content: 'File creation failed: File already exists and overwrite is not enabled',
-                                tool_call_id: runManager?.toolCall?.id
-                            })
-                        ]
-                    };
-                }
-                let content = template ? '// Generated file\n\n' : '';
-                fs_1.default.writeFileSync(fullPath, content, 'utf-8');
-                return {
-                    file_operation: {
-                        success: true,
-                        path: fullPath,
-                        message: `File created successfully at ${fullPath}`
-                    },
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `File created successfully at ${fullPath}`,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-            catch (error) {
-                return {
-                    file_operation: {
-                        success: false,
-                        error: error.message
-                    },
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `File creation failed: ${error.message}`,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-        }
-    }),
-    // Enhanced write file tool
-    new tools_1.DynamicStructuredTool({
-        name: 'write-file',
-        description: 'Writes content to a file with backup and validation options',
-        schema: zod_1.z.object({
-            path: zod_1.z
-                .string()
-                .describe('path to the file, but excluding the file name'),
-            fileName: zod_1.z.string().describe('name of the file'),
-            content: zod_1.z.string().describe('content to write'),
-            createBackup: zod_1.z
-                .boolean()
-                .optional()
-                .describe('create backup of existing file'),
-            appendContent: zod_1.z
-                .boolean()
-                .optional()
-                .describe('append instead of overwrite')
-        }),
-        func: async ({ path: dirPath, fileName, content, createBackup = false, appendContent = false }, runManager) => {
-            try {
-                const normalizedPath = path_1.default.normalize(dirPath);
-                const directoryPath = path_1.default.dirname(normalizedPath);
-                const fullPath = path_1.default.join(directoryPath, fileName);
-                validateFilePath(fullPath);
-                // Create backup if requested and file exists
-                if (createBackup && fs_1.default.existsSync(fullPath)) {
-                    const backupPath = `${fullPath}.backup-${Date.now()}`;
-                    fs_1.default.copyFileSync(fullPath, backupPath);
-                }
-                // Write content
-                if (appendContent && fs_1.default.existsSync(fullPath)) {
-                    fs_1.default.appendFileSync(fullPath, '\n' + content, 'utf-8');
-                }
-                else {
-                    fs_1.default.writeFileSync(fullPath, content, 'utf-8');
-                }
-                return {
-                    success: true,
-                    path: fullPath,
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `File write successful. File ${appendContent ? 'updated' : 'written'} successfully`,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-            catch (error) {
-                return {
-                    success: false,
-                    error: error.message,
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `File write failed: ${error.message}`,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-        }
-    }),
-    // Enhanced list files tool
-    new tools_1.DynamicStructuredTool({
-        name: 'list-files',
-        description: 'Lists files in a directory with filtering and detailed information',
-        schema: zod_1.z.object({
-            path: zod_1.z.string().describe('path to the directory'),
-            pattern: zod_1.z.string().optional().describe('file pattern to match'),
-            exclude: zod_1.z
-                .array(zod_1.z.string())
-                .optional()
-                .describe('directories to exclude'),
-            includeDetails: zod_1.z.boolean().optional().describe('include file details')
-        }),
-        func: async ({ path: dirPath, pattern, exclude, includeDetails = false }, runManager) => {
-            try {
-                const absolutePath = validateFilePath(dirPath);
-                const files = listFilesRecursively(absolutePath, exclude || ['node_modules', 'public', 'dist', 'coverage', '.git'], pattern);
-                if (!includeDetails) {
-                    return {
-                        success: true,
-                        files: files.map(f => f.path),
-                        messages: [
-                            new messages_1.ToolMessage({
-                                content: `Files listed successfully in ${dirPath}`,
-                                additional_kwargs: { files: files.map(f => f.path) },
-                                tool_call_id: runManager?.toolCall?.id
-                            })
-                        ]
-                    };
-                }
-                return {
-                    success: true,
-                    files: files,
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `Files listed successfully in ${dirPath}`,
-                            additional_kwargs: { files },
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-            catch (error) {
-                return {
-                    success: false,
-                    error: error.message,
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `Failed to list files: ${error.message}`,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-        }
-    }),
-    // Enhanced read file tool with Command
-    new tools_1.DynamicStructuredTool({
-        name: 'read-file',
-        description: 'Reads file content with encoding options and metadata',
-        schema: zod_1.z.object({
-            path: zod_1.z
-                .string()
-                .describe('path to the file, but not the file name. Must be a valid path. Mutually exclusive with fileName'),
-            encoding: zod_1.z.string().optional().describe('file encoding'),
-            includeMetadata: zod_1.z.boolean().optional().describe('include file metadata')
-        }),
-        func: async ({ path: filePath, encoding = 'utf-8', includeMetadata = false }, runManager) => {
-            try {
-                const absolutePath = validateFilePath(filePath);
-                const content = fs_1.default.readFileSync(absolutePath, {
-                    encoding: encoding
-                });
-                let result = { content };
-                if (includeMetadata) {
-                    const stats = fs_1.default.statSync(absolutePath);
-                    result.metadata = {
-                        size: stats.size,
-                        created: stats.birthtime,
-                        modified: stats.mtime,
-                        accessed: stats.atime
-                    };
-                }
-                return {
-                    file_content: {
-                        success: true,
-                        ...result
-                    },
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `File read successfully: ${filePath}`,
-                            tool_call_id: runManager?.toolCall?.id,
-                            additional_kwargs: result
-                        })
-                    ]
-                };
-            }
-            catch (error) {
-                return {
-                    file_content: {
-                        success: false,
-                        error: error.message
-                    },
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `Failed to read file: ${error.message}`,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-        }
-    }),
-    // Enhanced read file tool with Command
-    new tools_1.DynamicStructuredTool({
-        name: 'check-file',
-        description: 'Recursively searches for a file and returns its content',
-        schema: zod_1.z.object({
-            path: zod_1.z.string().describe('path or name of the file to find'),
-            searchRoot: zod_1.z
-                .string()
-                .optional()
-                .describe('root directory to start search from. Only include valid search paths'),
-            excludeDirs: zod_1.z
-                .array(zod_1.z.string())
-                .optional()
-                .describe('directories to exclude from search'),
-            encoding: zod_1.z
-                .string()
-                .optional()
-                .describe('encoding to use when reading file content')
-        }),
-        func: async ({ path: filePath, searchRoot, excludeDirs = DEFAULT_EXCLUDE_DIRS, encoding = 'utf8' }, runManager) => {
-            try {
-                const searchRootEx = process.cwd();
-                const rootDir = searchRootEx
-                    ? validateFilePath(searchRootEx)
-                    : process.cwd();
-                const fileName = path_1.default.basename(filePath);
-                // Find all matching files and get their content
-                const results = findFileRecursively(rootDir, fileName, excludeDirs).map((location) => {
-                    try {
-                        return {
-                            path: location.path,
-                            content: fs_1.default.readFileSync(location.path, {
-                                encoding: encoding
-                            })
-                        };
-                    }
-                    catch (err) {
-                        return {
-                            path: location.path,
-                            content: null
-                        };
-                    }
-                });
-                const result = results.length === 0
-                    ? {
-                        exists: false,
-                        message: 'File not found'
-                    }
-                    : {
-                        exists: true,
-                        files: results,
-                        message: 'Files found'
-                    };
-                return {
-                    fileContent: result.files?.map((f) => f.content).join('\n'),
-                    filePath: result.files?.map((f) => f.path).join('\n'),
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: result.message,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-            catch (error) {
-                return {
-                    file_check: {
-                        exists: false,
-                        error: error.message
-                    },
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `Error: ${error.message}`,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-        }
-    }),
-    // Enhanced read file tool with Command
-    new tools_1.DynamicStructuredTool({
-        name: 'find-test-file',
-        description: 'Recursively finds and reads corresponding test file content',
-        schema: zod_1.z.object({
-            sourcePath: zod_1.z.string().describe('path to the source file'),
-            extensions: zod_1.z
-                .array(zod_1.z.string())
-                .optional()
-                .describe('test file extensions to look for'),
-            searchRoot: zod_1.z
-                .string()
-                .optional()
-                .describe('root directory to start search from. Default is project root. Example value: /')
-        }),
-        func: async ({ sourcePath, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts'], searchRoot }, runManager) => {
-            try {
-                const searchRootEx = process.cwd();
-                // searchRoot && searchRoot === '.' ? process.cwd() : searchRoot
-                // Get the file name without extension to search for test files
-                const sourceFileName = path_1.default.basename(sourcePath, path_1.default.extname(sourcePath));
-                const rootDir = searchRootEx
-                    ? validateFilePath(searchRootEx)
-                    : process.cwd();
-                // Function to check if a file is a test file for our source
-                const isMatchingTestFile = (fileName) => {
-                    return extensions.some(ext => fileName === `${sourceFileName}${ext}` ||
-                        fileName.endsWith(`/${sourceFileName}${ext}`));
-                };
-                // Find matching test file recursively
-                const findTestFile = (dir) => {
-                    let result = null;
-                    const search = (currentDir) => {
-                        if (result)
-                            return; // Stop if we found a match
-                        const files = fs_1.default.readdirSync(currentDir);
-                        for (const file of files) {
-                            if (result)
-                                break; // Stop if we found a match
-                            const filePath = path_1.default.join(currentDir, file);
-                            const stat = fs_1.default.statSync(filePath);
-                            if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
-                                search(filePath); // Recurse into subdirectories
-                            }
-                            else if (isMatchingTestFile(file)) {
-                                try {
-                                    const content = fs_1.default.readFileSync(filePath, 'utf8');
-                                    result = {
-                                        path: filePath,
-                                        content: content
-                                    };
-                                    break;
-                                }
-                                catch (err) {
-                                    console.warn(`Could not read file: ${filePath}`);
-                                }
-                            }
-                        }
-                    };
-                    search(dir);
-                    return result;
-                };
-                const testFile = findTestFile(rootDir);
-                return {
-                    testFileContent: testFile ? testFile.content : null,
-                    testFilePath: testFile ? testFile.path : null,
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: testFile
-                                ? `Found test file: ${testFile.path}`
-                                : `No test file found for ${sourceFileName}`,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-            catch (error) {
-                return {
-                    testFileContent: null,
-                    messages: [
-                        new messages_1.ToolMessage({
-                            content: `Error finding test file: ${error.message}`,
-                            tool_call_id: runManager?.toolCall?.id
-                        })
-                    ]
-                };
-            }
-        }
-    })
-];
 
 
 /***/ }),
@@ -42829,40 +42369,84 @@ exports.CustomTools = [
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.workflow = void 0;
 const langgraph_1 = __nccwpck_require__(39405);
-const nodes_1 = __nccwpck_require__(89505);
-// Define a new graph.
-// See https://langchain-ai.github.io/langgraphjs/how-tos/define-state/#getting-started for
-// more on defining custom graph states.
+const state_1 = __nccwpck_require__(2462);
+const agents_1 = __nccwpck_require__(36758);
+const tool_executor_utility_1 = __nccwpck_require__(74226);
 // Create and compile the graph
-const workflow = new langgraph_1.StateGraph(nodes_1.GraphState)
+const workflow = new langgraph_1.StateGraph(state_1.GraphState)
     // Add nodes
-    .addNode('check-file', nodes_1.checkFileExists)
-    .addNode('tools-check-file', nodes_1.toolExecutor)
-    .addNode('check-test-file', nodes_1.checkTestFile)
-    .addNode('tools-check-test-file', nodes_1.toolExecutor)
-    .addNode('create-new-tests', nodes_1.createNewTests)
-    .addNode('read-existing-tests', nodes_1.readExistingTests)
-    .addNode('save-tests', nodes_1.saveTests)
-    .addNode('tools-write-tests', nodes_1.toolExecutor)
-    .addNode('run-tests', nodes_1.runTests)
-    .addNode('tools-run-tests', nodes_1.toolExecutor)
-    .addNode('fix-errors', nodes_1.fixErrors)
-    .addNode('tools-fix-errors', nodes_1.toolExecutor)
+    .addNode('find-file', agents_1.checkFileExists)
+    .addNode('tools', tool_executor_utility_1.toolExecutor)
+    .addNode('find-test-file', agents_1.checkTestFile)
+    .addNode('create-new-tests', agents_1.createNewTests)
+    .addNode('analyze-existing-tests', agents_1.analyzeExistingTests)
+    .addNode('save-tests', agents_1.saveTests)
+    .addNode('run-tests', agents_1.runTests)
+    .addNode('analyze-results', agents_1.analyzeTestResults)
+    .addNode('fix-errors', agents_1.fixErrors)
     // Add edges with fixed flow
-    .addEdge('__start__', 'check-file')
-    .addConditionalEdges('check-file', nodes_1.checkFileExistsEdges)
-    .addConditionalEdges('check-test-file', nodes_1.checkTestFileEdges)
-    .addConditionalEdges('create-new-tests', nodes_1.writeTestsEdges)
-    .addConditionalEdges('read-existing-tests', nodes_1.readExistingTestEdges)
-    .addConditionalEdges('save-tests', nodes_1.saveTestsEdges) // Use new edge handler
-    .addConditionalEdges('tools-write-tests', nodes_1.saveTestsEdges) // Route back through save flow
-    .addConditionalEdges('run-tests', nodes_1.runTestsEdges)
-    .addConditionalEdges('fix-errors', nodes_1.fixErrorsEdges)
-    .addConditionalEdges('tools-check-file', nodes_1.checkFileExistsEdges)
-    .addConditionalEdges('tools-check-test-file', nodes_1.checkTestFileEdges)
-    .addConditionalEdges('tools-run-tests', nodes_1.runTestsEdges)
-    .addConditionalEdges('tools-fix-errors', nodes_1.fixErrorsEdges);
+    .addEdge('__start__', 'find-file')
+    .addConditionalEdges('find-file', agents_1.checkFileExistsEdges)
+    .addConditionalEdges('find-test-file', agents_1.checkTestFileEdges)
+    .addConditionalEdges('create-new-tests', agents_1.writeTestsEdges)
+    .addConditionalEdges('analyze-existing-tests', agents_1.analyzeExistingTestEdges)
+    .addConditionalEdges('save-tests', agents_1.saveTestsEdges) // Use new edge handler
+    .addConditionalEdges('run-tests', agents_1.runTestsEdges)
+    .addConditionalEdges('analyze-results', agents_1.analyzeTestResultsEdges)
+    .addConditionalEdges('fix-errors', agents_1.fixErrorsEdges)
+    .addConditionalEdges('tools', agents_1.callToolsEdge)
+    .addEdge('analyze-results', '__end__');
 exports.workflow = workflow;
+
+
+/***/ }),
+
+/***/ 26627:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.llm = void 0;
+exports.initializeLLM = initializeLLM;
+exports.initializeReactAgent = initializeReactAgent;
+const openai_1 = __nccwpck_require__(92079);
+const prebuilt_1 = __nccwpck_require__(95286);
+const langgraph_1 = __nccwpck_require__(39405);
+// import { ToolNode } from '@langchain/langgraph/prebuilt';
+const tools_1 = __nccwpck_require__(72003);
+const tools = [...tools_1.CustomTools];
+// Initialize memory to persist state between graph runs
+const checkpointer = new langgraph_1.MemorySaver();
+// Define the tools for the agent to use
+// const toolNode = new ToolNode(tools);
+function initializeLLM(modelName, tools) {
+    const model = new openai_1.ChatOpenAI({
+        model: modelName,
+        temperature: 0,
+        verbose: false
+    });
+    // const toolNode = new ToolNode(tools);
+    return model.bindTools(tools);
+}
+function initializeReactAgent(modelName, tools) {
+    const model = new openai_1.ChatOpenAI({
+        model: modelName,
+        temperature: 0,
+        verbose: false
+    });
+    // const toolNode = new ToolNode(tools);
+    return (0, prebuilt_1.createReactAgent)({
+        llm: model,
+        tools: tools,
+        checkpointSaver: checkpointer
+    });
+}
+exports.llm = new openai_1.ChatOpenAI({
+    model: 'gpt-4o',
+    temperature: 0,
+    verbose: false
+}).bindTools(tools);
 
 
 /***/ }),
@@ -42964,17 +42548,9 @@ async function run() {
         if (diffOutput.trim()) {
             core.info('Changes detected, committing...');
             await exec.exec('git', ['config', 'user.name', 'github-actions']);
-            await exec.exec('git', [
-                'config',
-                'user.email',
-                'github-actions@github.com'
-            ]);
+            await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
             await exec.exec('git', ['add', '.']);
-            await exec.exec('git', [
-                'commit',
-                '-m',
-                'Automated commit by GitHub Actions'
-            ]);
+            await exec.exec('git', ['commit', '-m', 'Automated commit by GitHub Actions']);
             await exec.exec('git', ['push']);
             core.info('Changes committed and pushed.');
         }
@@ -42990,44 +42566,90 @@ async function run() {
 
 /***/ }),
 
-/***/ 89505:
+/***/ 2462:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.listFilesDirectoryEdges = exports.listFilesDirectory = exports.fixErrorsEdges = exports.runTestsEdges = exports.saveTestsEdges = exports.readExistingTestEdges = exports.writeTestsEdges = exports.checkTestFileEdges = exports.checkFileExistsEdges = exports.toolExecutor = exports.fixErrors = exports.saveTests = exports.readExistingTests = exports.createNewTests = exports.checkTestFile = exports.checkFileExists = exports.runTests = exports.GraphState = exports.tools = exports.toolNode = void 0;
-const messages_1 = __nccwpck_require__(62776);
-const tavily_search_1 = __nccwpck_require__(61396);
-const openai_1 = __nccwpck_require__(92079);
-const prompts_1 = __nccwpck_require__(45425);
+exports.GraphState = void 0;
 const langgraph_1 = __nccwpck_require__(39405);
-const prebuilt_1 = __nccwpck_require__(95286);
-// import { CodeAssistantTools } from './coding-assistant'
-const custom_tools_1 = __nccwpck_require__(49542);
-const state_1 = __nccwpck_require__(2462);
-Object.defineProperty(exports, "GraphState", ({ enumerable: true, get: function () { return state_1.GraphState; } }));
+// Define the graph state with additional properties
+exports.GraphState = langgraph_1.Annotation.Root({
+    messages: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => x.concat(y),
+        default: () => []
+    }),
+    iteration: (0, langgraph_1.Annotation)({
+        reducer: x => x,
+        default: () => 0
+    }),
+    hasError: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => false
+    }),
+    fileName: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    testFileName: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    fileContent: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    filePath: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    testFileContent: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    testFilePath: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => ''
+    }),
+    testFileFound: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => false
+    }),
+    testResults: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => null
+    }),
+    testSummary: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => null
+    })
+});
+
+
+/***/ }),
+
+/***/ 74226:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.toolExecutor = void 0;
+const messages_1 = __nccwpck_require__(62776);
 const messages_2 = __nccwpck_require__(62776);
-const tools = [new tavily_search_1.TavilySearchResults({ maxResults: 3 }), ...custom_tools_1.CustomTools];
-exports.tools = tools;
-// Define the tools for the agent to use
-const toolNode = new prebuilt_1.ToolNode(tools);
-exports.toolNode = toolNode;
+const langgraph_1 = __nccwpck_require__(39405);
+const tools_1 = __nccwpck_require__(72003);
+const tools = [...tools_1.CustomTools];
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
-const model = new openai_1.ChatOpenAI({
-    model: 'gpt-4o-mini',
-    temperature: 0,
-    verbose: true
-}).bindTools(tools);
 const toolExecutor = async (state) => {
     const message = state.messages.at(-1);
-    if (!(0, messages_2.isAIMessage)(message) ||
-        message.tool_calls === undefined ||
-        message.tool_calls.length === 0) {
+    // @ts-ignore
+    if (!(0, messages_1.isAIMessage)(message) || message.tool_calls === undefined || message.tool_calls.length === 0) {
         throw new Error('Most recent message must be an AIMessage with a tool call.');
     }
     // Execute all tool calls in parallel with proper error handling
-    const toolResults = await Promise.allSettled(message.tool_calls.map(async (toolCall) => {
+    const toolResults = (await Promise.allSettled(message.tool_calls.map(async (toolCall) => {
         try {
             const tool = toolMap.get(toolCall.name);
             if (!tool) {
@@ -43046,18 +42668,20 @@ const toolExecutor = async (state) => {
                 error: error instanceof Error ? error.message : String(error)
             };
         }
-    }));
+    })));
     // Process results and create state updates
     const stateUpdates = toolResults.map((result, index) => {
-        const toolCall = message.tool_calls ? message.tool_calls[index] : undefined;
+        // @ts-ignore
+        const toolCall = message?.tool_calls[index];
         if (result.status === 'rejected') {
             // Handle promise rejection
             return {
                 update: {
                     messages: [
-                        new messages_1.ToolMessage({
+                        new messages_2.ToolMessage({
                             content: `Tool execution failed: ${result.reason}`,
-                            tool_call_id: toolCall?.id ?? '',
+                            // @ts-ignore
+                            tool_call_id: toolCall.id,
                             additional_kwargs: { error: result.reason }
                         })
                     ]
@@ -43070,9 +42694,10 @@ const toolExecutor = async (state) => {
             return {
                 update: {
                     messages: [
-                        new messages_1.ToolMessage({
+                        new messages_2.ToolMessage({
                             content: `Tool execution failed: ${toolResult.error}`,
-                            tool_call_id: toolCall?.id ?? '',
+                            // @ts-ignore
+                            tool_call_id: toolCall.id,
                             additional_kwargs: { error: toolResult.error }
                         })
                     ]
@@ -43088,11 +42713,10 @@ const toolExecutor = async (state) => {
         return {
             ...restResult,
             messages: [
-                new messages_1.ToolMessage({
-                    content: typeof toolResult.result === 'string'
-                        ? toolResult.result
-                        : JSON.stringify(toolMessage, null, 2),
-                    tool_call_id: toolCall?.id ?? '',
+                new messages_2.ToolMessage({
+                    content: typeof toolResult.result === 'string' ? toolResult.result : JSON.stringify(toolResult.result, null, 2),
+                    // @ts-ignore
+                    tool_call_id: toolCall.id,
                     additional_kwargs: { result: toolResult.result }
                 })
             ]
@@ -43106,348 +42730,623 @@ const toolExecutor = async (state) => {
         };
     }, { fileContent: null, filePath: null, messages: [] });
     const { messages: updatedMessages, ...restStateUpdates } = stateUpdateReducer;
-    console.log('Tool Executor State Updates', JSON.stringify(stateUpdateReducer));
     // Combine all state updates
+    console.log('stateUpdateReducer', JSON.stringify(stateUpdateReducer, null, 2));
     return {
         ...state,
         ...restStateUpdates,
-        messages: [...state.messages, ...stateUpdateReducer.messages]
+        messages: updatedMessages
     };
 };
 exports.toolExecutor = toolExecutor;
-// Edge definitions
-const listFilesDirectoryEdges = async (state) => {
-    // check last message type
-    const messages = state.messages;
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-list-files';
-    }
-    return 'check-file';
-};
-exports.listFilesDirectoryEdges = listFilesDirectoryEdges;
-const checkFileExistsEdges = async (state) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    console.log('checkFileExistsEdges -> state', JSON.stringify(state));
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-check-file';
-    }
-    return 'check-test-file';
-};
-exports.checkFileExistsEdges = checkFileExistsEdges;
-const checkTestFileEdges = async (state) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    console.log('checkTestFileEdges -> state', JSON.stringify(state));
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-check-test-file';
-    }
-    // Route based on whether test file exists
-    return state.testFileContent ? 'read-existing-tests' : 'create-new-tests';
-};
-exports.checkTestFileEdges = checkTestFileEdges;
-const writeTestsEdges = async (state) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    console.log('writeTestsEdges -> state', JSON.stringify(state));
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-write-tests';
-    }
-    return 'save-tests';
-};
-exports.writeTestsEdges = writeTestsEdges;
-const readExistingTestEdges = async (state) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    console.log('readExistingTestEdges -> state', JSON.stringify(state));
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-write-tests';
-    }
-    return 'save-tests';
-};
-exports.readExistingTestEdges = readExistingTestEdges;
-// Define a separate edge handler for save tests
-const saveTestsEdges = async (state) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-write-tests';
-    }
-    return 'run-tests'; // After saving, proceed to run tests
-};
-exports.saveTestsEdges = saveTestsEdges;
-const runTestsEdges = async (state) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-run-tests';
-    }
-    if (state.hasError) {
-        return 'fix-errors';
-    }
-    return '__end__';
-};
-exports.runTestsEdges = runTestsEdges;
-const fixErrorsEdges = async (state) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage.tool_calls?.length) {
-        return 'tools-fix-errors';
-    }
-    if (state.iteration > 5) {
-        return '__end__';
-    }
-    return 'run-tests';
-};
-exports.fixErrorsEdges = fixErrorsEdges;
-// Nodes
-// Node definitions
-const listFilesDirectory = async (state) => {
-    const directoryListingTemplate = `You are an expert to analyse the file directory structure.
-        list all the files in the current directory.
-        You have access to the following tools: {tool_names}.
-        Current time: {time}.
-        You should use the tools to interact with the directory.
-        You should return the list of files in the directory.
-        If the directory does not exist, return an error message.
-         {agent_scratchpad}
-        `;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', directoryListingTemplate],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        time: new Date().toISOString(),
-        tool_names: tools.map(tool => tool.name).join(', '),
-        messages: state.messages,
-        agent_scratchpad: ''
-    });
-    const res = await model.invoke(formattedPrompt);
-    console.log('Process listFilesDirectory Message Result', res);
-    return {
-        messages: [...state.messages, res]
-    };
-};
-exports.listFilesDirectory = listFilesDirectory;
-const checkFileExists = async (state) => {
-    const template = `You are a code assistant checking for the existence of a source file.
-    Given the filename {fileName}, verify it exists in the codebase.
-    Use the available tools: {tool_names}
-    Current time: {time}
-    If the file exists, read and store its content.`;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', template],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        fileName: state.fileName,
-        time: new Date().toISOString(),
-        tool_names: tools.map(tool => tool.name).join(', '),
-        messages: state.messages
-    });
-    const res = await model.invoke(formattedPrompt);
-    return {
-        ...state,
-        messages: [...state.messages, res]
-    };
-};
-exports.checkFileExists = checkFileExists;
-const checkTestFile = async (state) => {
-    const template = `You are a test file analyzer.
-    Check if a test file exists for {fileName}.
-    Look for both .test.tsx and .spec.tsx extensions.
-    Use the available tools: {tool_names}
-    If found, read and store the existing test content.`;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', template],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        fileName: state.fileName,
-        time: new Date().toISOString(),
-        tool_names: tools.map(tool => tool.name).join(', '),
-        messages: state.messages
-    });
-    const res = await model.invoke(formattedPrompt);
-    return {
-        ...state,
-        messages: [...state.messages, res]
-    };
-};
-exports.checkTestFile = checkTestFile;
-const createNewTests = async (state) => {
-    const template = `You are an expert test writer for React components.
-    Create comprehensive test cases for the component in {fileName}.
-    Component content: {fileContent}
-    
-    Guidelines:
-    1. Write tests for component rendering
-    2. Test all props and their variations
-    3. Test user interactions
-    4. Test error states
-    5. Ensure >80% coverage
-    
-    Use modern testing practices with Jest and React Testing Library.`;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', template],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        fileName: state.fileName,
-        fileContent: state.fileContent,
-        messages: state.messages
-    });
-    const res = await model.invoke(formattedPrompt);
-    return {
-        ...state,
-        messages: [...state.messages, res]
-    };
-};
-exports.createNewTests = createNewTests;
-const readExistingTests = async (state) => {
-    const template = `
-    You are a JavaScript test improvement specialist.
-
-Your task:
-1. Analyze the provided test file content and suggest improvements directly, without additional tool calls to read the file again.
-2. Do not request additional information or tools unless explicitly instructed.
-
-Details:
-Component: {fileName}
-Existing Tests: {testFileContent}
-
-Guidelines for Analysis:
-1. Identify missing test cases.
-2. Improve assertion quality.
-3. Add edge cases.
-4. Maintain the existing test structure.
-5. Ensure backward compatibility.
-`;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', template],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        fileName: state.fileName,
-        testFileContent: state.testFileContent,
-        messages: state.messages
-    });
-    const res = await model.invoke(formattedPrompt);
-    return {
-        ...state,
-        messages: [...state.messages, res]
-    };
-};
-exports.readExistingTests = readExistingTests;
-const saveTests = async (state) => {
-    const template = `You are a test file manager.
-    Save the new/updated test file for {fileName}.
-    Use the appropriate test file extension (.test.tsx or .spec.tsx).
-    Ensure proper formatting and documentation.`;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', template],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        fileName: state.fileName,
-        messages: state.messages
-    });
-    const res = await model.invoke(formattedPrompt);
-    return {
-        ...state,
-        messages: [...state.messages, res]
-    };
-};
-exports.saveTests = saveTests;
-const runTests = async (state) => {
-    const template = `You are a test execution specialist.
-      Use the npm test command for running the tests.       
-      Output:
-      - Return a summary of the test results, highlighting any failures.
-      - Include coverage information if available.;
-    `;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', template],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        fileName: state.fileName,
-        messages: state.messages
-    });
-    const res = await model.invoke(formattedPrompt);
-    return {
-        ...state,
-        messages: [...state.messages, res]
-    };
-};
-exports.runTests = runTests;
-const fixErrors = async (state) => {
-    const template = `You are a test debugging expert.
-    Review the failed tests for {fileName}:
-    {testResults}
-    
-    Guidelines:
-    1. Analyze each failure
-    2. Identify root causes
-    3. Propose fixes
-    4. Update test cases
-    5. Maintain test integrity`;
-    const prompt = prompts_1.ChatPromptTemplate.fromMessages([
-        ['system', template],
-        new prompts_1.MessagesPlaceholder('messages')
-    ]);
-    const formattedPrompt = await prompt.formatMessages({
-        fileName: state.fileName,
-        testResults: JSON.stringify(state.testResults, null, 2),
-        messages: state.messages
-    });
-    const res = await model.invoke(formattedPrompt);
-    return {
-        ...state,
-        messages: [...state.messages, res],
-        iteration: state.iteration + 1
-    };
-};
-exports.fixErrors = fixErrors;
 
 
 /***/ }),
 
-/***/ 2462:
+/***/ 48716:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.FileFolderTools = void 0;
+const zod_1 = __nccwpck_require__(34809);
+const tools_1 = __nccwpck_require__(3477);
+const fs_1 = __importDefault(__nccwpck_require__(79896));
+const path_1 = __importDefault(__nccwpck_require__(16928));
+// Configuration constants
+const DEFAULT_EXCLUDE_DIRS = ['node_modules', 'public', 'dist', 'coverage', '.git', 'build'];
+const findFileRecursively = (searchPath, targetFile, excludeDirs = ['node_modules', 'public', 'dist', 'coverage', '.git']) => {
+    let results = [];
+    const search = (currentDir) => {
+        try {
+            const files = fs_1.default.readdirSync(currentDir);
+            for (const file of files) {
+                const filePath = path_1.default.join(currentDir, file);
+                const stat = fs_1.default.statSync(filePath);
+                if (stat.isDirectory()) {
+                    if (!excludeDirs.includes(file)) {
+                        // Recurse into subdirectories that aren't excluded
+                        search(filePath);
+                    }
+                }
+                else if (file === targetFile || filePath.endsWith(targetFile)) {
+                    // Match either exact filename or path ending with the target
+                    results.push({
+                        path: filePath,
+                        isDirectory: false,
+                        metadata: {
+                            size: stat.size,
+                            created: stat.birthtime,
+                            modified: stat.mtime,
+                            accessed: stat.atime
+                        }
+                    });
+                }
+            }
+        }
+        catch (error) {
+            console.error(`Error searching directory ${currentDir}:`, error);
+        }
+    };
+    search(searchPath);
+    return results;
+};
+const listFilesRecursively = (dir, excludeDirs = ['node_modules', 'public', 'dist', 'coverage', '.git'], filePattern = null) => {
+    let results = [];
+    const listFiles = (currentDir) => {
+        try {
+            const files = fs_1.default.readdirSync(currentDir);
+            files.forEach(file => {
+                const filePath = path_1.default.join(currentDir, file);
+                const stat = fs_1.default.statSync(filePath);
+                if (stat && stat.isDirectory()) {
+                    if (!excludeDirs.includes(file)) {
+                        listFiles(filePath);
+                    }
+                }
+                else {
+                    if (!filePattern || new RegExp(filePattern).test(file)) {
+                        results.push({
+                            path: filePath,
+                            size: stat.size,
+                            modified: stat.mtime,
+                            created: stat.birthtime
+                        });
+                    }
+                }
+            });
+        }
+        catch (error) {
+            console.error(`Error reading directory ${currentDir}:`, error);
+        }
+    };
+    listFiles(dir);
+    return results;
+};
+const validateFilePath = filePath => {
+    if (!filePath)
+        throw new Error('File path is required');
+    const normalizedPath = path_1.default.normalize(filePath);
+    const absolutePath = path_1.default.resolve(normalizedPath);
+    // Security check - ensure path is within project directory
+    const projectRoot = process.cwd();
+    if (!absolutePath.startsWith(projectRoot)) {
+        throw new Error('Access denied: File path must be within project directory');
+    }
+    return absolutePath;
+};
+exports.FileFolderTools = [
+    // Enhanced create file tool
+    new tools_1.DynamicStructuredTool({
+        name: 'create-file',
+        description: 'Creates a new file with optional template content and validation',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path to the file'),
+            fileName: zod_1.z.string().describe('name of the file'),
+            template: zod_1.z.string().optional().describe('template name to use'),
+            overwrite: zod_1.z.boolean().optional().describe('overwrite if file exists')
+        }),
+        func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager) => {
+            try {
+                const normalizedPath = path_1.default.normalize(dirPath);
+                const fullPath = path_1.default.join(normalizedPath, fileName);
+                validateFilePath(fullPath);
+                if (!fs_1.default.existsSync(normalizedPath)) {
+                    fs_1.default.mkdirSync(normalizedPath, { recursive: true });
+                }
+                if (fs_1.default.existsSync(fullPath) && !overwrite) {
+                    // read file content
+                    const fileContent = fs_1.default.readFileSync(fullPath, 'utf-8');
+                    return {
+                        testFileName: fileName,
+                        testFilePath: fullPath,
+                        testFileContent: fileContent,
+                        testFileFound: true,
+                        file_operation: {
+                            success: false,
+                            error: 'File already exists and overwrite is not enabled'
+                        }
+                    };
+                }
+                let content = template ? '// Generated file\n\n' : '';
+                fs_1.default.writeFileSync(fullPath, content, 'utf-8');
+                return {
+                    testFileName: fileName,
+                    testFilePath: fullPath,
+                    testFileContent: content,
+                    testFileFound: true,
+                    file_operation: {
+                        success: true,
+                        path: fullPath,
+                        message: `File created successfully at ${fullPath}`
+                    }
+                };
+            }
+            catch (error) {
+                return {
+                    file_operation: {
+                        success: false,
+                        error: error.message
+                    }
+                };
+            }
+        }
+    }),
+    // Enhanced write file tool
+    new tools_1.DynamicStructuredTool({
+        name: 'write-file',
+        description: 'Writes content to a file with backup and validation options',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path to the file'),
+            fileName: zod_1.z.string().describe('name of the file'),
+            content: zod_1.z.string().describe('content to write'),
+            createBackup: zod_1.z.boolean().optional().describe('create backup of existing file'),
+            appendContent: zod_1.z.boolean().optional().describe('append instead of overwrite')
+        }),
+        func: async ({ path: dirPath, fileName, content, createBackup = false, appendContent = false }, runManager) => {
+            try {
+                const fullPath = path_1.default.join(dirPath, fileName);
+                validateFilePath(fullPath);
+                // Create backup if requested and file exists
+                if (createBackup && fs_1.default.existsSync(fullPath)) {
+                    const backupPath = `${fullPath}.backup-${Date.now()}`;
+                    fs_1.default.copyFileSync(fullPath, backupPath);
+                }
+                // Write content
+                if (appendContent && fs_1.default.existsSync(fullPath)) {
+                    fs_1.default.appendFileSync(fullPath, '\n' + content, 'utf-8');
+                }
+                else {
+                    fs_1.default.writeFileSync(fullPath, content, 'utf-8');
+                }
+                return {
+                    success: true,
+                    path: fullPath
+                };
+            }
+            catch (error) {
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+    }),
+    // Enhanced list files tool
+    new tools_1.DynamicStructuredTool({
+        name: 'list-files',
+        description: 'Lists files in a directory with filtering and detailed information',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path to the directory'),
+            pattern: zod_1.z.string().optional().describe('file pattern to match'),
+            exclude: zod_1.z.array(zod_1.z.string()).optional().describe('directories to exclude'),
+            includeDetails: zod_1.z.boolean().optional().describe('include file details')
+        }),
+        func: async ({ path: dirPath, pattern, exclude, includeDetails = false }, runManager) => {
+            try {
+                const absolutePath = validateFilePath(dirPath);
+                const files = listFilesRecursively(absolutePath, exclude || ['node_modules', 'public', 'dist', 'coverage', '.git'], pattern);
+                if (!includeDetails) {
+                    return {
+                        success: true,
+                        files: files.map(f => f.path)
+                    };
+                }
+                const fileDirPath = path_1.default.dirname(absolutePath);
+                return {
+                    success: true,
+                    files: files
+                };
+            }
+            catch (error) {
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+    }),
+    // Enhanced read file tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'read-file',
+        description: 'Reads file content with encoding options and metadata',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path to the file'),
+            encoding: zod_1.z.string().optional().describe('file encoding'),
+            includeMetadata: zod_1.z.boolean().optional().describe('include file metadata')
+        }),
+        func: async ({ path: filePath, encoding = 'utf-8', includeMetadata = false }, runManager) => {
+            try {
+                const absolutePath = validateFilePath(filePath);
+                const content = fs_1.default.readFileSync(absolutePath, { encoding: encoding });
+                let result = { content };
+                if (includeMetadata) {
+                    const stats = fs_1.default.statSync(absolutePath);
+                    result.metadata = {
+                        size: stats.size,
+                        created: stats.birthtime,
+                        modified: stats.mtime,
+                        accessed: stats.atime
+                    };
+                }
+                return {
+                    file_content: {
+                        success: true,
+                        ...result
+                    }
+                };
+            }
+            catch (error) {
+                return {
+                    file_content: {
+                        success: false,
+                        error: error.message
+                    }
+                };
+            }
+        }
+    }),
+    // Enhanced find file tool
+    new tools_1.DynamicStructuredTool({
+        name: 'find-file',
+        description: 'Recursively searches for a file and returns its content',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            path: zod_1.z.string().describe('path or name of the file to find'),
+            searchRoot: zod_1.z.string().optional().describe('current root directory to start search from'),
+            excludeDirs: zod_1.z.array(zod_1.z.string()).optional().describe('directories to exclude from search'),
+            encoding: zod_1.z.string().optional().describe('encoding to use when reading file content')
+        }),
+        func: async ({ path: filePath, excludeDirs = DEFAULT_EXCLUDE_DIRS, encoding = 'utf8' }, runManager) => {
+            try {
+                const searchRoot = process.cwd();
+                const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+                const fileName = path_1.default.basename(filePath);
+                // Find all matching files and get their content
+                const results = findFileRecursively(rootDir, fileName, excludeDirs).map(location => {
+                    try {
+                        return {
+                            fileName: path_1.default.basename(location.path),
+                            path: location.path,
+                            content: fs_1.default.readFileSync(location.path, encoding)
+                        };
+                    }
+                    catch (err) {
+                        return {
+                            path: location.path,
+                            content: null
+                        };
+                    }
+                });
+                const result = results.length === 0
+                    ? {
+                        exists: false,
+                        message: 'File not found'
+                    }
+                    : {
+                        exists: true,
+                        files: results,
+                        message: 'Files found'
+                    };
+                return {
+                    fileName: result.files?.map(f => f.fileName).join('\n'),
+                    fileContent: result.files?.map(f => f.content).join('\n'),
+                    filePath: result.files?.map(f => f.path).join('\n')
+                };
+            }
+            catch (error) {
+                return {
+                    file_check: {
+                        exists: false,
+                        error: error.message
+                    }
+                };
+            }
+        }
+    }),
+    new tools_1.DynamicStructuredTool({
+        name: 'find-test-file',
+        description: 'Recursively finds and reads corresponding test file content',
+        schema: zod_1.z.object({
+            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            sourcePath: zod_1.z.string().describe('path to the source file'),
+            extensions: zod_1.z.array(zod_1.z.string()).optional().describe('test file extensions to look for'),
+            searchRoot: zod_1.z.string().optional().describe('current root directory to start search from')
+        }),
+        func: async ({ sourcePath, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts'] }, runManager) => {
+            try {
+                // Get the file name without extension to search for test files
+                const searchRoot = process.cwd();
+                const sourceFileName = path_1.default.basename(sourcePath, path_1.default.extname(sourcePath));
+                const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+                // Function to check if a file is a test file for our source
+                const isMatchingTestFile = (fileName) => {
+                    return extensions.some(ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`));
+                };
+                // Find matching test file recursively
+                const findTestFile = (dir) => {
+                    let result = null;
+                    const search = (currentDir) => {
+                        if (result)
+                            return; // Stop if we found a match
+                        const files = fs_1.default.readdirSync(currentDir);
+                        for (const file of files) {
+                            if (result)
+                                break; // Stop if we found a match
+                            const filePath = path_1.default.join(currentDir, file);
+                            const stat = fs_1.default.statSync(filePath);
+                            if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
+                                search(filePath); // Recurse into subdirectories
+                            }
+                            else if (isMatchingTestFile(file)) {
+                                try {
+                                    const content = fs_1.default.readFileSync(filePath, 'utf8');
+                                    result = {
+                                        path: filePath,
+                                        content: content
+                                    };
+                                    break;
+                                }
+                                catch (err) {
+                                    console.warn(`Could not read file: ${filePath}`);
+                                }
+                            }
+                        }
+                    };
+                    search(dir);
+                    return result;
+                };
+                const testFile = findTestFile(rootDir);
+                const testFileFound = !!testFile;
+                return {
+                    testFileContent: testFile ? testFile.content : null,
+                    testFilePath: testFile ? testFile.path : null,
+                    testFileName: testFile ? path_1.default.basename(testFile.path) : null,
+                    testFileFound
+                };
+            }
+            catch (error) {
+                return {
+                    testFileContent: null
+                };
+            }
+        }
+    })
+];
+
+
+/***/ }),
+
+/***/ 72003:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.GraphState = void 0;
-const langgraph_1 = __nccwpck_require__(39405);
-exports.GraphState = langgraph_1.Annotation.Root({
-    messages: (0, langgraph_1.Annotation)({
-        reducer: langgraph_1.messagesStateReducer,
-        default: () => []
-    }),
-    iteration: (0, langgraph_1.Annotation)({
-        reducer: x => x,
-        default: () => 0
-    }),
-    hasError: (0, langgraph_1.Annotation)({ reducer: x => x, default: () => false }),
-    fileName: (0, langgraph_1.Annotation)({ reducer: x => x, default: () => '' }),
-    testFileName: (0, langgraph_1.Annotation)({
-        reducer: x => x,
-        default: () => ''
-    }),
-    fileContent: (0, langgraph_1.Annotation)({
-        reducer: x => x,
-        default: () => ''
-    }),
-    filePath: (0, langgraph_1.Annotation)({ reducer: x => x, default: () => '' }),
-    testFileContent: (0, langgraph_1.Annotation)({
-        reducer: x => x,
-        default: () => ''
-    }),
-    testFilePath: (0, langgraph_1.Annotation)({
-        reducer: x => x,
-        default: () => ''
-    }),
-    testResults: (0, langgraph_1.Annotation)({
-        reducer: x => x,
-        default: () => undefined
+exports.CustomTools = void 0;
+const npm_test_tool_1 = __nccwpck_require__(28834);
+const file_folder_tools_1 = __nccwpck_require__(48716);
+const test_result_analyzer_tool_1 = __nccwpck_require__(37543);
+exports.CustomTools = [...npm_test_tool_1.TestTools, ...file_folder_tools_1.FileFolderTools, ...test_result_analyzer_tool_1.TestResultAnalyzerTools];
+
+
+/***/ }),
+
+/***/ 28834:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TestTools = void 0;
+const zod_1 = __nccwpck_require__(34809);
+const tools_1 = __nccwpck_require__(3477);
+const util_1 = __nccwpck_require__(39023);
+const child_process_1 = __nccwpck_require__(35317);
+const nodeExecutor = (0, util_1.promisify)(child_process_1.exec);
+exports.TestTools = [
+    // Enhanced npm test tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'npm-test',
+        description: 'Executes npm test commands with support for various options including coverage and watch mode',
+        schema: zod_1.z.object({
+            command: zod_1.z.string().describe('npm command to execute'),
+            options: zod_1.z
+                .object({
+                directory_path: zod_1.z
+                    .string()
+                    .optional()
+                    .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+                coverage: zod_1.z.boolean().optional().describe('Run tests with coverage'),
+                json: zod_1.z.boolean().optional().describe('Output test results as JSON'),
+                watch: zod_1.z.boolean().optional().describe('Run tests in watch mode'),
+                testRegex: zod_1.z.string().optional().describe('Regular expression to match test files'),
+                updateSnapshots: zod_1.z.boolean().optional().describe('Update test snapshots')
+            })
+                .optional()
+        }),
+        func: async ({ command, options = {} }, runManager) => {
+            try {
+                const testCommandCheck = command.includes('test');
+                let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
+                // Add options to the command
+                if (options.directory_path)
+                    fullCommand += ` --prefix ./appcode`;
+                // suffix json
+                fullCommand += ` -- --json`;
+                if (options.coverage)
+                    fullCommand += ' --coverage';
+                // if (options.json) fullCommand += " --json";
+                if (options.testRegex)
+                    fullCommand += ` --testRegex="${options.testRegex}"`;
+                if (options.updateSnapshots)
+                    fullCommand += ' -u';
+                // append silent flag to suppress npm notices
+                // fullCommand += " --silent 2>/dev/null";
+                const { stdout, stderr } = await nodeExecutor(fullCommand);
+                return {
+                    testResults: { success: true, output: stdout }
+                };
+            }
+            catch (error) {
+                return {
+                    hasError: true,
+                    testResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    }
+                };
+            }
+        }
     })
-});
+];
+
+
+/***/ }),
+
+/***/ 37543:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TestResultAnalyzerTools = void 0;
+const zod_1 = __nccwpck_require__(34809);
+const tools_1 = __nccwpck_require__(3477);
+exports.TestResultAnalyzerTools = [
+    // New tool: Json Test Result Analyzer
+    new tools_1.DynamicStructuredTool({
+        name: 'json-test-result-analyzer',
+        description: 'Analyzes and summarizes test results from JSON output',
+        schema: zod_1.z.object({
+            result: zod_1.z
+                .object({
+                numTotalTests: zod_1.z.number().describe('total number of tests'),
+                numPassedTests: zod_1.z.number().describe('number of passed tests'),
+                numFailedTests: zod_1.z.number().describe('number of failed tests'),
+                numPendingTests: zod_1.z.number().describe('number of skipped tests'),
+                failureReasons: zod_1.z.array(zod_1.z.string()).optional().describe('failure reasons'),
+                coverage: zod_1.z
+                    .object({
+                    lines: zod_1.z
+                        .object({
+                        total: zod_1.z.number().describe('total lines'),
+                        covered: zod_1.z.number().describe('covered lines'),
+                        skipped: zod_1.z.number().describe('skipped lines'),
+                        pct: zod_1.z.number().describe('coverage percentage')
+                    })
+                        .describe('line coverage'),
+                    statements: zod_1.z
+                        .object({
+                        total: zod_1.z.number().describe('total statements'),
+                        covered: zod_1.z.number().describe('covered statements'),
+                        skipped: zod_1.z.number().describe('skipped statements'),
+                        pct: zod_1.z.number().describe('coverage percentage')
+                    })
+                        .describe('statement coverage'),
+                    functions: zod_1.z
+                        .object({
+                        total: zod_1.z.number().describe('total functions'),
+                        covered: zod_1.z.number().describe('covered functions'),
+                        skipped: zod_1.z.number().describe('skipped functions'),
+                        pct: zod_1.z.number().describe('coverage percentage')
+                    })
+                        .describe('function coverage'),
+                    branches: zod_1.z
+                        .object({
+                        total: zod_1.z.number().describe('total branches'),
+                        covered: zod_1.z.number().describe('covered branches'),
+                        skipped: zod_1.z.number().describe('skipped branches'),
+                        pct: zod_1.z.number().describe('coverage percentage')
+                    })
+                        .describe('branch coverage')
+                })
+                    .describe('test coverage  metrics')
+            })
+                .describe('parsed JSON test results')
+        }),
+        func: async ({ result }, runManager) => {
+            try {
+                const testResults = result;
+                const totalTests = testResults.numTotalTests;
+                const totalPassed = testResults.numPassedTests;
+                const totalFailed = testResults.numFailedTests;
+                const totalSkipped = testResults.numPendingTests;
+                return {
+                    testSummary: {
+                        totalTests,
+                        totalPassed,
+                        totalFailed,
+                        totalSkipped,
+                        failureReasons: testResults.failureReasons || [],
+                        coverage: {
+                            lines: {
+                                total: testResults.coverage.lines.total,
+                                covered: testResults.coverage.lines.covered,
+                                skipped: testResults.coverage.lines.skipped,
+                                pct: testResults.coverage.lines.pct
+                            },
+                            statements: {
+                                total: testResults.coverage.statements.total,
+                                covered: testResults.coverage.statements.covered,
+                                skipped: testResults.coverage.statements.skipped,
+                                pct: testResults.coverage.statements.pct
+                            },
+                            functions: {
+                                total: testResults.coverage.functions.total,
+                                covered: testResults.coverage.functions.covered,
+                                skipped: testResults.coverage.functions.skipped,
+                                pct: testResults.coverage.functions.pct
+                            },
+                            branches: {
+                                total: testResults.coverage.branches.total,
+                                covered: testResults.coverage.branches.covered,
+                                skipped: testResults.coverage.branches.skipped,
+                                pct: testResults.coverage.branches.pct
+                            }
+                        }
+                    }
+                };
+            }
+            catch (error) {
+                return {
+                    testSummary: {
+                        error: error.message
+                    }
+                };
+            }
+        }
+    })
+];
 
 
 /***/ }),
@@ -58440,159 +58339,6 @@ exports.zodToJsonSchema = zodToJsonSchema;
 
 /***/ }),
 
-/***/ 63117:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.TavilySearchResults = void 0;
-const tools_1 = __nccwpck_require__(3477);
-const env_1 = __nccwpck_require__(40895);
-/**
- * Tavily search API tool integration.
- *
- * Setup:
- * Install `@langchain/community`. You'll also need an API key set as `TAVILY_API_KEY`.
- *
- * ```bash
- * npm install @langchain/community
- * ```
- *
- * ## [Constructor args](https://api.js.langchain.com/classes/_langchain_community.tools_tavily_search.TavilySearchResults.html#constructor)
- *
- * <details open>
- * <summary><strong>Instantiate</strong></summary>
- *
- * ```typescript
- * import { TavilySearchResults } from "@langchain/community/tools/tavily_search";
- *
- * const tool = new TavilySearchResults({
- *   maxResults: 2,
- *   // ...
- * });
- * ```
- * </details>
- *
- * <br />
- *
- * <details>
- *
- * <summary><strong>Invocation</strong></summary>
- *
- * ```typescript
- * await tool.invoke("what is the current weather in sf?");
- * ```
- * </details>
- *
- * <br />
- *
- * <details>
- *
- * <summary><strong>Invocation with tool call</strong></summary>
- *
- * ```typescript
- * // This is usually generated by a model, but we'll create a tool call directly for demo purposes.
- * const modelGeneratedToolCall = {
- *   args: {
- *     input: "what is the current weather in sf?",
- *   },
- *   id: "tool_call_id",
- *   name: tool.name,
- *   type: "tool_call",
- * };
- * await tool.invoke(modelGeneratedToolCall);
- * ```
- *
- * ```text
- * ToolMessage {
- *   "content": "...",
- *   "name": "tavily_search_results_json",
- *   "additional_kwargs": {},
- *   "response_metadata": {},
- *   "tool_call_id": "tool_call_id"
- * }
- * ```
- * </details>
- */
-class TavilySearchResults extends tools_1.Tool {
-    static lc_name() {
-        return "TavilySearchResults";
-    }
-    constructor(fields) {
-        super(fields);
-        Object.defineProperty(this, "description", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: "A search engine optimized for comprehensive, accurate, and trusted results. Useful for when you need to answer questions about current events. Input should be a search query."
-        });
-        Object.defineProperty(this, "name", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: "tavily_search_results_json"
-        });
-        Object.defineProperty(this, "maxResults", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: 5
-        });
-        Object.defineProperty(this, "apiKey", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "kwargs", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: {}
-        });
-        this.maxResults = fields?.maxResults ?? this.maxResults;
-        this.kwargs = fields?.kwargs ?? this.kwargs;
-        this.apiKey = fields?.apiKey ?? (0, env_1.getEnvironmentVariable)("TAVILY_API_KEY");
-        if (this.apiKey === undefined) {
-            throw new Error(`No Tavily API key found. Either set an environment variable named "TAVILY_API_KEY" or pass an API key as "apiKey".`);
-        }
-    }
-    async _call(input, _runManager) {
-        const body = {
-            query: input,
-            max_results: this.maxResults,
-            api_key: this.apiKey,
-        };
-        const response = await fetch("https://api.tavily.com/search", {
-            method: "POST",
-            headers: {
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({ ...body, ...this.kwargs }),
-        });
-        const json = await response.json();
-        if (!response.ok) {
-            throw new Error(`Request failed with status code ${response.status}: ${json.error}`);
-        }
-        if (!Array.isArray(json.results)) {
-            throw new Error(`Could not parse Tavily results. Please try again.`);
-        }
-        return JSON.stringify(json.results);
-    }
-}
-exports.TavilySearchResults = TavilySearchResults;
-
-
-/***/ }),
-
-/***/ 61396:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-module.exports = __nccwpck_require__(63117);
-
-/***/ }),
-
 /***/ 17716:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -58768,6 +58514,9 @@ class BaseCallbackHandler extends BaseCallbackHandlerMethodsClass {
         return undefined;
     }
     get lc_aliases() {
+        return undefined;
+    }
+    get lc_serializable_keys() {
         return undefined;
     }
     /**
@@ -59100,11 +58849,11 @@ class CallbackManagerForLLMRun extends BaseRunManager {
             }
         }, handler.awaitHandlers)));
     }
-    async handleLLMError(err) {
+    async handleLLMError(err, _runId, _parentRunId, _tags, extraParams) {
         await Promise.all(this.handlers.map((handler) => (0, promises_js_1.consumeCallback)(async () => {
             if (!handler.ignoreLLM) {
                 try {
-                    await handler.handleLLMError?.(err, this.runId, this._parentRunId, this.tags);
+                    await handler.handleLLMError?.(err, this.runId, this._parentRunId, this.tags, extraParams);
                 }
                 catch (err) {
                     const logFunction = handler.raiseError
@@ -59118,11 +58867,11 @@ class CallbackManagerForLLMRun extends BaseRunManager {
             }
         }, handler.awaitHandlers)));
     }
-    async handleLLMEnd(output) {
+    async handleLLMEnd(output, _runId, _parentRunId, _tags, extraParams) {
         await Promise.all(this.handlers.map((handler) => (0, promises_js_1.consumeCallback)(async () => {
             if (!handler.ignoreLLM) {
                 try {
-                    await handler.handleLLMEnd?.(output, this.runId, this._parentRunId, this.tags);
+                    await handler.handleLLMEnd?.(output, this.runId, this._parentRunId, this.tags, extraParams);
                 }
                 catch (err) {
                     const logFunction = handler.raiseError
@@ -60906,6 +60655,12 @@ class BaseChatModel extends base_js_1.BaseLanguageModel {
             writable: true,
             value: ["langchain", "chat_models", this._llmType()]
         });
+        Object.defineProperty(this, "disableStreaming", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: false
+        });
     }
     _separateRunnableConfigFromCallOptionsCompat(options) {
         // For backwards compat, keep `signal` in both runnableConfig and callOptions
@@ -60933,7 +60688,8 @@ class BaseChatModel extends base_js_1.BaseLanguageModel {
     async *_streamIterator(input, options) {
         // Subclass check required to avoid double callbacks with default implementation
         if (this._streamResponseChunks ===
-            BaseChatModel.prototype._streamResponseChunks) {
+            BaseChatModel.prototype._streamResponseChunks ||
+            this.disableStreaming) {
             yield this.invoke(input, options);
         }
         else {
@@ -61006,20 +60762,27 @@ class BaseChatModel extends base_js_1.BaseLanguageModel {
         };
     }
     /** @ignore */
-    async _generateUncached(messages, parsedOptions, handledOptions) {
+    async _generateUncached(messages, parsedOptions, handledOptions, startedRunManagers) {
         const baseMessages = messages.map((messageList) => messageList.map(index_js_1.coerceMessageLikeToMessage));
-        const inheritableMetadata = {
-            ...handledOptions.metadata,
-            ...this.getLsParams(parsedOptions),
-        };
-        // create callback manager and start run
-        const callbackManager_ = await manager_js_1.CallbackManager.configure(handledOptions.callbacks, this.callbacks, handledOptions.tags, this.tags, inheritableMetadata, this.metadata, { verbose: this.verbose });
-        const extra = {
-            options: parsedOptions,
-            invocation_params: this?.invocationParams(parsedOptions),
-            batch_size: 1,
-        };
-        const runManagers = await callbackManager_?.handleChatModelStart(this.toJSON(), baseMessages, handledOptions.runId, undefined, extra, undefined, undefined, handledOptions.runName);
+        let runManagers;
+        if (startedRunManagers !== undefined &&
+            startedRunManagers.length === baseMessages.length) {
+            runManagers = startedRunManagers;
+        }
+        else {
+            const inheritableMetadata = {
+                ...handledOptions.metadata,
+                ...this.getLsParams(parsedOptions),
+            };
+            // create callback manager and start run
+            const callbackManager_ = await manager_js_1.CallbackManager.configure(handledOptions.callbacks, this.callbacks, handledOptions.tags, this.tags, inheritableMetadata, this.metadata, { verbose: this.verbose });
+            const extra = {
+                options: parsedOptions,
+                invocation_params: this?.invocationParams(parsedOptions),
+                batch_size: 1,
+            };
+            runManagers = await callbackManager_?.handleChatModelStart(this.toJSON(), baseMessages, handledOptions.runId, undefined, extra, undefined, undefined, handledOptions.runName);
+        }
         const generations = [];
         const llmOutputs = [];
         // Even if stream is not explicitly called, check if model is implicitly
@@ -61027,6 +60790,7 @@ class BaseChatModel extends base_js_1.BaseLanguageModel {
         // Bail out if _streamResponseChunks not overridden
         const hasStreamingHandler = !!runManagers?.[0].handlers.find(base_js_3.callbackHandlerPrefersStreaming);
         if (hasStreamingHandler &&
+            !this.disableStreaming &&
             baseMessages.length === 1 &&
             this._streamResponseChunks !==
                 BaseChatModel.prototype._streamResponseChunks) {
@@ -61137,7 +60901,6 @@ class BaseChatModel extends base_js_1.BaseLanguageModel {
             options: parsedOptions,
             invocation_params: this?.invocationParams(parsedOptions),
             batch_size: 1,
-            cached: true,
         };
         const runManagers = await callbackManager_?.handleChatModelStart(this.toJSON(), baseMessages, handledOptions.runId, undefined, extra, undefined, undefined, handledOptions.runName);
         // generate results
@@ -61162,23 +60925,45 @@ class BaseChatModel extends base_js_1.BaseLanguageModel {
         await Promise.all(cachedResults.map(async ({ result: promiseResult, runManager }, i) => {
             if (promiseResult.status === "fulfilled") {
                 const result = promiseResult.value;
-                generations[i] = result;
+                generations[i] = result.map((result) => {
+                    if ("message" in result &&
+                        (0, index_js_1.isBaseMessage)(result.message) &&
+                        (0, index_js_1.isAIMessage)(result.message)) {
+                        // eslint-disable-next-line no-param-reassign
+                        result.message.usage_metadata = {
+                            input_tokens: 0,
+                            output_tokens: 0,
+                            total_tokens: 0,
+                        };
+                    }
+                    // eslint-disable-next-line no-param-reassign
+                    result.generationInfo = {
+                        ...result.generationInfo,
+                        tokenUsage: {},
+                    };
+                    return result;
+                });
                 if (result.length) {
                     await runManager?.handleLLMNewToken(result[0].text);
                 }
                 return runManager?.handleLLMEnd({
                     generations: [result],
+                }, undefined, undefined, undefined, {
+                    cached: true,
                 });
             }
             else {
                 // status === "rejected"
-                await runManager?.handleLLMError(promiseResult.reason);
+                await runManager?.handleLLMError(promiseResult.reason, undefined, undefined, undefined, {
+                    cached: true,
+                });
                 return Promise.reject(promiseResult.reason);
             }
         }));
         const output = {
             generations,
             missingPromptIndices,
+            startedRunManagers: runManagers,
         };
         // This defines RUN_KEY as a non-enumerable property on the output object
         // so that it is not serialized when the output is stringified, and so that
@@ -61215,7 +61000,7 @@ class BaseChatModel extends base_js_1.BaseLanguageModel {
         }
         const { cache } = this;
         const llmStringKey = this._getSerializedCacheKeyParametersForCall(callOptions);
-        const { generations, missingPromptIndices } = await this._generateCached({
+        const { generations, missingPromptIndices, startedRunManagers } = await this._generateCached({
             messages: baseMessages,
             cache,
             llmStringKey,
@@ -61224,7 +61009,9 @@ class BaseChatModel extends base_js_1.BaseLanguageModel {
         });
         let llmOutput = {};
         if (missingPromptIndices.length > 0) {
-            const results = await this._generateUncached(missingPromptIndices.map((i) => baseMessages[i]), callOptions, runnableConfig);
+            const results = await this._generateUncached(missingPromptIndices.map((i) => baseMessages[i]), callOptions, runnableConfig, startedRunManagers !== undefined
+                ? missingPromptIndices.map((i) => startedRunManagers?.[i])
+                : undefined);
             await Promise.all(results.generations.map(async (generation, index) => {
                 const promptIndex = missingPromptIndices[index];
                 generations[promptIndex] = generation;
@@ -61564,14 +61351,21 @@ class BaseLLM extends base_js_1.BaseLanguageModel {
         return llmResults;
     }
     /** @ignore */
-    async _generateUncached(prompts, parsedOptions, handledOptions) {
-        const callbackManager_ = await manager_js_1.CallbackManager.configure(handledOptions.callbacks, this.callbacks, handledOptions.tags, this.tags, handledOptions.metadata, this.metadata, { verbose: this.verbose });
-        const extra = {
-            options: parsedOptions,
-            invocation_params: this?.invocationParams(parsedOptions),
-            batch_size: prompts.length,
-        };
-        const runManagers = await callbackManager_?.handleLLMStart(this.toJSON(), prompts, handledOptions.runId, undefined, extra, undefined, undefined, handledOptions?.runName);
+    async _generateUncached(prompts, parsedOptions, handledOptions, startedRunManagers) {
+        let runManagers;
+        if (startedRunManagers !== undefined &&
+            startedRunManagers.length === prompts.length) {
+            runManagers = startedRunManagers;
+        }
+        else {
+            const callbackManager_ = await manager_js_1.CallbackManager.configure(handledOptions.callbacks, this.callbacks, handledOptions.tags, this.tags, handledOptions.metadata, this.metadata, { verbose: this.verbose });
+            const extra = {
+                options: parsedOptions,
+                invocation_params: this?.invocationParams(parsedOptions),
+                batch_size: prompts.length,
+            };
+            runManagers = await callbackManager_?.handleLLMStart(this.toJSON(), prompts, handledOptions.runId, undefined, extra, undefined, undefined, handledOptions?.runName);
+        }
         // Even if stream is not explicitly called, check if model is implicitly
         // called from streamEvents() or streamLog() to get all streamed events.
         // Bail out if _streamResponseChunks not overridden
@@ -61629,7 +61423,6 @@ class BaseLLM extends base_js_1.BaseLanguageModel {
             options: parsedOptions,
             invocation_params: this?.invocationParams(parsedOptions),
             batch_size: prompts.length,
-            cached: true,
         };
         const runManagers = await callbackManager_?.handleLLMStart(this.toJSON(), prompts, runId, undefined, extra, undefined, undefined, handledOptions?.runName);
         // generate results
@@ -61652,23 +61445,35 @@ class BaseLLM extends base_js_1.BaseLanguageModel {
         await Promise.all(cachedResults.map(async ({ result: promiseResult, runManager }, i) => {
             if (promiseResult.status === "fulfilled") {
                 const result = promiseResult.value;
-                generations[i] = result;
+                generations[i] = result.map((result) => {
+                    // eslint-disable-next-line no-param-reassign
+                    result.generationInfo = {
+                        ...result.generationInfo,
+                        tokenUsage: {},
+                    };
+                    return result;
+                });
                 if (result.length) {
                     await runManager?.handleLLMNewToken(result[0].text);
                 }
                 return runManager?.handleLLMEnd({
                     generations: [result],
+                }, undefined, undefined, undefined, {
+                    cached: true,
                 });
             }
             else {
                 // status === "rejected"
-                await runManager?.handleLLMError(promiseResult.reason);
+                await runManager?.handleLLMError(promiseResult.reason, undefined, undefined, undefined, {
+                    cached: true,
+                });
                 return Promise.reject(promiseResult.reason);
             }
         }));
         const output = {
             generations,
             missingPromptIndices,
+            startedRunManagers: runManagers,
         };
         // This defines RUN_KEY as a non-enumerable property on the output object
         // so that it is not serialized when the output is stringified, and so that
@@ -61702,7 +61507,7 @@ class BaseLLM extends base_js_1.BaseLanguageModel {
         }
         const { cache } = this;
         const llmStringKey = this._getSerializedCacheKeyParametersForCall(callOptions);
-        const { generations, missingPromptIndices } = await this._generateCached({
+        const { generations, missingPromptIndices, startedRunManagers } = await this._generateCached({
             prompts,
             cache,
             llmStringKey,
@@ -61712,7 +61517,9 @@ class BaseLLM extends base_js_1.BaseLanguageModel {
         });
         let llmOutput = {};
         if (missingPromptIndices.length > 0) {
-            const results = await this._generateUncached(missingPromptIndices.map((i) => prompts[i]), callOptions, runnableConfig);
+            const results = await this._generateUncached(missingPromptIndices.map((i) => prompts[i]), callOptions, runnableConfig, startedRunManagers !== undefined
+                ? missingPromptIndices.map((i) => startedRunManagers?.[i])
+                : undefined);
             await Promise.all(results.generations.map(async (generation, index) => {
                 const promptIndex = missingPromptIndices[index];
                 generations[promptIndex] = generation;
@@ -62221,6 +62028,13 @@ class Serializable {
     get lc_aliases() {
         return undefined;
     }
+    /**
+     * A manual list of keys that should be serialized.
+     * If not overridden, all fields passed into the constructor will be serialized.
+     */
+    get lc_serializable_keys() {
+        return undefined;
+    }
     constructor(kwargs, ..._args) {
         Object.defineProperty(this, "lc_serializable", {
             enumerable: true,
@@ -62234,7 +62048,12 @@ class Serializable {
             writable: true,
             value: void 0
         });
-        this.lc_kwargs = kwargs || {};
+        if (this.lc_serializable_keys !== undefined) {
+            this.lc_kwargs = Object.fromEntries(Object.entries(kwargs || {}).filter(([key]) => this.lc_serializable_keys?.includes(key)));
+        }
+        else {
+            this.lc_kwargs = kwargs ?? {};
+        }
     }
     toJSON() {
         if (!this.lc_serializable) {
@@ -63628,6 +63447,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.defaultTextSplitter = exports.trimMessages = exports.mergeMessageRuns = exports.filterMessages = void 0;
 const base_js_1 = __nccwpck_require__(86741);
 const ai_js_1 = __nccwpck_require__(43568);
+const base_js_2 = __nccwpck_require__(95157);
 const chat_js_1 = __nccwpck_require__(10412);
 const function_js_1 = __nccwpck_require__(85602);
 const human_js_1 = __nccwpck_require__(46409);
@@ -63643,14 +63463,14 @@ const _isMessageType = (msg, types) => {
             }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const instantiatedMsgClass = new t({});
-            if (!("_getType" in instantiatedMsgClass) ||
-                typeof instantiatedMsgClass._getType !== "function") {
+            if (!("getType" in instantiatedMsgClass) ||
+                typeof instantiatedMsgClass.getType !== "function") {
                 throw new Error("Invalid type provided.");
             }
-            return instantiatedMsgClass._getType();
+            return instantiatedMsgClass.getType();
         })),
     ];
-    const msgType = msg._getType();
+    const msgType = msg.getType();
     return typesAsStrings.some((t) => t === msgType);
 };
 function filterMessages(messagesOrOptions, options) {
@@ -63706,13 +63526,13 @@ function _mergeMessageRuns(messages) {
     }
     const merged = [];
     for (const msg of messages) {
-        const curr = msg; // Create a shallow copy of the message
+        const curr = msg;
         const last = merged.pop();
         if (!last) {
             merged.push(curr);
         }
-        else if (curr._getType() === "tool" ||
-            !(curr._getType() === last._getType())) {
+        else if (curr.getType() === "tool" ||
+            !(curr.getType() === last.getType())) {
             merged.push(last, curr);
         }
         else {
@@ -63738,7 +63558,9 @@ function trimMessages(messagesOrOptions, options) {
     }
     else {
         const trimmerOptions = messagesOrOptions;
-        return base_js_1.RunnableLambda.from((input) => _trimMessagesHelper(input, trimmerOptions));
+        return base_js_1.RunnableLambda.from((input) => _trimMessagesHelper(input, trimmerOptions)).withConfig({
+            runName: "trim_messages",
+        });
     }
 }
 exports.trimMessages = trimMessages;
@@ -63820,7 +63642,7 @@ async function _firstMaxTokens(messages, options) {
                     ? reversedContent.slice(0, i)
                     : reversedContent.slice(-i);
                 const fields = Object.fromEntries(Object.entries(excluded).filter(([k]) => k !== "type" && !k.startsWith("lc_")));
-                const updatedMessage = _switchTypeToMessage(excluded._getType(), {
+                const updatedMessage = _switchTypeToMessage(excluded.getType(), {
                     ...fields,
                     content: partialContent,
                 });
@@ -63881,17 +63703,22 @@ async function _firstMaxTokens(messages, options) {
 }
 async function _lastMaxTokens(messages, options) {
     const { allowPartial = false, includeSystem = false, endOn, startOn, ...rest } = options;
+    // Create a copy of messages to avoid mutation
+    let messagesCopy = messages.map((message) => {
+        const fields = Object.fromEntries(Object.entries(message).filter(([k]) => k !== "type" && !k.startsWith("lc_")));
+        return _switchTypeToMessage(message.getType(), fields, (0, base_js_2.isBaseMessageChunk)(message));
+    });
     if (endOn) {
         const endOnArr = Array.isArray(endOn) ? endOn : [endOn];
-        while (messages &&
-            !_isMessageType(messages[messages.length - 1], endOnArr)) {
-            messages.pop();
+        while (messagesCopy.length > 0 &&
+            !_isMessageType(messagesCopy[messagesCopy.length - 1], endOnArr)) {
+            messagesCopy = messagesCopy.slice(0, -1);
         }
     }
-    const swappedSystem = includeSystem && messages[0]._getType() === "system";
+    const swappedSystem = includeSystem && messagesCopy[0]?.getType() === "system";
     let reversed_ = swappedSystem
-        ? messages.slice(0, 1).concat(messages.slice(1).reverse())
-        : messages.reverse();
+        ? messagesCopy.slice(0, 1).concat(messagesCopy.slice(1).reverse())
+        : messagesCopy.reverse();
     reversed_ = await _firstMaxTokens(reversed_, {
         ...rest,
         partialStrategy: allowPartial ? "last" : undefined,
@@ -64049,7 +63876,7 @@ function _switchTypeToMessage(messageType, fields, returnChunk) {
     throw new Error(`Unrecognized message type ${messageType}`);
 }
 function _chunkToMsg(chunk) {
-    const chunkType = chunk._getType();
+    const chunkType = chunk.getType();
     let msg;
     const fields = Object.fromEntries(Object.entries(chunk).filter(([k]) => !["type", "tool_call_chunks"].includes(k) && !k.startsWith("lc_")));
     if (chunkType in _MSG_CHUNK_MAP) {
@@ -64142,6 +63969,14 @@ function _constructMessageFromParams(params) {
         else if (className === "SystemMessage" ||
             className === "SystemMessageChunk") {
             type = "system";
+        }
+        else if (className === "FunctionMessage" ||
+            className === "FunctionMessageChunk") {
+            type = "function";
+        }
+        else if (className === "ToolMessage" ||
+            className === "ToolMessageChunk") {
+            type = "tool";
         }
         else {
             type = "unknown";
@@ -66044,6 +65879,22 @@ class BasePromptTemplate extends base_js_1.Runnable {
             writable: true,
             value: void 0
         });
+        /**
+         * Metadata to be used for tracing.
+         */
+        Object.defineProperty(this, "metadata", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        /** Tags to be used for tracing. */
+        Object.defineProperty(this, "tags", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
         const { inputVariables } = input;
         if (inputVariables.includes("stop")) {
             throw new Error("Cannot have an input variable named 'stop', as it is used internally, please rename.");
@@ -66079,7 +65930,12 @@ class BasePromptTemplate extends base_js_1.Runnable {
      * @returns A Promise that resolves to the output of the prompt template.
      */
     async invoke(input, options) {
-        return this._callWithConfig((input) => this.formatPromptValue(input), input, { ...options, runType: "prompt" });
+        const metadata = {
+            ...this.metadata,
+            ...options?.metadata,
+        };
+        const tags = [...(this.tags ?? []), ...(options?.tags ?? [])];
+        return this._callWithConfig((input) => this.formatPromptValue(input), input, { ...options, tags, metadata, runType: "prompt" });
     }
     /**
      * Return a json-like object representing this prompt template.
@@ -66630,13 +66486,20 @@ function _coerceMessagePromptTemplateLike(messagePromptTemplateLike, extra) {
     if (Array.isArray(messagePromptTemplateLike) &&
         messagePromptTemplateLike[0] === "placeholder") {
         const messageContent = messagePromptTemplateLike[1];
-        if (typeof messageContent !== "string" ||
-            messageContent[0] !== "{" ||
-            messageContent[messageContent.length - 1] !== "}") {
-            throw new Error(`Invalid placeholder template: "${messagePromptTemplateLike[1]}". Expected a variable name surrounded by curly braces.`);
+        if (extra?.templateFormat === "mustache" &&
+            typeof messageContent === "string" &&
+            messageContent.slice(0, 2) === "{{" &&
+            messageContent.slice(-2) === "}}") {
+            const variableName = messageContent.slice(2, -2);
+            return new MessagesPlaceholder({ variableName, optional: true });
         }
-        const variableName = messageContent.slice(1, -1);
-        return new MessagesPlaceholder({ variableName, optional: true });
+        else if (typeof messageContent === "string" &&
+            messageContent[0] === "{" &&
+            messageContent[messageContent.length - 1] === "}") {
+            const variableName = messageContent.slice(1, -1);
+            return new MessagesPlaceholder({ variableName, optional: true });
+        }
+        throw new Error(`Invalid placeholder template for format ${extra?.templateFormat ?? `"f-string"`}: "${messagePromptTemplateLike[1]}". Expected a variable name surrounded by ${extra?.templateFormat === "mustache" ? "double" : "single"} curly braces.`);
     }
     const message = (0, index_js_1.coerceMessageLikeToMessage)(messagePromptTemplateLike);
     let templateData;
@@ -68689,16 +68552,44 @@ class Runnable extends serializable_js_1.Serializable {
             // eslint-disable-next-line no-param-reassign
             config.callbacks = copiedCallbacks;
         }
+        const abortController = new AbortController();
         // Call the runnable in streaming mode,
         // add each chunk to the output stream
         const outerThis = this;
         async function consumeRunnableStream() {
             try {
-                const runnableStream = await outerThis.stream(input, config);
+                let signal;
+                if (options?.signal) {
+                    if ("any" in AbortSignal) {
+                        // Use native AbortSignal.any() if available (Node 19+)
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        signal = AbortSignal.any([
+                            abortController.signal,
+                            options.signal,
+                        ]);
+                    }
+                    else {
+                        // Fallback for Node 18 and below - just use the provided signal
+                        signal = options.signal;
+                        // Ensure we still abort our controller when the parent signal aborts
+                        options.signal.addEventListener("abort", () => {
+                            abortController.abort();
+                        }, { once: true });
+                    }
+                }
+                else {
+                    signal = abortController.signal;
+                }
+                const runnableStream = await outerThis.stream(input, {
+                    ...config,
+                    signal,
+                });
                 const tappedStream = eventStreamer.tapOutputIterable(runId, runnableStream);
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 for await (const _ of tappedStream) {
                     // Just iterate so that the callback handler picks up events
+                    if (abortController.signal.aborted)
+                        break;
                 }
             }
             finally {
@@ -68733,6 +68624,7 @@ class Runnable extends serializable_js_1.Serializable {
             }
         }
         finally {
+            abortController.abort();
             await runnableStreamConsumePromise;
         }
     }
@@ -72706,13 +72598,18 @@ class StructuredTool extends base_js_1.BaseLangChain {
     }
     constructor(fields) {
         super(fields ?? {});
+        /**
+         * Whether to return the tool's output directly.
+         *
+         * Setting this to true means that after the tool is called,
+         * an agent should stop looping.
+         */
         Object.defineProperty(this, "returnDirect", {
             enumerable: true,
             configurable: true,
             writable: true,
             value: false
         });
-        // TODO: Make default in 0.3
         Object.defineProperty(this, "verboseParsingErrors", {
             enumerable: true,
             configurable: true,
@@ -73298,7 +73195,7 @@ class BaseTracer extends base_js_1.BaseCallbackHandler {
         await this.onLLMStart?.(run);
         return run;
     }
-    async handleLLMEnd(output, runId) {
+    async handleLLMEnd(output, runId, _parentRunId, _tags, extraParams) {
         const run = this.runMap.get(runId);
         if (!run || run?.run_type !== "llm") {
             throw new Error("No LLM run to end.");
@@ -73309,11 +73206,12 @@ class BaseTracer extends base_js_1.BaseCallbackHandler {
             name: "end",
             time: new Date(run.end_time).toISOString(),
         });
+        run.extra = { ...run.extra, ...extraParams };
         await this.onLLMEnd?.(run);
         await this._endTrace(run);
         return run;
     }
-    async handleLLMError(error, runId) {
+    async handleLLMError(error, runId, _parentRunId, _tags, extraParams) {
         const run = this.runMap.get(runId);
         if (!run || run?.run_type !== "llm") {
             throw new Error("No LLM run to end.");
@@ -73324,6 +73222,7 @@ class BaseTracer extends base_js_1.BaseCallbackHandler {
             name: "error",
             time: new Date(run.end_time).toISOString(),
         });
+        run.extra = { ...run.extra, ...extraParams };
         await this.onLLMError?.(run);
         await this._endTrace(run);
         return run;
@@ -75089,6 +74988,7 @@ class LangChainTracer extends base_js_1.BaseTracer {
             trace_id: run.trace_id,
             dotted_order: run.dotted_order,
             parent_run_id: run.parent_run_id,
+            extra: run.extra,
         };
         await this.client.updateRun(run.id, runUpdate);
     }
@@ -85539,7 +85439,7 @@ module.exports = __nccwpck_require__(9789);
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.WRITES_IDX_MAP = exports.maxChannelVersion = exports.compareChannelVersions = exports.BaseCheckpointSaver = exports.copyCheckpoint = exports.emptyCheckpoint = exports.deepCopy = void 0;
+exports.getCheckpointId = exports.WRITES_IDX_MAP = exports.maxChannelVersion = exports.compareChannelVersions = exports.BaseCheckpointSaver = exports.copyCheckpoint = exports.emptyCheckpoint = exports.deepCopy = void 0;
 const id_js_1 = __nccwpck_require__(78946);
 const types_js_1 = __nccwpck_require__(55010);
 const jsonplus_js_1 = __nccwpck_require__(30801);
@@ -85638,6 +85538,10 @@ exports.WRITES_IDX_MAP = {
     [types_js_1.INTERRUPT]: -3,
     [types_js_1.RESUME]: -4,
 };
+function getCheckpointId(config) {
+    return (config.configurable?.checkpoint_id || config.configurable?.thread_ts || "");
+}
+exports.getCheckpointId = getCheckpointId;
 
 
 /***/ }),
@@ -85735,7 +85639,8 @@ class MemorySaver extends base_js_1.BaseCheckpointSaver {
     async _getPendingSends(threadId, checkpointNs, parentCheckpointId) {
         let pendingSends = [];
         if (parentCheckpointId !== undefined) {
-            pendingSends = await Promise.all(this.writes[_generateKey(threadId, checkpointNs, parentCheckpointId)]
+            const key = _generateKey(threadId, checkpointNs, parentCheckpointId);
+            pendingSends = await Promise.all(Object.values(this.writes[key] || {})
                 ?.filter(([_taskId, channel]) => {
                 return channel === types_js_1.TASKS;
             })
@@ -85748,19 +85653,18 @@ class MemorySaver extends base_js_1.BaseCheckpointSaver {
     async getTuple(config) {
         const thread_id = config.configurable?.thread_id;
         const checkpoint_ns = config.configurable?.checkpoint_ns ?? "";
-        let checkpoint_id = config.configurable?.checkpoint_id;
+        let checkpoint_id = (0, base_js_1.getCheckpointId)(config);
         if (checkpoint_id) {
             const saved = this.storage[thread_id]?.[checkpoint_ns]?.[checkpoint_id];
             if (saved !== undefined) {
                 const [checkpoint, metadata, parentCheckpointId] = saved;
-                const writes = this.writes[_generateKey(thread_id, checkpoint_ns, checkpoint_id)] ??
-                    [];
+                const key = _generateKey(thread_id, checkpoint_ns, checkpoint_id);
                 const pending_sends = await this._getPendingSends(thread_id, checkpoint_ns, parentCheckpointId);
                 const deserializedCheckpoint = {
                     ...(await this.serde.loadsTyped("json", checkpoint)),
                     pending_sends,
                 };
-                const pendingWrites = await Promise.all(writes.map(async ([taskId, channel, value]) => {
+                const pendingWrites = await Promise.all(Object.values(this.writes[key] || {}).map(async ([taskId, channel, value]) => {
                     return [
                         taskId,
                         channel,
@@ -85792,14 +85696,13 @@ class MemorySaver extends base_js_1.BaseCheckpointSaver {
                 checkpoint_id = Object.keys(checkpoints).sort((a, b) => b.localeCompare(a))[0];
                 const saved = checkpoints[checkpoint_id];
                 const [checkpoint, metadata, parentCheckpointId] = saved;
-                const writes = this.writes[_generateKey(thread_id, checkpoint_ns, checkpoint_id)] ??
-                    [];
+                const key = _generateKey(thread_id, checkpoint_ns, checkpoint_id);
                 const pending_sends = await this._getPendingSends(thread_id, checkpoint_ns, parentCheckpointId);
                 const deserializedCheckpoint = {
                     ...(await this.serde.loadsTyped("json", checkpoint)),
                     pending_sends,
                 };
-                const pendingWrites = await Promise.all(writes.map(async ([taskId, channel, value]) => {
+                const pendingWrites = await Promise.all(Object.values(this.writes[key] || {}).map(async ([taskId, channel, value]) => {
                     return [
                         taskId,
                         channel,
@@ -85839,6 +85742,7 @@ class MemorySaver extends base_js_1.BaseCheckpointSaver {
             ? [config.configurable?.thread_id]
             : Object.keys(this.storage);
         const configCheckpointNamespace = config.configurable?.checkpoint_ns;
+        const configCheckpointId = config.configurable?.checkpoint_id;
         for (const threadId of threadIds) {
             for (const checkpointNamespace of Object.keys(this.storage[threadId] ?? {})) {
                 if (configCheckpointNamespace !== undefined &&
@@ -85848,7 +85752,11 @@ class MemorySaver extends base_js_1.BaseCheckpointSaver {
                 const checkpoints = this.storage[threadId]?.[checkpointNamespace] ?? {};
                 const sortedCheckpoints = Object.entries(checkpoints).sort((a, b) => b[0].localeCompare(a[0]));
                 for (const [checkpointId, [checkpoint, metadataStr, parentCheckpointId],] of sortedCheckpoints) {
-                    // Filter by checkpoint ID
+                    // Filter by checkpoint ID from config
+                    if (configCheckpointId && checkpointId !== configCheckpointId) {
+                        continue;
+                    }
+                    // Filter by checkpoint ID from before config
                     if (before &&
                         before.configurable?.checkpoint_id &&
                         checkpointId >= before.configurable.checkpoint_id) {
@@ -85864,10 +85772,10 @@ class MemorySaver extends base_js_1.BaseCheckpointSaver {
                     if (limit !== undefined) {
                         if (limit <= 0)
                             break;
-                        // eslint-disable-next-line no-param-reassign
                         limit -= 1;
                     }
-                    const writes = this.writes[_generateKey(threadId, checkpointNamespace, checkpointId)] ?? [];
+                    const key = _generateKey(threadId, checkpointNamespace, checkpointId);
+                    const writes = Object.values(this.writes[key] || {});
                     const pending_sends = await this._getPendingSends(threadId, checkpointNamespace, parentCheckpointId);
                     const pendingWrites = await Promise.all(writes.map(async ([taskId, channel, value]) => {
                         return [
@@ -85945,15 +85853,23 @@ class MemorySaver extends base_js_1.BaseCheckpointSaver {
         if (checkpointId === undefined) {
             throw new Error(`Failed to put writes. The passed RunnableConfig is missing a required "checkpoint_id" field in its "configurable" property.`);
         }
-        const key = _generateKey(threadId, checkpointNamespace, checkpointId);
-        if (this.writes[key] === undefined) {
-            this.writes[key] = [];
+        const outerKey = _generateKey(threadId, checkpointNamespace, checkpointId);
+        const outerWrites_ = this.writes[outerKey];
+        if (this.writes[outerKey] === undefined) {
+            this.writes[outerKey] = {};
         }
-        const pendingWrites = writes.map(([channel, value]) => {
+        writes.forEach(([channel, value], idx) => {
             const [, serializedValue] = this.serde.dumpsTyped(value);
-            return [taskId, channel, serializedValue];
+            const innerKey = [
+                taskId,
+                base_js_1.WRITES_IDX_MAP[channel] || idx,
+            ];
+            const innerKeyStr = `${innerKey[0]},${innerKey[1]}`;
+            if (innerKey[1] >= 0 && outerWrites_ && innerKeyStr in outerWrites_) {
+                return;
+            }
+            this.writes[outerKey][innerKeyStr] = [taskId, channel, serializedValue];
         });
-        this.writes[key].push(...pendingWrites);
     }
 }
 exports.MemorySaver = MemorySaver;
@@ -86724,6 +86640,17 @@ class AsyncBatchedStore extends base_js_1.BaseStore {
                 });
             }
         }
+    }
+    // AsyncBatchedStore is internal and gets passed as args into traced tasks
+    // some BaseStores contain circular references so just serialize without it
+    // as this causes warnings when tracing with LangSmith.
+    toJSON() {
+        return {
+            queue: this.queue,
+            nextKey: this.nextKey,
+            running: this.running,
+            store: "[LangGraphStore]",
+        };
     }
 }
 exports.AsyncBatchedStore = AsyncBatchedStore;
@@ -87623,46 +87550,47 @@ class EphemeralValue extends index_js_1.BaseChannel {
             writable: true,
             value: void 0
         });
+        // value is an array so we don't misinterpret an update to undefined as no write
         Object.defineProperty(this, "value", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: void 0
+            value: []
         });
         this.guard = guard;
     }
     fromCheckpoint(checkpoint) {
         const empty = new EphemeralValue(this.guard);
         if (checkpoint) {
-            empty.value = checkpoint;
+            empty.value = [checkpoint];
         }
         return empty;
     }
     update(values) {
         if (values.length === 0) {
-            const updated = this.value !== undefined;
+            const updated = this.value.length > 0;
             // If there are no updates for this specific channel at the end of the step, wipe it.
-            this.value = undefined;
+            this.value = [];
             return updated;
         }
         if (values.length !== 1 && this.guard) {
             throw new errors_js_1.InvalidUpdateError("EphemeralValue can only receive one value per step.");
         }
         // eslint-disable-next-line prefer-destructuring
-        this.value = values[values.length - 1];
+        this.value = [values[values.length - 1]];
         return true;
     }
     get() {
-        if (this.value === undefined) {
+        if (this.value.length === 0) {
             throw new errors_js_1.EmptyChannelError();
         }
-        return this.value;
+        return this.value[0];
     }
     checkpoint() {
-        if (this.value === undefined) {
+        if (this.value.length === 0) {
             throw new errors_js_1.EmptyChannelError();
         }
-        return this.value;
+        return this.value[0];
     }
 }
 exports.EphemeralValue = EphemeralValue;
@@ -87713,17 +87641,18 @@ class LastValue extends base_js_1.BaseChannel {
             writable: true,
             value: "LastValue"
         });
+        // value is an array so we don't misinterpret an update to undefined as no write
         Object.defineProperty(this, "value", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: void 0
+            value: []
         });
     }
     fromCheckpoint(checkpoint) {
         const empty = new LastValue();
         if (checkpoint) {
-            empty.value = checkpoint;
+            empty.value = [checkpoint];
         }
         return empty;
     }
@@ -87737,20 +87666,20 @@ class LastValue extends base_js_1.BaseChannel {
             });
         }
         // eslint-disable-next-line prefer-destructuring
-        this.value = values[values.length - 1];
+        this.value = [values[values.length - 1]];
         return true;
     }
     get() {
-        if (this.value === undefined) {
+        if (this.value.length === 0) {
             throw new errors_js_1.EmptyChannelError();
         }
-        return this.value;
+        return this.value[0];
     }
     checkpoint() {
-        if (this.value === undefined) {
+        if (this.value.length === 0) {
             throw new errors_js_1.EmptyChannelError();
         }
-        return this.value;
+        return this.value[0];
     }
 }
 exports.LastValue = LastValue;
@@ -87852,24 +87781,39 @@ exports.NamedBarrierValue = NamedBarrierValue;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.isCommand = exports.Command = exports._isSend = exports.Send = exports._isSendInterface = exports.CHECKPOINT_NAMESPACE_END = exports.CHECKPOINT_NAMESPACE_SEPARATOR = exports.RESERVED = exports.NULL_TASK_ID = exports.TASK_NAMESPACE = exports.PULL = exports.PUSH = exports.TASKS = exports.SELF = exports.TAG_NOSTREAM = exports.TAG_HIDDEN = exports.RECURSION_LIMIT_DEFAULT = exports.RUNTIME_PLACEHOLDER = exports.RESUME = exports.INTERRUPT = exports.CONFIG_KEY_CHECKPOINT_MAP = exports.CONFIG_KEY_CHECKPOINT_NS = exports.CONFIG_KEY_SCRATCHPAD = exports.CONFIG_KEY_WRITES = exports.CONFIG_KEY_RESUME_VALUE = exports.CONFIG_KEY_STREAM = exports.CONFIG_KEY_TASK_ID = exports.CONFIG_KEY_RESUMING = exports.CONFIG_KEY_CHECKPOINTER = exports.CONFIG_KEY_READ = exports.CONFIG_KEY_SEND = exports.ERROR = exports.INPUT = exports.MISSING = void 0;
-exports.MISSING = Symbol.for("__missing__");
+exports.isCommand = exports.Command = exports._isSend = exports.Send = exports._isSendInterface = exports.CHECKPOINT_NAMESPACE_END = exports.CHECKPOINT_NAMESPACE_SEPARATOR = exports.RESERVED = exports.NULL_TASK_ID = exports.TASK_NAMESPACE = exports.PULL = exports.PUSH = exports.TASKS = exports.SELF = exports.TAG_NOSTREAM = exports.TAG_HIDDEN = exports.RECURSION_LIMIT_DEFAULT = exports.RUNTIME_PLACEHOLDER = exports.PREVIOUS = exports.RETURN = exports.NO_WRITES = exports.RESUME = exports.INTERRUPT = exports.CONFIG_KEY_CHECKPOINT_MAP = exports.CONFIG_KEY_CHECKPOINT_NS = exports.CONFIG_KEY_CHECKPOINT_ID = exports.CONFIG_KEY_PREVIOUS_STATE = exports.CONFIG_KEY_SCRATCHPAD = exports.CONFIG_KEY_RESUME_VALUE = exports.CONFIG_KEY_STREAM = exports.CONFIG_KEY_TASK_ID = exports.CONFIG_KEY_RESUMING = exports.CONFIG_KEY_CHECKPOINTER = exports.CONFIG_KEY_READ = exports.CONFIG_KEY_CALL = exports.CONFIG_KEY_SEND = exports.ERROR = exports.INPUT = exports.END = exports.START = void 0;
+/** Special reserved node name denoting the start of a graph. */
+exports.START = "__start__";
+/** Special reserved node name denoting the end of a graph. */
+exports.END = "__end__";
 exports.INPUT = "__input__";
 exports.ERROR = "__error__";
 exports.CONFIG_KEY_SEND = "__pregel_send";
+/** config key containing function used to call a node (push task) */
+exports.CONFIG_KEY_CALL = "__pregel_call";
 exports.CONFIG_KEY_READ = "__pregel_read";
 exports.CONFIG_KEY_CHECKPOINTER = "__pregel_checkpointer";
 exports.CONFIG_KEY_RESUMING = "__pregel_resuming";
 exports.CONFIG_KEY_TASK_ID = "__pregel_task_id";
 exports.CONFIG_KEY_STREAM = "__pregel_stream";
 exports.CONFIG_KEY_RESUME_VALUE = "__pregel_resume_value";
-exports.CONFIG_KEY_WRITES = "__pregel_writes";
 exports.CONFIG_KEY_SCRATCHPAD = "__pregel_scratchpad";
+/** config key containing state from previous invocation of graph for the given thread */
+exports.CONFIG_KEY_PREVIOUS_STATE = "__pregel_previous";
+exports.CONFIG_KEY_CHECKPOINT_ID = "checkpoint_id";
 exports.CONFIG_KEY_CHECKPOINT_NS = "checkpoint_ns";
 // this one is part of public API
 exports.CONFIG_KEY_CHECKPOINT_MAP = "checkpoint_map";
+/** Special channel reserved for graph interrupts */
 exports.INTERRUPT = "__interrupt__";
+/** Special channel reserved for graph resume */
 exports.RESUME = "__resume__";
+/** Special channel reserved for cases when a task exits without any writes */
+exports.NO_WRITES = "__no_writes__";
+/** Special channel reserved for graph return */
+exports.RETURN = "__return__";
+/** Special channel reserved for graph previous state */
+exports.PREVIOUS = "__previous__";
 exports.RUNTIME_PLACEHOLDER = "__pregel_runtime_placeholder__";
 exports.RECURSION_LIMIT_DEFAULT = 25;
 exports.TAG_HIDDEN = "langsmith:hidden";
@@ -87881,24 +87825,36 @@ exports.PULL = "__pregel_pull";
 exports.TASK_NAMESPACE = "6ba7b831-9dad-11d1-80b4-00c04fd430c8";
 exports.NULL_TASK_ID = "00000000-0000-0000-0000-000000000000";
 exports.RESERVED = [
+    exports.TAG_HIDDEN,
+    exports.INPUT,
     exports.INTERRUPT,
     exports.RESUME,
     exports.ERROR,
+    exports.NO_WRITES,
     exports.TASKS,
+    // reserved config.configurable keys
     exports.CONFIG_KEY_SEND,
     exports.CONFIG_KEY_READ,
     exports.CONFIG_KEY_CHECKPOINTER,
+    exports.CONFIG_KEY_STREAM,
     exports.CONFIG_KEY_RESUMING,
     exports.CONFIG_KEY_TASK_ID,
-    exports.CONFIG_KEY_STREAM,
+    exports.CONFIG_KEY_CALL,
+    exports.CONFIG_KEY_RESUME_VALUE,
+    exports.CONFIG_KEY_SCRATCHPAD,
+    exports.CONFIG_KEY_PREVIOUS_STATE,
     exports.CONFIG_KEY_CHECKPOINT_MAP,
-    exports.INPUT,
+    exports.CONFIG_KEY_CHECKPOINT_NS,
+    exports.CONFIG_KEY_CHECKPOINT_ID,
 ];
 exports.CHECKPOINT_NAMESPACE_SEPARATOR = "|";
 exports.CHECKPOINT_NAMESPACE_END = ":";
 function _isSendInterface(x) {
     const operation = x;
-    return typeof operation.node === "string" && operation.args !== undefined;
+    return (operation !== null &&
+        operation !== undefined &&
+        typeof operation.node === "string" &&
+        operation.args !== undefined);
 }
 exports._isSendInterface = _isSendInterface;
 /**
@@ -88343,6 +88299,309 @@ exports.getSubgraphsSeenSet = getSubgraphsSeenSet;
 
 /***/ }),
 
+/***/ 74881:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getPreviousState = exports.entrypoint = exports.task = void 0;
+const singletons_1 = __nccwpck_require__(85734);
+const index_js_1 = __nccwpck_require__(51234);
+const read_js_1 = __nccwpck_require__(56502);
+const constants_js_1 = __nccwpck_require__(94533);
+const ephemeral_value_js_1 = __nccwpck_require__(98468);
+const call_js_1 = __nccwpck_require__(60978);
+const last_value_js_1 = __nccwpck_require__(77383);
+const utils_js_1 = __nccwpck_require__(63457);
+/**
+ * Define a LangGraph task using the `task` function.
+ *
+ * !!! warning "Beta"
+ *     The Functional API is currently in beta and is subject to change.
+ *
+ * @beta
+ *
+ * Tasks can only be called from within an {@link entrypoint} or from within a StateGraph.
+ * A task can be called like a regular function with the following differences:
+ *
+ * - When a checkpointer is enabled, the function inputs and outputs must be serializable.
+ * - The wrapped function can only be called from within an entrypoint or StateGraph.
+ * - Calling the function produces a promise. This makes it easy to parallelize tasks.
+ *
+ * @typeParam ArgsT - The type of arguments the task function accepts
+ * @typeParam OutputT - The type of value the task function returns
+ * @param optionsOrName - Either an {@link TaskOptions} object, or a string for the name of the task
+ * @param func - The function that executes this task
+ * @returns A proxy function that accepts the same arguments as the original and always returns the result as a Promise
+ *
+ * @example basic example
+ * ```typescript
+ * const addOne = task("add", async (a: number) => a + 1);
+ *
+ * const workflow = entrypoint("example", async (numbers: number[]) => {
+ *   const promises = numbers.map(n => addOne(n));
+ *   const results = await Promise.all(promises);
+ *   return results;
+ * });
+ *
+ * // Call the entrypoint
+ * await workflow.invoke([1, 2, 3]); // Returns [2, 3, 4]
+ * ```
+ *
+ * @example using a retry policy
+ * ```typescript
+ * const addOne = task({
+ *     name: "add",
+ *     retry: { maxAttempts: 3 }
+ *   },
+ *   async (a: number) => a + 1
+ * );
+ *
+ * const workflow = entrypoint("example", async (numbers: number[]) => {
+ *   const promises = numbers.map(n => addOne(n));
+ *   const results = await Promise.all(promises);
+ *   return results;
+ * });
+ * ```
+ */
+function task(optionsOrName, func) {
+    const { name, retry } = typeof optionsOrName === "string"
+        ? { name: optionsOrName, retry: undefined }
+        : optionsOrName;
+    if ((0, utils_js_1.isAsyncGeneratorFunction)(func) || (0, utils_js_1.isGeneratorFunction)(func)) {
+        throw new Error("Generators are disallowed as tasks. For streaming responses, use config.write.");
+    }
+    return (...args) => {
+        return (0, call_js_1.call)({ func, name, retry }, ...args);
+    };
+}
+exports.task = task;
+/**
+ * Define a LangGraph workflow using the `entrypoint` function.
+ *
+ * !!! warning "Beta"
+ *     The Functional API is currently in beta and is subject to change.
+ *
+ * @beta
+ *
+ * ### Function signature
+ *
+ * The wrapped function must accept at most **two parameters**. The first parameter
+ * is the input to the function. The second (optional) parameter is a
+ * {@link LangGraphRunnableConfig} object. If you wish to pass multiple parameters to
+ * the function, you can pass them as an object.
+ *
+ * ### Helper functions
+ *
+ * #### Streaming
+ * To write data to the "custom" stream, use the {@link getWriter} function, or the
+ * {@link LangGraphRunnableConfig.writer} property.
+ *
+ * #### State management
+ * The {@link getPreviousState} function can be used to access the previous state
+ * that was returned from the last invocation of the entrypoint on the same thread id.
+ *
+ * If you wish to save state other than the return value, you can use the
+ * {@link entrypoint.final} function.
+ *
+ * @typeParam InputT - The type of input the entrypoint accepts
+ * @typeParam OutputT - The type of output the entrypoint produces
+ * @param optionsOrName - Either an {@link EntrypointOptions} object, or a string for the name of the entrypoint
+ * @param func - The function that executes this entrypoint
+ * @returns A {@link Pregel} instance that can be run to execute the workflow
+ *
+ * @example Using entrypoint and tasks
+ * ```typescript
+ * import { task, entrypoint } from "@langchain/langgraph";
+ * import { MemorySaver } from "@langchain/langgraph-checkpoint";
+ * import { interrupt, Command } from "@langchain/langgraph";
+ *
+ * const composeEssay = task("compose", async (topic: string) => {
+ *   await new Promise(r => setTimeout(r, 1000)); // Simulate slow operation
+ *   return `An essay about ${topic}`;
+ * });
+ *
+ * const reviewWorkflow = entrypoint({
+ *   name: "review",
+ *   checkpointer: new MemorySaver()
+ * }, async (topic: string) => {
+ *   const essay = await composeEssay(topic);
+ *   const humanReview = await interrupt({
+ *     question: "Please provide a review",
+ *     essay
+ *   });
+ *   return {
+ *     essay,
+ *     review: humanReview
+ *   };
+ * });
+ *
+ * // Example configuration for the workflow
+ * const config = {
+ *   configurable: {
+ *     thread_id: "some_thread"
+ *   }
+ * };
+ *
+ * // Topic for the essay
+ * const topic = "cats";
+ *
+ * // Stream the workflow to generate the essay and await human review
+ * for await (const result of reviewWorkflow.stream(topic, config)) {
+ *   console.log(result);
+ * }
+ *
+ * // Example human review provided after the interrupt
+ * const humanReview = "This essay is great.";
+ *
+ * // Resume the workflow with the provided human review
+ * for await (const result of reviewWorkflow.stream(new Command({ resume: humanReview }), config)) {
+ *   console.log(result);
+ * }
+ * ```
+ *
+ * @example Accessing the previous return value
+ * ```typescript
+ * import { entrypoint, getPreviousState } from "@langchain/langgraph";
+ * import { MemorySaver } from "@langchain/langgraph-checkpoint";
+ *
+ * const accumulator = entrypoint({
+ *   name: "accumulator",
+ *   checkpointer: new MemorySaver()
+ * }, async (input: string) => {
+ *   const previous = getPreviousState<number>();
+ *   return previous !== undefined ? `${previous } ${input}` : input;
+ * });
+ *
+ * const config = {
+ *   configurable: {
+ *     thread_id: "some_thread"
+ *   }
+ * };
+ * await accumulator.invoke("hello", config); // returns "hello"
+ * await accumulator.invoke("world", config); // returns "hello world"
+ * ```
+ *
+ * @example Using entrypoint.final to save a value
+ * ```typescript
+ * import { entrypoint, getPreviousState } from "@langchain/langgraph";
+ * import { MemorySaver } from "@langchain/langgraph-checkpoint";
+ *
+ * const myWorkflow = entrypoint({
+ *   name: "accumulator",
+ *   checkpointer: new MemorySaver()
+ * }, async (num: number) => {
+ *   const previous = getPreviousState<number>();
+ *
+ *   // This will return the previous value to the caller, saving
+ *   // 2 * num to the checkpoint, which will be used in the next invocation
+ *   // for the `previous` parameter.
+ *   return entrypoint.final({
+ *     value: previous ?? 0,
+ *     save: 2 * num
+ *   });
+ * });
+ *
+ * const config = {
+ *   configurable: {
+ *     thread_id: "some_thread"
+ *   }
+ * };
+ *
+ * await myWorkflow.invoke(3, config); // 0 (previous was undefined)
+ * await myWorkflow.invoke(1, config); // 6 (previous was 3 * 2 from the previous invocation)
+ * ```
+ */
+exports.entrypoint = function entrypoint(optionsOrName, func) {
+    const { name, checkpointer, store } = typeof optionsOrName === "string"
+        ? { name: optionsOrName, checkpointer: undefined, store: undefined }
+        : optionsOrName;
+    if ((0, utils_js_1.isAsyncGeneratorFunction)(func) || (0, utils_js_1.isGeneratorFunction)(func)) {
+        throw new Error("Generators are disallowed as entrypoints. For streaming responses, use config.write.");
+    }
+    const streamMode = "updates";
+    const bound = (0, call_js_1.getRunnableForEntrypoint)(name, func);
+    return new index_js_1.Pregel({
+        name,
+        checkpointer,
+        nodes: {
+            [name]: new read_js_1.PregelNode({
+                bound,
+                triggers: [constants_js_1.START],
+                channels: [constants_js_1.START],
+                writers: [],
+            }),
+        },
+        channels: {
+            [constants_js_1.START]: new ephemeral_value_js_1.EphemeralValue(),
+            [constants_js_1.END]: new last_value_js_1.LastValue(),
+            [constants_js_1.PREVIOUS]: new last_value_js_1.LastValue(),
+        },
+        inputChannels: constants_js_1.START,
+        outputChannels: constants_js_1.END,
+        streamChannels: constants_js_1.END,
+        streamMode,
+        store,
+    });
+};
+// documented by the EntrypointFunction interface
+exports.entrypoint.final = function final({ value, save, }) {
+    return { value, save, __lg_type: "__pregel_final" };
+};
+/**
+ * A helper utility function for use with the functional API that returns the previous
+ * state from the checkpoint from the last invocation of the current thread.
+ *
+ * This function allows workflows to access state that was saved in previous runs
+ * using {@link entrypoint.final}.
+ *
+ * !!! warning "Beta"
+ *     The Functional API is currently in beta and is subject to change.
+ *
+ * @beta
+ *
+ * @typeParam StateT - The type of the state that was previously saved
+ * @returns The previous saved state from the last invocation of the current thread
+ *
+ * @example
+ * ```typescript
+ * const previousState = getPreviousState<{ counter: number }>();
+ * const newCount = (previousState?.counter ?? 0) + 1;
+ * ```
+ */
+function getPreviousState() {
+    const config = singletons_1.AsyncLocalStorageProviderSingleton.getRunnableConfig();
+    return config.configurable?.[constants_js_1.CONFIG_KEY_PREVIOUS_STATE];
+}
+exports.getPreviousState = getPreviousState;
+
+
+/***/ }),
+
+/***/ 82742:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isEntrypointFinal = void 0;
+/**
+ * Checks if a value is an EntrypointFinal - use this instead of `instanceof`, as value may have been deserialized
+ * @param value The value to check
+ * @returns Whether the value is an EntrypointFinal
+ */
+function isEntrypointFinal(value) {
+    return (typeof value === "object" &&
+        value !== null &&
+        "__lg_type" in value &&
+        value.__lg_type === "__pregel_final");
+}
+exports.isEntrypointFinal = isEntrypointFinal;
+
+
+/***/ }),
+
 /***/ 75318:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -88486,7 +88745,7 @@ exports.getChannel = getChannel;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.CompiledGraph = exports.Graph = exports.Branch = exports.END = exports.START = void 0;
+exports.CompiledGraph = exports.Graph = exports.Branch = void 0;
 /* eslint-disable @typescript-eslint/no-use-before-define */
 const runnables_1 = __nccwpck_require__(59950);
 const graph_1 = __nccwpck_require__(55759);
@@ -88500,10 +88759,6 @@ const constants_js_1 = __nccwpck_require__(94533);
 const utils_js_1 = __nccwpck_require__(63457);
 const errors_js_1 = __nccwpck_require__(90491);
 const subgraph_js_1 = __nccwpck_require__(70150);
-/** Special reserved node name denoting the start of a graph. */
-exports.START = "__start__";
-/** Special reserved node name denoting the end of a graph. */
-exports.END = "__end__";
 class Branch {
     constructor(options) {
         Object.defineProperty(this, "condition", {
@@ -88569,7 +88824,7 @@ class Branch {
         if (destinations.some((dest) => !dest)) {
             throw new Error("Branch condition returned unknown or null destination");
         }
-        if (destinations.filter(constants_js_1._isSend).some((packet) => packet.node === exports.END)) {
+        if (destinations.filter(constants_js_1._isSend).some((packet) => packet.node === constants_js_1.END)) {
             throw new errors_js_1.InvalidUpdateError("Cannot send a packet to the END node");
         }
         const writeResult = await writer(destinations, config);
@@ -88635,7 +88890,7 @@ class Graph {
         if (key in this.nodes) {
             throw new Error(`Node \`${key}\` already present.`);
         }
-        if (key === exports.END) {
+        if (key === constants_js_1.END) {
             throw new Error(`Node \`${key}\` is reserved.`);
         }
         const runnable = (0, runnables_1._coerceToRunnable)(
@@ -88651,10 +88906,10 @@ class Graph {
     }
     addEdge(startKey, endKey) {
         this.warnIfCompiled(`Adding an edge to a graph that has already been compiled. This will not be reflected in the compiled graph.`);
-        if (startKey === exports.END) {
+        if (startKey === constants_js_1.END) {
             throw new Error("END cannot be a start node");
         }
-        if (endKey === exports.START) {
+        if (endKey === constants_js_1.START) {
             throw new Error("START cannot be an end node");
         }
         if (Array.from(this.edges).some(([start]) => start === startKey) &&
@@ -88701,14 +88956,14 @@ class Graph {
      */
     setEntryPoint(key) {
         this.warnIfCompiled("Setting the entry point of a graph that has already been compiled. This will not be reflected in the compiled graph.");
-        return this.addEdge(exports.START, key);
+        return this.addEdge(constants_js_1.START, key);
     }
     /**
      * @deprecated use `addEdge(key, END)` instead
      */
     setFinishPoint(key) {
         this.warnIfCompiled("Setting a finish point of a graph that has already been compiled. This will not be reflected in the compiled graph.");
-        return this.addEdge(key, exports.END);
+        return this.addEdge(key, constants_js_1.END);
     }
     compile({ checkpointer, interruptBefore, interruptAfter, } = {}) {
         // validate the graph
@@ -88725,11 +88980,11 @@ class Graph {
             autoValidate: false,
             nodes: {},
             channels: {
-                [exports.START]: new ephemeral_value_js_1.EphemeralValue(),
-                [exports.END]: new ephemeral_value_js_1.EphemeralValue(),
+                [constants_js_1.START]: new ephemeral_value_js_1.EphemeralValue(),
+                [constants_js_1.END]: new ephemeral_value_js_1.EphemeralValue(),
             },
-            inputChannels: exports.START,
-            outputChannels: exports.END,
+            inputChannels: constants_js_1.START,
+            outputChannels: constants_js_1.END,
             streamChannels: [],
             streamMode: "values",
         });
@@ -88754,7 +89009,7 @@ class Graph {
             allSources.add(start);
         }
         for (const source of allSources) {
-            if (source !== exports.START && !(source in this.nodes)) {
+            if (source !== constants_js_1.START && !(source in this.nodes)) {
                 throw new Error(`Found edge starting at unknown node \`${source}\``);
             }
         }
@@ -88768,7 +89023,7 @@ class Graph {
                     }
                 }
                 else {
-                    allTargets.add(exports.END);
+                    allTargets.add(constants_js_1.END);
                     for (const node of Object.keys(this.nodes)) {
                         if (node !== start) {
                             allTargets.add(node);
@@ -88797,7 +89052,7 @@ class Graph {
             }
         }
         for (const target of allTargets) {
-            if (target !== exports.END && !(target in this.nodes)) {
+            if (target !== constants_js_1.END && !(target in this.nodes)) {
                 throw new Error(`Found edge ending at unknown node \`${target}\``);
             }
         }
@@ -88838,11 +89093,11 @@ class CompiledGraph extends index_js_1.Pregel {
         this.streamChannels.push(key);
     }
     attachEdge(start, end) {
-        if (end === exports.END) {
-            if (start === exports.START) {
+        if (end === constants_js_1.END) {
+            if (start === constants_js_1.START) {
                 throw new Error("Cannot have an edge from START to END");
             }
-            this.nodes[start].writers.push(new write_js_1.ChannelWrite([{ channel: exports.END, value: write_js_1.PASSTHROUGH }], [constants_js_1.TAG_HIDDEN]));
+            this.nodes[start].writers.push(new write_js_1.ChannelWrite([{ channel: constants_js_1.END, value: write_js_1.PASSTHROUGH }], [constants_js_1.TAG_HIDDEN]));
         }
         else {
             this.nodes[end].triggers.push(start);
@@ -88851,8 +89106,8 @@ class CompiledGraph extends index_js_1.Pregel {
     }
     attachBranch(start, name, branch) {
         // add hidden start node
-        if (start === exports.START && this.nodes[exports.START]) {
-            this.nodes[exports.START] = index_js_1.Channel.subscribeTo(exports.START, { tags: [constants_js_1.TAG_HIDDEN] });
+        if (start === constants_js_1.START && this.nodes[constants_js_1.START]) {
+            this.nodes[constants_js_1.START] = index_js_1.Channel.subscribeTo(constants_js_1.START, { tags: [constants_js_1.TAG_HIDDEN] });
         }
         // attach branch writer
         this.nodes[start].pipe(branch.run((dests) => {
@@ -88861,7 +89116,7 @@ class CompiledGraph extends index_js_1.Pregel {
                     return dest;
                 }
                 return {
-                    channel: dest === exports.END ? exports.END : `branch:${start}:${name}:${dest}`,
+                    channel: dest === constants_js_1.END ? constants_js_1.END : `branch:${start}:${name}:${dest}`,
                     value: write_js_1.PASSTHROUGH,
                 };
             });
@@ -88872,7 +89127,7 @@ class CompiledGraph extends index_js_1.Pregel {
             ? Object.values(branch.ends)
             : Object.keys(this.nodes);
         for (const end of ends) {
-            if (end !== exports.END) {
+            if (end !== constants_js_1.END) {
                 const channelName = `branch:${start}:${name}:${end}`;
                 this.channels[channelName] =
                     new ephemeral_value_js_1.EphemeralValue();
@@ -88888,9 +89143,9 @@ class CompiledGraph extends index_js_1.Pregel {
         const xray = config?.xray;
         const graph = new graph_1.Graph();
         const startNodes = {
-            [exports.START]: graph.addNode({
+            [constants_js_1.START]: graph.addNode({
                 schema: zod_1.z.any(),
-            }, exports.START),
+            }, constants_js_1.START),
         };
         const endNodes = {};
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88901,8 +89156,8 @@ class CompiledGraph extends index_js_1.Pregel {
             (x) => isCompiledGraph(x[1])));
         }
         function addEdge(start, end, label, conditional = false) {
-            if (end === exports.END && endNodes[exports.END] === undefined) {
-                endNodes[exports.END] = graph.addNode({ schema: zod_1.z.any() }, exports.END);
+            if (end === constants_js_1.END && endNodes[constants_js_1.END] === undefined) {
+                endNodes[constants_js_1.END] = graph.addNode({ schema: zod_1.z.any() }, constants_js_1.END);
             }
             return graph.addEdge(startNodes[start], endNodes[end], label !== end ? label : undefined, conditional);
         }
@@ -89012,7 +89267,7 @@ class CompiledGraph extends index_js_1.Pregel {
                 ...Object.fromEntries(Object.keys(this.builder.nodes)
                     .filter((k) => k !== start)
                     .map((k) => [_escapeMermaidKeywords(k), _escapeMermaidKeywords(k)])),
-                [exports.END]: exports.END,
+                [constants_js_1.END]: constants_js_1.END,
             };
             for (const branch of Object.values(branches)) {
                 let ends;
@@ -89045,9 +89300,9 @@ class CompiledGraph extends index_js_1.Pregel {
         const xray = config?.xray;
         const graph = new graph_1.Graph();
         const startNodes = {
-            [exports.START]: graph.addNode({
+            [constants_js_1.START]: graph.addNode({
                 schema: zod_1.z.any(),
-            }, exports.START),
+            }, constants_js_1.START),
         };
         const endNodes = {};
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89058,8 +89313,8 @@ class CompiledGraph extends index_js_1.Pregel {
             (x) => isCompiledGraph(x[1])));
         }
         function addEdge(start, end, label, conditional = false) {
-            if (end === exports.END && endNodes[exports.END] === undefined) {
-                endNodes[exports.END] = graph.addNode({ schema: zod_1.z.any() }, exports.END);
+            if (end === constants_js_1.END && endNodes[constants_js_1.END] === undefined) {
+                endNodes[constants_js_1.END] = graph.addNode({ schema: zod_1.z.any() }, constants_js_1.END);
             }
             return graph.addEdge(startNodes[start], endNodes[end], label !== end ? label : undefined, conditional);
         }
@@ -89169,7 +89424,7 @@ class CompiledGraph extends index_js_1.Pregel {
                 ...Object.fromEntries(Object.keys(this.builder.nodes)
                     .filter((k) => k !== start)
                     .map((k) => [_escapeMermaidKeywords(k), _escapeMermaidKeywords(k)])),
-                [exports.END]: exports.END,
+                [constants_js_1.END]: constants_js_1.END,
             };
             for (const branch of Object.values(branches)) {
                 let ends;
@@ -89212,13 +89467,11 @@ function _escapeMermaidKeywords(key) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.messagesStateReducer = exports.MessageGraph = exports.CompiledStateGraph = exports.StateGraph = exports.Graph = exports.START = exports.END = exports.AnnotationRoot = exports.Annotation = void 0;
+exports.messagesStateReducer = exports.MessageGraph = exports.CompiledStateGraph = exports.StateGraph = exports.Graph = exports.AnnotationRoot = exports.Annotation = void 0;
 var annotation_js_1 = __nccwpck_require__(75318);
 Object.defineProperty(exports, "Annotation", ({ enumerable: true, get: function () { return annotation_js_1.Annotation; } }));
 Object.defineProperty(exports, "AnnotationRoot", ({ enumerable: true, get: function () { return annotation_js_1.AnnotationRoot; } }));
 var graph_js_1 = __nccwpck_require__(70787);
-Object.defineProperty(exports, "END", ({ enumerable: true, get: function () { return graph_js_1.END; } }));
-Object.defineProperty(exports, "START", ({ enumerable: true, get: function () { return graph_js_1.START; } }));
 Object.defineProperty(exports, "Graph", ({ enumerable: true, get: function () { return graph_js_1.Graph; } }));
 var state_js_1 = __nccwpck_require__(8060);
 Object.defineProperty(exports, "StateGraph", ({ enumerable: true, get: function () { return state_js_1.StateGraph; } }));
@@ -89265,16 +89518,17 @@ function messagesStateReducer(left, right) {
         }
     }
     // merge
-    const leftIdxById = new Map(leftMessages.map((m, i) => [m.id, i]));
     const merged = [...leftMessages];
+    const mergedById = new Map(merged.map((m, i) => [m.id, i]));
     const idsToRemove = new Set();
     for (const m of rightMessages) {
-        const existingIdx = leftIdxById.get(m.id);
+        const existingIdx = mergedById.get(m.id);
         if (existingIdx !== undefined) {
             if (m._getType() === "remove") {
                 idsToRemove.add(m.id);
             }
             else {
+                idsToRemove.delete(m.id);
                 merged[existingIdx] = m;
             }
         }
@@ -89282,6 +89536,7 @@ function messagesStateReducer(left, right) {
             if (m._getType() === "remove") {
                 throw new Error(`Attempting to delete a message with an ID that doesn't exist ('${m.id}')`);
             }
+            mergedById.set(m.id, merged.length);
             merged.push(m);
         }
     }
@@ -89578,7 +89833,7 @@ class StateGraph extends graph_js_1.Graph {
         if (key in this.nodes) {
             throw new Error(`Node \`${key}\` already present.`);
         }
-        if (key === graph_js_1.END || key === graph_js_1.START) {
+        if (key === constants_js_1.END || key === constants_js_1.START) {
             throw new Error(`Node \`${key}\` is reserved.`);
         }
         if (options?.input !== undefined) {
@@ -89621,14 +89876,14 @@ class StateGraph extends graph_js_1.Graph {
                 "not be reflected in the compiled graph.");
         }
         for (const start of startKey) {
-            if (start === graph_js_1.END) {
+            if (start === constants_js_1.END) {
                 throw new Error("END cannot be a start node");
             }
             if (!Object.keys(this.nodes).some((node) => node === start)) {
                 throw new Error(`Need to add a node named "${start}" first`);
             }
         }
-        if (endKey === graph_js_1.END) {
+        if (endKey === constants_js_1.END) {
             throw new Error("END cannot be an end node");
         }
         if (!Object.keys(this.nodes).some((node) => node === endKey)) {
@@ -89658,20 +89913,20 @@ class StateGraph extends graph_js_1.Graph {
             nodes: {},
             channels: {
                 ...this.channels,
-                [graph_js_1.START]: new ephemeral_value_js_1.EphemeralValue(),
+                [constants_js_1.START]: new ephemeral_value_js_1.EphemeralValue(),
             },
-            inputChannels: graph_js_1.START,
+            inputChannels: constants_js_1.START,
             outputChannels,
             streamChannels,
             streamMode: "updates",
             store,
         });
         // attach nodes, edges and branches
-        compiled.attachNode(graph_js_1.START);
+        compiled.attachNode(constants_js_1.START);
         for (const [key, node] of Object.entries(this.nodes)) {
             compiled.attachNode(key, node);
         }
-        compiled.attachBranch(graph_js_1.START, constants_js_1.SELF, _getControlBranch(), {
+        compiled.attachBranch(constants_js_1.START, constants_js_1.SELF, _getControlBranch(), {
             withReader: false,
         });
         for (const [key] of Object.entries(this.nodes)) {
@@ -89715,7 +89970,7 @@ function _getChannels(schema) {
 class CompiledStateGraph extends graph_js_1.CompiledGraph {
     attachNode(key, node) {
         let outputKeys;
-        if (key === graph_js_1.START) {
+        if (key === constants_js_1.START) {
             // Get input schema keys excluding managed values
             outputKeys = Object.entries(this.builder._schemaDefinitions.get(this.builder._inputDefinition))
                 .filter(([_, v]) => !(0, base_js_2.isConfiguredManagedValue)(v))
@@ -89810,11 +90065,11 @@ class CompiledStateGraph extends graph_js_1.CompiledGraph {
             },
         ];
         // add node and output channel
-        if (key === graph_js_1.START) {
+        if (key === constants_js_1.START) {
             this.nodes[key] = new read_js_1.PregelNode({
                 tags: [constants_js_1.TAG_HIDDEN],
-                triggers: [graph_js_1.START],
-                channels: [graph_js_1.START],
+                triggers: [constants_js_1.START],
+                channels: [constants_js_1.START],
                 writers: [new write_js_1.ChannelWrite(stateWriteEntries, [constants_js_1.TAG_HIDDEN])],
             });
         }
@@ -89846,7 +90101,7 @@ class CompiledStateGraph extends graph_js_1.CompiledGraph {
         }
     }
     attachEdge(start, end) {
-        if (end === graph_js_1.END) {
+        if (end === constants_js_1.END) {
             return;
         }
         if (Array.isArray(start)) {
@@ -89861,15 +90116,15 @@ class CompiledStateGraph extends graph_js_1.CompiledGraph {
                 this.nodes[s].writers.push(new write_js_1.ChannelWrite([{ channel: channelName, value: s }], [constants_js_1.TAG_HIDDEN]));
             }
         }
-        else if (start === graph_js_1.START) {
-            const channelName = `${graph_js_1.START}:${end}`;
+        else if (start === constants_js_1.START) {
+            const channelName = `${constants_js_1.START}:${end}`;
             // register channel
             this.channels[channelName] =
                 new ephemeral_value_js_1.EphemeralValue();
             // subscribe to channel
             this.nodes[end].triggers.push(channelName);
             // publish to channel
-            this.nodes[graph_js_1.START].writers.push(new write_js_1.ChannelWrite([{ channel: channelName, value: graph_js_1.START }], [constants_js_1.TAG_HIDDEN]));
+            this.nodes[constants_js_1.START].writers.push(new write_js_1.ChannelWrite([{ channel: channelName, value: constants_js_1.START }], [constants_js_1.TAG_HIDDEN]));
         }
         else {
             this.nodes[end].triggers.push(start);
@@ -89877,7 +90132,7 @@ class CompiledStateGraph extends graph_js_1.CompiledGraph {
     }
     attachBranch(start, name, branch, options = { withReader: true }) {
         const branchWriter = async (packets, config) => {
-            const filteredPackets = packets.filter((p) => p !== graph_js_1.END);
+            const filteredPackets = packets.filter((p) => p !== constants_js_1.END);
             if (!filteredPackets.length) {
                 return;
             }
@@ -89903,7 +90158,7 @@ class CompiledStateGraph extends graph_js_1.CompiledGraph {
             ? Object.values(branch.ends)
             : Object.keys(this.builder.nodes);
         for (const end of ends) {
-            if (end === graph_js_1.END) {
+            if (end === constants_js_1.END) {
                 continue;
             }
             const channelName = `branch:${start}:${name}:${end}`;
@@ -90011,10 +90266,18 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getPreviousState = exports.getWriter = exports.getStore = exports.interrupt = void 0;
 const async_local_storage_js_1 = __nccwpck_require__(34490);
 // Initialize global async local storage instance for tracing
 (0, async_local_storage_js_1.initializeAsyncLocalStorageSingleton)();
 __exportStar(__nccwpck_require__(94184), exports);
+var interrupt_js_1 = __nccwpck_require__(77675);
+Object.defineProperty(exports, "interrupt", ({ enumerable: true, get: function () { return interrupt_js_1.interrupt; } }));
+var config_js_1 = __nccwpck_require__(56426);
+Object.defineProperty(exports, "getStore", ({ enumerable: true, get: function () { return config_js_1.getStore; } }));
+Object.defineProperty(exports, "getWriter", ({ enumerable: true, get: function () { return config_js_1.getWriter; } }));
+var index_js_1 = __nccwpck_require__(74881);
+Object.defineProperty(exports, "getPreviousState", ({ enumerable: true, get: function () { return index_js_1.getPreviousState; } }));
 
 
 /***/ }),
@@ -90068,50 +90331,37 @@ const constants_js_1 = __nccwpck_require__(94533);
  * @throws {Error} If called outside the context of a graph
  * @throws {GraphInterrupt} When no resume value is available
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function interrupt(value) {
     const config = singletons_1.AsyncLocalStorageProviderSingleton.getRunnableConfig();
     if (!config) {
         throw new Error("Called interrupt() outside the context of a graph.");
     }
+    const conf = config.configurable;
+    if (!conf) {
+        throw new Error("No configurable found in config");
+    }
     // Track interrupt index
-    const scratchpad = config.configurable?.[constants_js_1.CONFIG_KEY_SCRATCHPAD];
-    if (scratchpad.interruptCounter === undefined) {
-        scratchpad.interruptCounter = 0;
-    }
-    else {
-        scratchpad.interruptCounter += 1;
-    }
+    const scratchpad = conf[constants_js_1.CONFIG_KEY_SCRATCHPAD];
+    scratchpad.interruptCounter += 1;
     const idx = scratchpad.interruptCounter;
     // Find previous resume values
-    const taskId = config.configurable?.[constants_js_1.CONFIG_KEY_TASK_ID];
-    const writes = config.configurable?.[constants_js_1.CONFIG_KEY_WRITES] ?? [];
-    if (!scratchpad.resume) {
-        const newResume = (writes.find((w) => w[0] === taskId && w[1] === constants_js_1.RESUME)?.[2] || []);
-        scratchpad.resume = Array.isArray(newResume) ? newResume : [newResume];
-    }
-    if (scratchpad.resume) {
-        if (idx < scratchpad.resume.length) {
-            return scratchpad.resume[idx];
-        }
+    if (scratchpad.resume.length > 0 && idx < scratchpad.resume.length) {
+        return scratchpad.resume[idx];
     }
     // Find current resume value
-    if (!scratchpad.usedNullResume) {
-        scratchpad.usedNullResume = true;
-        const sortedWrites = [...writes].sort((a, b) => b[0].localeCompare(a[0]) // Sort in reverse order
-        );
-        for (const [tid, c, v] of sortedWrites) {
-            if (tid === constants_js_1.NULL_TASK_ID && c === constants_js_1.RESUME) {
-                if (scratchpad.resume.length !== idx) {
-                    throw new Error(`Resume length mismatch: ${scratchpad.resume.length} !== ${idx}`);
-                }
-                scratchpad.resume.push(v);
-                const send = config.configurable?.[constants_js_1.CONFIG_KEY_SEND];
-                if (send) {
-                    send([[constants_js_1.RESUME, scratchpad.resume]]);
-                }
-                return v;
-            }
+    if (scratchpad.nullResume !== undefined) {
+        if (scratchpad.resume.length !== idx) {
+            throw new Error(`Resume length mismatch: ${scratchpad.resume.length} !== ${idx}`);
         }
+        const v = scratchpad.nullResume;
+        delete scratchpad.nullResume;
+        scratchpad.resume.push(v);
+        const send = conf[constants_js_1.CONFIG_KEY_SEND];
+        if (send) {
+            send([[constants_js_1.RESUME, scratchpad.resume]]);
+        }
+        return v;
     }
     // No resume value found
     throw new errors_js_1.GraphInterrupt([
@@ -90119,7 +90369,7 @@ function interrupt(value) {
             value,
             when: "during",
             resumable: true,
-            ns: config.configurable?.[constants_js_1.CONFIG_KEY_CHECKPOINT_NS]?.split(constants_js_1.CHECKPOINT_NAMESPACE_SEPARATOR),
+            ns: conf[constants_js_1.CONFIG_KEY_CHECKPOINT_NS]?.split(constants_js_1.CHECKPOINT_NAMESPACE_SEPARATOR),
         },
     ]);
 }
@@ -90486,7 +90736,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createAgentExecutor = void 0;
 const tool_executor_js_1 = __nccwpck_require__(23988);
 const state_js_1 = __nccwpck_require__(8060);
-const index_js_1 = __nccwpck_require__(25467);
+const constants_js_1 = __nccwpck_require__(94533);
 /** @ignore */
 function createAgentExecutor({ agentRunnable, tools, }) {
     let toolExecutor;
@@ -90537,7 +90787,7 @@ function createAgentExecutor({ agentRunnable, tools, }) {
         .addNode("action", executeTools)
         // Set the entrypoint as `agent`
         // This means that this node is the first one called
-        .addEdge(index_js_1.START, "agent")
+        .addEdge(constants_js_1.START, "agent")
         // We now add a conditional edge
         .addConditionalEdges(
     // First, we define the start node. We use `agent`.
@@ -90555,7 +90805,7 @@ function createAgentExecutor({ agentRunnable, tools, }) {
         // If `tools`, then we call the tool node.
         continue: "action",
         // Otherwise we finish.
-        end: index_js_1.END,
+        end: constants_js_1.END,
     })
         // We now add a normal edge from `tools` to `agent`.
         // This means that after `tools` is called, `agent` node is called next.
@@ -90579,7 +90829,7 @@ const messages_1 = __nccwpck_require__(62776);
 const runnables_1 = __nccwpck_require__(59950);
 const tool_executor_js_1 = __nccwpck_require__(23988);
 const state_js_1 = __nccwpck_require__(8060);
-const index_js_1 = __nccwpck_require__(25467);
+const constants_js_1 = __nccwpck_require__(94533);
 /** @deprecated Use {@link createReactAgent} instead with tool calling. */
 function createFunctionCallingExecutor({ model, tools, }) {
     let toolExecutor;
@@ -90672,7 +90922,7 @@ function createFunctionCallingExecutor({ model, tools, }) {
         .addNode("action", new runnables_1.RunnableLambda({ func: callTool }))
         // Set the entrypoint as `agent`
         // This means that this node is the first one called
-        .addEdge(index_js_1.START, "agent")
+        .addEdge(constants_js_1.START, "agent")
         // We now add a conditional edge
         .addConditionalEdges(
     // First, we define the start node. We use `agent`.
@@ -90690,7 +90940,7 @@ function createFunctionCallingExecutor({ model, tools, }) {
         // If `tools`, then we call the tool node.
         continue: "action",
         // Otherwise we finish.
-        end: index_js_1.END,
+        end: constants_js_1.END,
     })
         // We now add a normal edge from `tools` to `agent`.
         // This means that after `tools` is called, `agent` node is called next.
@@ -90733,12 +90983,14 @@ Object.defineProperty(exports, "toolsCondition", ({ enumerable: true, get: funct
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.createReactAgent = void 0;
+exports.createReactAgent = exports.createReactAgentAnnotation = void 0;
 const messages_1 = __nccwpck_require__(62776);
 const runnables_1 = __nccwpck_require__(59950);
 const index_js_1 = __nccwpck_require__(25467);
-const messages_annotation_js_1 = __nccwpck_require__(18875);
 const tool_node_js_1 = __nccwpck_require__(5311);
+const annotation_js_1 = __nccwpck_require__(75318);
+const message_js_1 = __nccwpck_require__(11886);
+const constants_js_1 = __nccwpck_require__(94533);
 function _convertMessageModifierToStateModifier(messageModifier) {
     // Handle string or SystemMessage
     if (typeof messageModifier === "string" ||
@@ -90798,6 +91050,14 @@ function _getModelPreprocessingRunnable(stateModifier, messageModifier) {
     }
     return _getStateModifierRunnable(stateModifier);
 }
+const createReactAgentAnnotation = () => annotation_js_1.Annotation.Root({
+    messages: (0, annotation_js_1.Annotation)({
+        reducer: message_js_1.messagesStateReducer,
+        default: () => [],
+    }),
+    structuredResponse: (annotation_js_1.Annotation),
+});
+exports.createReactAgentAnnotation = createReactAgentAnnotation;
 /**
  * Creates a StateGraph agent that relies on a chat model utilizing tool calling.
  *
@@ -90841,7 +91101,7 @@ function _getModelPreprocessingRunnable(stateModifier, messageModifier) {
  * ```
  */
 function createReactAgent(params) {
-    const { llm, tools, messageModifier, stateModifier, stateSchema, checkpointSaver, interruptBefore, interruptAfter, store, } = params;
+    const { llm, tools, messageModifier, stateModifier, stateSchema, checkpointSaver, checkpointer, interruptBefore, interruptAfter, store, responseFormat, } = params;
     let toolClasses;
     if (!Array.isArray(tools)) {
         toolClasses = tools.tools;
@@ -90856,32 +91116,89 @@ function createReactAgent(params) {
     // we're passing store here for validation
     const preprocessor = _getModelPreprocessingRunnable(stateModifier, messageModifier);
     const modelRunnable = preprocessor.pipe(modelWithTools);
+    // If any of the tools are configured to return_directly after running,
+    // our graph needs to check if these were called
+    const shouldReturnDirect = new Set(toolClasses
+        .filter((tool) => "returnDirect" in tool && tool.returnDirect)
+        .map((tool) => tool.name));
     const shouldContinue = (state) => {
         const { messages } = state;
         const lastMessage = messages[messages.length - 1];
         if ((0, messages_1.isAIMessage)(lastMessage) &&
             (!lastMessage.tool_calls || lastMessage.tool_calls.length === 0)) {
-            return index_js_1.END;
+            return responseFormat != null ? "generate_structured_response" : constants_js_1.END;
         }
         else {
             return "continue";
         }
     };
+    const generateStructuredResponse = async (state, config) => {
+        if (responseFormat == null) {
+            throw new Error("Attempted to generate structured output with no passed response schema. Please contact us for help.");
+        }
+        // Exclude the last message as there's enough information
+        // for the LLM to generate the structured response
+        const messages = state.messages.slice(0, -1);
+        let modelWithStructuredOutput;
+        if (typeof responseFormat === "object" &&
+            "prompt" in responseFormat &&
+            "schema" in responseFormat) {
+            const { prompt, schema } = responseFormat;
+            modelWithStructuredOutput = llm.withStructuredOutput(schema);
+            messages.unshift(new messages_1.SystemMessage({ content: prompt }));
+        }
+        else {
+            modelWithStructuredOutput = llm.withStructuredOutput(responseFormat);
+        }
+        const response = await modelWithStructuredOutput.invoke(messages, config);
+        return { structuredResponse: response };
+    };
     const callModel = async (state, config) => {
         // TODO: Auto-promote streaming.
         return { messages: [await modelRunnable.invoke(state, config)] };
     };
-    const workflow = new index_js_1.StateGraph(stateSchema ?? messages_annotation_js_1.MessagesAnnotation)
+    const workflow = new index_js_1.StateGraph(stateSchema ?? (0, exports.createReactAgentAnnotation)())
         .addNode("agent", callModel)
         .addNode("tools", new tool_node_js_1.ToolNode(toolClasses))
-        .addEdge(index_js_1.START, "agent")
-        .addConditionalEdges("agent", shouldContinue, {
-        continue: "tools",
-        [index_js_1.END]: index_js_1.END,
-    })
-        .addEdge("tools", "agent");
+        .addEdge(constants_js_1.START, "agent");
+    if (responseFormat !== undefined) {
+        workflow
+            .addNode("generate_structured_response", generateStructuredResponse)
+            .addEdge("generate_structured_response", constants_js_1.END)
+            .addConditionalEdges("agent", shouldContinue, {
+            continue: "tools",
+            [constants_js_1.END]: constants_js_1.END,
+            generate_structured_response: "generate_structured_response",
+        });
+    }
+    else {
+        workflow.addConditionalEdges("agent", shouldContinue, {
+            continue: "tools",
+            [constants_js_1.END]: constants_js_1.END,
+        });
+    }
+    const routeToolResponses = (state) => {
+        // Check the last consecutive tool calls
+        for (let i = state.messages.length - 1; i >= 0; i -= 1) {
+            const message = state.messages[i];
+            if (!(0, messages_1.isToolMessage)(message)) {
+                break;
+            }
+            // Check if this tool is configured to return directly
+            if (message.name !== undefined && shouldReturnDirect.has(message.name)) {
+                return constants_js_1.END;
+            }
+        }
+        return "agent";
+    };
+    if (shouldReturnDirect.size > 0) {
+        workflow.addConditionalEdges("tools", routeToolResponses, ["agent", constants_js_1.END]);
+    }
+    else {
+        workflow.addEdge("tools", "agent");
+    }
     return workflow.compile({
-        checkpointer: checkpointSaver,
+        checkpointer: checkpointer ?? checkpointSaver,
         interruptBefore,
         interruptAfter,
         store,
@@ -90978,7 +91295,6 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.toolsCondition = exports.ToolNode = void 0;
 const messages_1 = __nccwpck_require__(62776);
 const utils_js_1 = __nccwpck_require__(63457);
-const graph_js_1 = __nccwpck_require__(70787);
 const errors_js_1 = __nccwpck_require__(90491);
 const constants_js_1 = __nccwpck_require__(94533);
 /**
@@ -91193,7 +91509,7 @@ function toolsCondition(state) {
         return "tools";
     }
     else {
-        return graph_js_1.END;
+        return constants_js_1.END;
     }
 }
 exports.toolsCondition = toolsCondition;
@@ -91214,8 +91530,10 @@ const langgraph_checkpoint_1 = __nccwpck_require__(11026);
 const base_js_1 = __nccwpck_require__(7034);
 const io_js_1 = __nccwpck_require__(84614);
 const constants_js_1 = __nccwpck_require__(94533);
+const types_js_1 = __nccwpck_require__(98505);
 const errors_js_1 = __nccwpck_require__(90491);
 const index_js_1 = __nccwpck_require__(69804);
+const call_js_1 = __nccwpck_require__(60978);
 const increment = (current) => {
     return current !== undefined ? current + 1 : 1;
 };
@@ -91286,7 +91604,7 @@ commit, processes, managed,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 writes) {
     for (const [chan, value] of writes) {
-        if (chan === constants_js_1.TASKS) {
+        if (chan === constants_js_1.TASKS && value != null) {
             if (!(0, constants_js_1._isSend)(value)) {
                 throw new errors_js_1.InvalidUpdateError(`Invalid packet type, expected SendProtocol, got ${JSON.stringify(value)}`);
             }
@@ -91300,7 +91618,14 @@ writes) {
     commit(writes);
 }
 exports._localWrite = _localWrite;
-const IGNORE = new Set([constants_js_1.PUSH, constants_js_1.RESUME, constants_js_1.INTERRUPT]);
+const IGNORE = new Set([
+    constants_js_1.NO_WRITES,
+    constants_js_1.PUSH,
+    constants_js_1.RESUME,
+    constants_js_1.INTERRUPT,
+    constants_js_1.RETURN,
+    constants_js_1.ERROR,
+]);
 function _applyWrites(checkpoint, channels, tasks, 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 getNextVersion) {
@@ -91467,7 +91792,84 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
     const { step, checkpointer, manager } = extra;
     const configurable = config.configurable ?? {};
     const parentNamespace = configurable.checkpoint_ns ?? "";
-    if (taskPath[0] === constants_js_1.PUSH) {
+    if (taskPath[0] === constants_js_1.PUSH && (0, types_js_1.isCall)(taskPath[taskPath.length - 1])) {
+        const call = taskPath[taskPath.length - 1];
+        const proc = (0, call_js_1.getRunnableForFunc)(call.name, call.func);
+        const triggers = [constants_js_1.PUSH];
+        const checkpointNamespace = parentNamespace === ""
+            ? call.name
+            : `${parentNamespace}${constants_js_1.CHECKPOINT_NAMESPACE_SEPARATOR}${call.name}`;
+        const id = (0, langgraph_checkpoint_1.uuid5)(JSON.stringify([
+            checkpointNamespace,
+            step.toString(),
+            call.name,
+            constants_js_1.PUSH,
+            taskPath[1],
+            taskPath[2],
+        ]), checkpoint.id);
+        const taskCheckpointNamespace = `${checkpointNamespace}${constants_js_1.CHECKPOINT_NAMESPACE_END}${id}`;
+        const metadata = {
+            langgraph_step: step,
+            langgraph_node: call.name,
+            langgraph_triggers: triggers,
+            langgraph_path: taskPath.slice(0, 3),
+            langgraph_checkpoint_ns: taskCheckpointNamespace,
+        };
+        if (forExecution) {
+            const writes = [];
+            const task = {
+                name: call.name,
+                input: call.input,
+                proc,
+                writes,
+                config: (0, runnables_1.patchConfig)((0, runnables_1.mergeConfigs)(config, {
+                    metadata,
+                    store: extra.store ?? config.store,
+                }), {
+                    runName: call.name,
+                    callbacks: manager?.getChild(`graph:step:${step}`),
+                    configurable: {
+                        [constants_js_1.CONFIG_KEY_TASK_ID]: id,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        [constants_js_1.CONFIG_KEY_SEND]: (writes_) => _localWrite(step, (items) => writes.push(...items), processes, managed, writes_),
+                        [constants_js_1.CONFIG_KEY_READ]: (select_, fresh_ = false) => _localRead(step, checkpoint, channels, managed, {
+                            name: call.name,
+                            writes: writes,
+                            triggers,
+                            path: taskPath.slice(0, 3),
+                        }, select_, fresh_),
+                        [constants_js_1.CONFIG_KEY_CHECKPOINTER]: checkpointer ?? configurable[constants_js_1.CONFIG_KEY_CHECKPOINTER],
+                        [constants_js_1.CONFIG_KEY_CHECKPOINT_MAP]: {
+                            ...configurable[constants_js_1.CONFIG_KEY_CHECKPOINT_MAP],
+                            [parentNamespace]: checkpoint.id,
+                        },
+                        [constants_js_1.CONFIG_KEY_SCRATCHPAD]: _scratchpad([
+                            ...(pendingWrites || []),
+                            ...(configurable[constants_js_1.CONFIG_KEY_SCRATCHPAD]?.resume || []).map((v) => [id, constants_js_1.RESUME, v]),
+                        ], id),
+                        [constants_js_1.CONFIG_KEY_PREVIOUS_STATE]: checkpoint.channel_values[constants_js_1.PREVIOUS],
+                        checkpoint_id: undefined,
+                        checkpoint_ns: taskCheckpointNamespace,
+                    },
+                }),
+                triggers,
+                retry_policy: call.retry,
+                id,
+                path: taskPath.slice(0, 3),
+                writers: [],
+            };
+            return task;
+        }
+        else {
+            return {
+                id,
+                name: call.name,
+                interrupts: [],
+                path: taskPath.slice(0, 3),
+            };
+        }
+    }
+    else if (taskPath[0] === constants_js_1.PUSH) {
         const index = typeof taskPath[1] === "number"
             ? taskPath[1]
             : parseInt(taskPath[1], 10);
@@ -91539,11 +91941,15 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
                                 ...configurable[constants_js_1.CONFIG_KEY_CHECKPOINT_MAP],
                                 [parentNamespace]: checkpoint.id,
                             },
-                            [constants_js_1.CONFIG_KEY_WRITES]: [
+                            [constants_js_1.CONFIG_KEY_SCRATCHPAD]: _scratchpad([
                                 ...(pendingWrites || []),
-                                ...(configurable[constants_js_1.CONFIG_KEY_WRITES] || []),
-                            ].filter((w) => w[0] === constants_js_1.NULL_TASK_ID || w[0] === taskId),
-                            [constants_js_1.CONFIG_KEY_SCRATCHPAD]: {},
+                                ...(configurable[constants_js_1.CONFIG_KEY_SCRATCHPAD]?.resume || []).map((v) => [
+                                    taskId,
+                                    constants_js_1.RESUME,
+                                    v,
+                                ]),
+                            ], taskId),
+                            [constants_js_1.CONFIG_KEY_PREVIOUS_STATE]: checkpoint.channel_values[constants_js_1.PREVIOUS],
                             checkpoint_id: undefined,
                             checkpoint_ns: taskCheckpointNamespace,
                         },
@@ -91557,7 +91963,12 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
             }
         }
         else {
-            return { id: taskId, name: packet.node, interrupts: [], path: taskPath };
+            return {
+                id: taskId,
+                name: packet.node,
+                interrupts: [],
+                path: taskPath,
+            };
         }
     }
     else if (taskPath[0] === constants_js_1.PULL) {
@@ -91645,11 +92056,15 @@ function _prepareSingleTask(taskPath, checkpoint, pendingWrites, processes, chan
                                     ...configurable[constants_js_1.CONFIG_KEY_CHECKPOINT_MAP],
                                     [parentNamespace]: checkpoint.id,
                                 },
-                                [constants_js_1.CONFIG_KEY_WRITES]: [
+                                [constants_js_1.CONFIG_KEY_SCRATCHPAD]: _scratchpad([
                                     ...(pendingWrites || []),
-                                    ...(configurable[constants_js_1.CONFIG_KEY_WRITES] || []),
-                                ].filter((w) => w[0] === constants_js_1.NULL_TASK_ID || w[0] === taskId),
-                                [constants_js_1.CONFIG_KEY_SCRATCHPAD]: {},
+                                    ...(configurable[constants_js_1.CONFIG_KEY_SCRATCHPAD]?.resume || []).map((v) => [
+                                        taskId,
+                                        constants_js_1.RESUME,
+                                        v,
+                                    ]),
+                                ], taskId),
+                                [constants_js_1.CONFIG_KEY_PREVIOUS_STATE]: checkpoint.channel_values[constants_js_1.PREVIOUS],
                                 checkpoint_id: undefined,
                                 checkpoint_ns: taskCheckpointNamespace,
                             },
@@ -91740,6 +92155,101 @@ function _procInput(step, proc, managed, channels, forExecution) {
     }
     return val;
 }
+function _scratchpad(pendingWrites, taskId) {
+    return {
+        callCounter: 0,
+        interruptCounter: -1,
+        resume: pendingWrites
+            .filter(([writeTaskId, chan]) => writeTaskId === taskId && chan === constants_js_1.RESUME)
+            .flatMap(([_writeTaskId, _chan, resume]) => resume),
+        nullResume: pendingWrites.find(([writeTaskId, chan]) => writeTaskId === constants_js_1.NULL_TASK_ID && chan === constants_js_1.RESUME)?.[2],
+    };
+}
+
+
+/***/ }),
+
+/***/ 60978:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.call = exports.getRunnableForEntrypoint = exports.getRunnableForFunc = void 0;
+const runnables_1 = __nccwpck_require__(59950);
+const singletons_1 = __nccwpck_require__(85734);
+const constants_js_1 = __nccwpck_require__(94533);
+const write_js_1 = __nccwpck_require__(32791);
+const utils_js_1 = __nccwpck_require__(63457);
+const types_js_1 = __nccwpck_require__(82742);
+/**
+ * Wraps a user function in a Runnable that writes the returned value to the RETURN channel.
+ */
+function getRunnableForFunc(name, func) {
+    const run = new utils_js_1.RunnableCallable({
+        func: (input) => func(...input),
+        name,
+        trace: false,
+        recurse: false,
+    });
+    return new runnables_1.RunnableSequence({
+        name,
+        first: run,
+        last: new write_js_1.ChannelWrite([{ channel: constants_js_1.RETURN, value: write_js_1.PASSTHROUGH }], [constants_js_1.TAG_HIDDEN]),
+    });
+}
+exports.getRunnableForFunc = getRunnableForFunc;
+function getRunnableForEntrypoint(name, func) {
+    const run = new utils_js_1.RunnableCallable({
+        func: (input, config) => {
+            return func(input, config);
+        },
+        name,
+        trace: false,
+        recurse: false,
+    });
+    return new runnables_1.RunnableSequence({
+        name,
+        first: run,
+        middle: [
+            new write_js_1.ChannelWrite([
+                {
+                    channel: constants_js_1.END,
+                    value: write_js_1.PASSTHROUGH,
+                    mapper: new utils_js_1.RunnableCallable({
+                        func: (value) => ((0, types_js_1.isEntrypointFinal)(value) ? value.value : value),
+                    }),
+                },
+            ], [constants_js_1.TAG_HIDDEN]),
+            new write_js_1.ChannelWrite([
+                {
+                    channel: constants_js_1.PREVIOUS,
+                    value: write_js_1.PASSTHROUGH,
+                    mapper: new utils_js_1.RunnableCallable({
+                        func: (value) => {
+                            return (0, types_js_1.isEntrypointFinal)(value) ? value.save : value;
+                        },
+                    }),
+                },
+            ]),
+        ],
+        last: new utils_js_1.RunnableCallable({
+            func: (final) => (0, types_js_1.isEntrypointFinal)(final) ? final.value : final,
+        }),
+    });
+}
+exports.getRunnableForEntrypoint = getRunnableForEntrypoint;
+function call({ func, name, retry }, ...args) {
+    const config = singletons_1.AsyncLocalStorageProviderSingleton.getRunnableConfig();
+    if (typeof config.configurable?.[constants_js_1.CONFIG_KEY_CALL] === "function") {
+        return config.configurable[constants_js_1.CONFIG_KEY_CALL](func, name, args, {
+            retry,
+            callbacks: config.callbacks,
+        });
+    }
+    throw new Error("Async local storage not initialized. Please call initializeAsyncLocalStorageSingleton() before using this function.");
+}
+exports.call = call;
 
 
 /***/ }),
@@ -92000,11 +92510,12 @@ const algo_js_1 = __nccwpck_require__(63823);
 const index_js_1 = __nccwpck_require__(69804);
 const subgraph_js_1 = __nccwpck_require__(70150);
 const loop_js_1 = __nccwpck_require__(2528);
-const retry_js_1 = __nccwpck_require__(73552);
 const base_js_2 = __nccwpck_require__(16739);
 const utils_js_1 = __nccwpck_require__(63457);
 const config_js_1 = __nccwpck_require__(56426);
 const messages_js_1 = __nccwpck_require__(2698);
+const runner_js_1 = __nccwpck_require__(50556);
+const stream_js_1 = __nccwpck_require__(66374);
 function isString(value) {
     return typeof value === "string";
 }
@@ -92808,92 +93319,6 @@ class Pregel extends runnables_1.Runnable {
             managed,
         };
     }
-    async _runLoop(params) {
-        const { loop, interruptAfter, interruptBefore, runManager, debug, config } = params;
-        let tickError;
-        try {
-            while (await loop.tick({
-                inputKeys: this.inputChannels,
-                interruptAfter,
-                interruptBefore,
-                manager: runManager,
-            })) {
-                if (debug) {
-                    (0, debug_js_1.printStepCheckpoint)(loop.checkpointMetadata.step, loop.channels, this.streamChannelsList);
-                }
-                if (debug) {
-                    (0, debug_js_1.printStepTasks)(loop.step, Object.values(loop.tasks));
-                }
-                // execute tasks, and wait for one to fail or all to finish.
-                // each task is independent from all other concurrent tasks
-                // yield updates/debug output as each task finishes
-                const taskStream = (0, retry_js_1.executeTasksWithRetry)(Object.values(loop.tasks).filter((task) => task.writes.length === 0), {
-                    stepTimeout: this.stepTimeout,
-                    signal: config.signal,
-                    retryPolicy: this.retryPolicy,
-                });
-                let graphInterrupt;
-                for await (const { task, error } of taskStream) {
-                    if (error !== undefined) {
-                        if ((0, errors_js_1.isGraphBubbleUp)(error)) {
-                            if (loop.isNested) {
-                                throw error;
-                            }
-                            if ((0, errors_js_1.isGraphInterrupt)(error)) {
-                                graphInterrupt = error;
-                                if (error.interrupts.length) {
-                                    const interrupts = error.interrupts.map((interrupt) => [constants_js_1.INTERRUPT, interrupt]);
-                                    const resumes = task.writes.filter((w) => w[0] === constants_js_1.RESUME);
-                                    if (resumes.length) {
-                                        interrupts.push(...resumes);
-                                    }
-                                    loop.putWrites(task.id, interrupts);
-                                }
-                            }
-                        }
-                        else {
-                            loop.putWrites(task.id, [
-                                [constants_js_1.ERROR, { message: error.message, name: error.name }],
-                            ]);
-                            throw error;
-                        }
-                    }
-                    else {
-                        loop.putWrites(task.id, task.writes);
-                    }
-                }
-                if (debug) {
-                    (0, debug_js_1.printStepWrites)(loop.step, Object.values(loop.tasks)
-                        .map((task) => task.writes)
-                        .flat(), this.streamChannelsList);
-                }
-                if (graphInterrupt !== undefined) {
-                    throw graphInterrupt;
-                }
-            }
-            if (loop.status === "out_of_steps") {
-                throw new errors_js_1.GraphRecursionError([
-                    `Recursion limit of ${config.recursionLimit} reached`,
-                    "without hitting a stop condition. You can increase the",
-                    `limit by setting the "recursionLimit" config key.`,
-                ].join(" "), {
-                    lc_error_code: "GRAPH_RECURSION_LIMIT",
-                });
-            }
-        }
-        catch (e) {
-            tickError = e;
-            const suppress = await loop.finishAndHandleError(tickError);
-            if (!suppress) {
-                throw e;
-            }
-        }
-        finally {
-            if (tickError === undefined) {
-                await loop.finishAndHandleError();
-            }
-        }
-    }
     async *_streamIterator(input, options) {
         const streamSubgraphs = options?.subgraphs;
         const inputConfig = (0, config_js_1.ensureLangGraphConfig)(this.config, options);
@@ -92909,7 +93334,7 @@ class Pregel extends runnables_1.Runnable {
         const { runId, ...restConfig } = inputConfig;
         // assign defaults
         const [debug, streamMode, , outputKeys, config, interruptBefore, interruptAfter, checkpointer, store, streamModeSingle,] = this._defaults(restConfig);
-        const stream = new loop_js_1.IterableReadableWritableStream({
+        const stream = new stream_js_1.IterableReadableWritableStream({
             modes: new Set(streamMode),
         });
         // set up messages stream mode
@@ -92958,6 +93383,14 @@ class Pregel extends runnables_1.Runnable {
                     streamKeys: this.streamChannelsAsIs,
                     store,
                     stream,
+                    interruptAfter,
+                    interruptBefore,
+                    manager: runManager,
+                    debug: this.debug,
+                });
+                const runner = new runner_js_1.PregelRunner({
+                    loop,
+                    nodeFinished: config.configurable?.nodeFinished,
                 });
                 if (options?.subgraphs) {
                     loop.config.configurable = {
@@ -92965,14 +93398,7 @@ class Pregel extends runnables_1.Runnable {
                         [constants_js_1.CONFIG_KEY_STREAM]: loop.stream,
                     };
                 }
-                await this._runLoop({
-                    loop,
-                    interruptAfter,
-                    interruptBefore,
-                    runManager,
-                    debug,
-                    config,
-                });
+                await this._runLoop({ loop, runner, debug, config });
             }
             catch (e) {
                 loopError = e;
@@ -93069,6 +93495,53 @@ class Pregel extends runnables_1.Runnable {
             return chunks[chunks.length - 1];
         }
         return chunks;
+    }
+    async _runLoop(params) {
+        const { loop, runner, debug, config } = params;
+        let tickError;
+        try {
+            while (await loop.tick({
+                inputKeys: this.inputChannels,
+            })) {
+                if (debug) {
+                    (0, debug_js_1.printStepCheckpoint)(loop.checkpointMetadata.step, loop.channels, this.streamChannelsList);
+                }
+                if (debug) {
+                    (0, debug_js_1.printStepTasks)(loop.step, Object.values(loop.tasks));
+                }
+                await runner.tick({
+                    timeout: this.stepTimeout,
+                    retryPolicy: this.retryPolicy,
+                    onStepWrite: (step, writes) => {
+                        if (debug) {
+                            (0, debug_js_1.printStepWrites)(step, writes, this.streamChannelsList);
+                        }
+                    },
+                    signal: config.signal,
+                });
+            }
+            if (loop.status === "out_of_steps") {
+                throw new errors_js_1.GraphRecursionError([
+                    `Recursion limit of ${config.recursionLimit} reached`,
+                    "without hitting a stop condition. You can increase the",
+                    `limit by setting the "recursionLimit" config key.`,
+                ].join(" "), {
+                    lc_error_code: "GRAPH_RECURSION_LIMIT",
+                });
+            }
+        }
+        catch (e) {
+            tickError = e;
+            const suppress = await loop.finishAndHandleError(tickError);
+            if (!suppress) {
+                throw e;
+            }
+        }
+        finally {
+            if (tickError === undefined) {
+                await loop.finishAndHandleError();
+            }
+        }
     }
 }
 exports.Pregel = Pregel;
@@ -93176,8 +93649,15 @@ function* mapCommand(cmd, pendingWrites) {
         if (typeof cmd.update !== "object" || !cmd.update) {
             throw new Error("Expected cmd.update to be a dict mapping channel names to update values");
         }
-        for (const [k, v] of Object.entries(cmd.update)) {
-            yield [constants_js_1.NULL_TASK_ID, k, v];
+        if (Array.isArray(cmd.update)) {
+            for (const [k, v] of cmd.update) {
+                yield [constants_js_1.NULL_TASK_ID, k, v];
+            }
+        }
+        else {
+            for (const [k, v] of Object.entries(cmd.update)) {
+                yield [constants_js_1.NULL_TASK_ID, k, v];
+            }
         }
     }
 }
@@ -93246,7 +93726,12 @@ function* mapOutputUpdates(outputChannels, tasks, cached
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let updated;
-    if (!Array.isArray(outputChannels)) {
+    if (outputTasks.some(([task]) => task.writes.some(([chan, _]) => chan === constants_js_1.RETURN))) {
+        updated = outputTasks.flatMap(([task]) => task.writes
+            .filter(([chan, _]) => chan === constants_js_1.RETURN)
+            .map(([_, value]) => [task.name, value]));
+    }
+    else if (!Array.isArray(outputChannels)) {
         updated = outputTasks.flatMap(([task]) => task.writes
             .filter(([chan, _]) => chan === outputChannels)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93300,8 +93785,7 @@ exports.single = single;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.PregelLoop = exports.IterableReadableWritableStream = void 0;
-const stream_1 = __nccwpck_require__(56998);
+exports.PregelLoop = void 0;
 const langgraph_checkpoint_1 = __nccwpck_require__(11026);
 const base_js_1 = __nccwpck_require__(7034);
 const constants_js_1 = __nccwpck_require__(94533);
@@ -93311,66 +93795,12 @@ const io_js_1 = __nccwpck_require__(84614);
 const errors_js_1 = __nccwpck_require__(90491);
 const index_js_1 = __nccwpck_require__(69804);
 const debug_js_1 = __nccwpck_require__(97727);
+const stream_js_1 = __nccwpck_require__(66374);
 const INPUT_DONE = Symbol.for("INPUT_DONE");
 const INPUT_RESUMING = Symbol.for("INPUT_RESUMING");
 const DEFAULT_LOOP_LIMIT = 25;
-class IterableReadableWritableStream extends stream_1.IterableReadableStream {
-    constructor(params) {
-        let streamControllerPromiseResolver;
-        const streamControllerPromise = new Promise((resolve) => {
-            streamControllerPromiseResolver = resolve;
-        });
-        super({
-            start: (controller) => {
-                streamControllerPromiseResolver(controller);
-            },
-        });
-        Object.defineProperty(this, "modes", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "controller", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "passthroughFn", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        // .start() will always be called before the stream can be interacted
-        // with anyway
-        void streamControllerPromise.then((controller) => {
-            this.controller = controller;
-        });
-        this.passthroughFn = params.passthroughFn;
-        this.modes = params.modes;
-    }
-    push(chunk) {
-        this.passthroughFn?.(chunk);
-        this.controller.enqueue(chunk);
-    }
-    close() {
-        try {
-            this.controller.close();
-        }
-        catch (e) {
-            // pass
-        }
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    error(e) {
-        this.controller.error(e);
-    }
-}
-exports.IterableReadableWritableStream = IterableReadableWritableStream;
 function createDuplexStream(...streams) {
-    return new IterableReadableWritableStream({
+    return new stream_js_1.IterableReadableWritableStream({
         passthroughFn: (value) => {
             for (const stream of streams) {
                 if (stream.modes.has(value[1])) {
@@ -93549,6 +93979,36 @@ class PregelLoop {
             writable: true,
             value: void 0
         });
+        Object.defineProperty(this, "manager", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "interruptAfter", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "interruptBefore", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "toInterrupt", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: []
+        });
+        Object.defineProperty(this, "debug", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: false
+        });
         this.input = params.input;
         this.checkpointer = params.checkpointer;
         // TODO: if managed values no longer needs graph we can replace with
@@ -93570,6 +94030,7 @@ class PregelLoop {
         this.config = params.config;
         this.checkpointConfig = params.checkpointConfig;
         this.isNested = params.isNested;
+        this.manager = params.manager;
         this.outputKeys = params.outputKeys;
         this.streamKeys = params.streamKeys;
         this.nodes = params.nodes;
@@ -93578,6 +94039,9 @@ class PregelLoop {
         this.stream = params.stream;
         this.checkpointNamespace = params.checkpointNamespace;
         this.prevCheckpointConfig = params.prevCheckpointConfig;
+        this.interruptAfter = params.interruptAfter;
+        this.interruptBefore = params.interruptBefore;
+        this.debug = params.debug;
     }
     static async initialize(params) {
         let { config, stream } = params;
@@ -93668,6 +94132,7 @@ class PregelLoop {
             channels,
             managed: params.managed,
             isNested,
+            manager: params.manager,
             skipDoneTasks,
             step,
             stop,
@@ -93678,6 +94143,9 @@ class PregelLoop {
             nodes: params.nodes,
             stream,
             store,
+            interruptAfter: params.interruptAfter,
+            interruptBefore: params.interruptBefore,
+            debug: params.debug,
         });
     }
     _checkpointerPutAfterPrevious(input) {
@@ -93758,7 +94226,7 @@ class PregelLoop {
         if (this.store && !this.store.isRunning) {
             this.store?.start();
         }
-        const { inputKeys = [], interruptAfter = [], interruptBefore = [], manager, } = params;
+        const { inputKeys = [] } = params;
         if (this.status !== "pending") {
             throw new Error(`Cannot tick when status is no longer "pending". Current status: "${this.status}"`);
         }
@@ -93782,7 +94250,7 @@ class PregelLoop {
                 writes: (0, io_js_1.mapOutputUpdates)(this.outputKeys, Object.values(this.tasks).map((task) => [task, task.writes])).next().value ?? null,
             });
             // after execution, check if we should interrupt
-            if ((0, algo_js_1.shouldInterrupt)(this.checkpoint, interruptAfter, Object.values(this.tasks))) {
+            if ((0, algo_js_1.shouldInterrupt)(this.checkpoint, this.interruptAfter, Object.values(this.tasks))) {
                 this.status = "interrupt_after";
                 throw new errors_js_1.GraphInterrupt();
             }
@@ -93798,8 +94266,9 @@ class PregelLoop {
             step: this.step,
             checkpointer: this.checkpointer,
             isResuming: this.input === INPUT_RESUMING,
-            manager,
+            manager: this.manager,
             store: this.store,
+            stream: this.stream,
         });
         this.tasks = nextTasks;
         // Produce debug output
@@ -93830,15 +94299,10 @@ class PregelLoop {
         }
         // if all tasks have finished, re-tick
         if (Object.values(this.tasks).every((task) => task.writes.length > 0)) {
-            return this.tick({
-                inputKeys,
-                interruptAfter,
-                interruptBefore,
-                manager,
-            });
+            return this.tick({ inputKeys });
         }
         // Before execution, check if we should interrupt
-        if ((0, algo_js_1.shouldInterrupt)(this.checkpoint, interruptBefore, Object.values(this.tasks))) {
+        if ((0, algo_js_1.shouldInterrupt)(this.checkpoint, this.interruptBefore, Object.values(this.tasks))) {
             this.status = "interrupt_before";
             throw new errors_js_1.GraphInterrupt();
         }
@@ -93875,20 +94339,59 @@ class PregelLoop {
         }
         return suppress;
     }
+    acceptPush(task, writeIdx, call) {
+        if (this.interruptAfter?.length > 0 &&
+            (0, algo_js_1.shouldInterrupt)(this.checkpoint, this.interruptAfter, [task])) {
+            this.toInterrupt.push(task);
+            return;
+        }
+        const pushed = (0, algo_js_1._prepareSingleTask)([constants_js_1.PUSH, task.path ?? [], writeIdx, task.id, call], this.checkpoint, this.checkpointPendingWrites, this.nodes, this.channels, this.managed, this.config, true, {
+            step: this.step,
+            checkpointer: this.checkpointer,
+            manager: this.manager,
+            store: this.store,
+            stream: this.stream,
+        });
+        if (pushed) {
+            if (this.interruptBefore?.length > 0 &&
+                (0, algo_js_1.shouldInterrupt)(this.checkpoint, this.interruptBefore, [pushed])) {
+                this.toInterrupt.push(pushed);
+                return;
+            }
+            this._emit((0, utils_js_1.gatherIteratorSync)((0, utils_js_1.prefixGenerator)((0, debug_js_1.mapDebugTasks)(this.step, [pushed]), "debug")));
+            if (this.debug) {
+                (0, debug_js_1.printStepTasks)(this.step, [pushed]);
+            }
+            this.tasks[pushed.id] = pushed;
+            if (this.skipDoneTasks) {
+                this._matchWrites({ [pushed.id]: pushed });
+            }
+            return pushed;
+        }
+    }
     _suppressInterrupt(e) {
         return (0, errors_js_1.isGraphInterrupt)(e) && !this.isNested;
     }
-    /**
-     * Resuming from previous checkpoint requires
-     * - finding a previous checkpoint
-     * - receiving null input (outer graph) or RESUMING flag (subgraph)
-     */
     async _first(inputKeys) {
+        /*
+         * Resuming from previous checkpoint requires
+         * - finding a previous checkpoint
+         * - receiving null input (outer graph) or RESUMING flag (subgraph)
+         */
+        const { configurable } = this.config;
         const isResuming = Object.keys(this.checkpoint.channel_versions).length !== 0 &&
             (this.config.configurable?.[constants_js_1.CONFIG_KEY_RESUMING] !== undefined ||
                 this.input === null ||
                 (0, constants_js_1.isCommand)(this.input));
+        // take resume value from parent
+        const scratchpad = configurable?.[constants_js_1.CONFIG_KEY_SCRATCHPAD];
+        if (scratchpad && scratchpad.nullResume !== undefined) {
+            this.putWrites(constants_js_1.NULL_TASK_ID, [[constants_js_1.RESUME, scratchpad.nullResume]]);
+        }
         if ((0, constants_js_1.isCommand)(this.input)) {
+            if (this.input.resume != null && this.checkpointer == null) {
+                throw new Error("Cannot use Command(resume=...) without checkpointer");
+            }
             const writes = {};
             // group writes by task id
             for (const [tid, key, value] of (0, io_js_1.mapCommand)(this.input, this.checkpointPendingWrites)) {
@@ -93953,10 +94456,10 @@ class PregelLoop {
             });
         }
         // done with input
-        this.input = isResuming ? INPUT_RESUMING : INPUT_DONE;
+        this.input = this.input === INPUT_RESUMING ? INPUT_RESUMING : INPUT_DONE;
         if (!this.isNested) {
             this.config = (0, index_js_1.patchConfigurable)(this.config, {
-                [constants_js_1.CONFIG_KEY_RESUMING]: isResuming,
+                [constants_js_1.CONFIG_KEY_RESUMING]: this.input === INPUT_RESUMING,
             });
         }
     }
@@ -94016,6 +94519,22 @@ class PregelLoop {
             };
         }
         this.step += 1;
+    }
+    _matchWrites(tasks) {
+        for (const [tid, k, v] of this.checkpointPendingWrites) {
+            if (k === constants_js_1.ERROR || k === constants_js_1.INTERRUPT || k === constants_js_1.RESUME) {
+                continue;
+            }
+            const task = Object.values(tasks).find((t) => t.id === tid);
+            if (task) {
+                task.writes.push([k, v]);
+            }
+        }
+        for (const task of Object.values(tasks)) {
+            if (task.writes.length > 0) {
+                this._outputWrites(task.id, task.writes, true);
+            }
+        }
     }
 }
 exports.PregelLoop = PregelLoop;
@@ -94473,9 +94992,10 @@ exports.PregelNode = PregelNode;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.executeTasksWithRetry = exports.DEFAULT_MAX_RETRIES = exports.DEFAULT_MAX_INTERVAL = exports.DEFAULT_BACKOFF_FACTOR = exports.DEFAULT_INITIAL_INTERVAL = void 0;
+exports._runWithRetry = exports.DEFAULT_MAX_RETRIES = exports.DEFAULT_MAX_INTERVAL = exports.DEFAULT_BACKOFF_FACTOR = exports.DEFAULT_INITIAL_INTERVAL = void 0;
 const constants_js_1 = __nccwpck_require__(94533);
 const errors_js_1 = __nccwpck_require__(90491);
+const index_js_1 = __nccwpck_require__(69804);
 exports.DEFAULT_INITIAL_INTERVAL = 500;
 exports.DEFAULT_BACKOFF_FACTOR = 2;
 exports.DEFAULT_MAX_INTERVAL = 128000;
@@ -94514,47 +95034,9 @@ const DEFAULT_RETRY_ON_HANDLER = (error) => {
     }
     return true;
 };
-async function* executeTasksWithRetry(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-tasks, options) {
-    const { stepTimeout, retryPolicy } = options ?? {};
-    let signal = options?.signal;
-    // Start tasks
-    const executingTasksMap = Object.fromEntries(tasks.map((pregelTask) => {
-        return [pregelTask.id, _runWithRetry(pregelTask, retryPolicy)];
-    }));
-    if (stepTimeout && signal) {
-        if ("any" in AbortSignal) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            signal = AbortSignal.any([
-                signal,
-                AbortSignal.timeout(stepTimeout),
-            ]);
-        }
-    }
-    else if (stepTimeout) {
-        signal = AbortSignal.timeout(stepTimeout);
-    }
-    // Abort if signal is aborted
-    signal?.throwIfAborted();
-    let listener;
-    const signalPromise = new Promise((_resolve, reject) => {
-        listener = () => reject(new Error("Abort"));
-        signal?.addEventListener("abort", listener);
-    }).finally(() => signal?.removeEventListener("abort", listener));
-    while (Object.keys(executingTasksMap).length > 0) {
-        const settledTask = await Promise.race([
-            ...Object.values(executingTasksMap),
-            signalPromise,
-        ]);
-        yield settledTask;
-        delete executingTasksMap[settledTask.task.id];
-    }
-}
-exports.executeTasksWithRetry = executeTasksWithRetry;
 async function _runWithRetry(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-pregelTask, retryPolicy) {
+pregelTask, retryPolicy, configurable, signal) {
     const resolvedRetryPolicy = pregelTask.retry_policy ?? retryPolicy;
     let interval = resolvedRetryPolicy !== undefined
         ? resolvedRetryPolicy.initialInterval ?? exports.DEFAULT_INITIAL_INTERVAL
@@ -94562,28 +95044,34 @@ pregelTask, retryPolicy) {
     let attempts = 0;
     let error;
     let result;
+    let { config } = pregelTask;
+    if (configurable) {
+        config = (0, index_js_1.patchConfigurable)(config, configurable);
+    }
     // eslint-disable-next-line no-constant-condition
     while (true) {
-        // Modify writes in place to clear any previous retries
-        while (pregelTask.writes.length > 0) {
-            pregelTask.writes.pop();
+        if (signal?.aborted) {
+            // no need to throw here - we'll throw from the runner, instead.
+            // there's just no point in retrying if the user has requested an abort.
+            break;
         }
+        // Clear any writes from previous attempts
+        pregelTask.writes.splice(0, pregelTask.writes.length);
         error = undefined;
         try {
-            result = await pregelTask.proc.invoke(pregelTask.input, pregelTask.config);
+            result = await pregelTask.proc.invoke(pregelTask.input, config);
             break;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         }
         catch (e) {
             error = e;
             error.pregelTaskId = pregelTask.id;
             if ((0, errors_js_1.isParentCommand)(error)) {
-                const ns = pregelTask.config?.configurable?.checkpoint_ns;
+                const ns = config?.configurable?.checkpoint_ns;
                 const cmd = error.command;
                 if (cmd.graph === ns) {
                     // this command is for the current graph, handle it
                     for (const writer of pregelTask.writers) {
-                        await writer.invoke(cmd, pregelTask.config);
+                        await writer.invoke(cmd, config);
                     }
                     break;
                 }
@@ -94626,11 +95114,13 @@ pregelTask, retryPolicy) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 error.constructor.unminifiable_name ??
                 error.constructor.name;
-            console.log(`Retrying task "${pregelTask.name}" after ${interval.toFixed(2)}ms (attempt ${attempts}) after ${errorName}: ${error}`);
+            console.log(`Retrying task "${String(pregelTask.name)}" after ${interval.toFixed(2)}ms (attempt ${attempts}) after ${errorName}: ${error}`);
+            // signal subgraphs to resume (if available)
+            config = (0, index_js_1.patchConfigurable)(config, { [constants_js_1.CONFIG_KEY_RESUMING]: true });
         }
         finally {
             // Clear checkpoint_ns seen (for subgraph detection)
-            const checkpointNs = pregelTask.config?.configurable?.checkpoint_ns;
+            const checkpointNs = config?.configurable?.checkpoint_ns;
             if (checkpointNs) {
                 (0, errors_js_1.getSubgraphsSeenSet)().delete(checkpointNs);
             }
@@ -94639,9 +95129,436 @@ pregelTask, retryPolicy) {
     return {
         task: pregelTask,
         result,
-        error,
+        error: error,
     };
 }
+exports._runWithRetry = _runWithRetry;
+
+
+/***/ }),
+
+/***/ 50556:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PregelRunner = void 0;
+const types_js_1 = __nccwpck_require__(98505);
+const constants_js_1 = __nccwpck_require__(94533);
+const errors_js_1 = __nccwpck_require__(90491);
+const retry_js_1 = __nccwpck_require__(73552);
+/**
+ * Responsible for handling task execution on each tick of the {@link PregelLoop}.
+ */
+class PregelRunner {
+    /**
+     * Construct a new PregelRunner, which executes tasks from the provided PregelLoop.
+     * @param loop - The PregelLoop that produces tasks for this runner to execute.
+     */
+    constructor({ loop, nodeFinished, }) {
+        Object.defineProperty(this, "nodeFinished", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "loop", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        this.loop = loop;
+        this.nodeFinished = nodeFinished;
+    }
+    /**
+     * Execute tasks from the current step of the PregelLoop.
+     *
+     * Note: this method does NOT call {@link PregelLoop}#tick. That must be handled externally.
+     * @param options - Options for the execution.
+     */
+    async tick(options = {}) {
+        const { timeout, signal, retryPolicy, onStepWrite } = options;
+        let graphInterrupt;
+        // Start task execution
+        const pendingTasks = Object.values(this.loop.tasks).filter((t) => t.writes.length === 0);
+        const taskStream = this._executeTasksWithRetry(pendingTasks, {
+            stepTimeout: timeout,
+            signal,
+            retryPolicy,
+        });
+        for await (const { task, error } of taskStream) {
+            graphInterrupt = this._commit(task, error) ?? graphInterrupt;
+        }
+        onStepWrite?.(this.loop.step, Object.values(this.loop.tasks)
+            .map((task) => task.writes)
+            .flat());
+        if (graphInterrupt) {
+            throw graphInterrupt;
+        }
+    }
+    /**
+     * Concurrently executes tasks with the requested retry policy, yielding a {@link SettledPregelTask} for each task as it completes.
+     * @param tasks - The tasks to execute.
+     * @param options - Options for the execution.
+     */
+    async *_executeTasksWithRetry(tasks, options) {
+        const { stepTimeout, retryPolicy } = options ?? {};
+        let signal = options?.signal;
+        const promiseAddedSymbol = Symbol.for("promiseAdded");
+        let addedPromiseSignal;
+        let addedPromiseWait;
+        function waitHandler(resolve) {
+            addedPromiseSignal = () => {
+                addedPromiseWait = new Promise(waitHandler);
+                resolve(promiseAddedSymbol);
+            };
+        }
+        addedPromiseWait = new Promise(waitHandler);
+        const executingTasksMap = {};
+        const writer = (task, writes, { calls } = {}) => {
+            if (writes.every(([channel]) => channel !== constants_js_1.PUSH)) {
+                return task.config?.configurable?.[constants_js_1.CONFIG_KEY_SEND]?.(writes) ?? [];
+            }
+            // Schedule PUSH tasks, collect promises
+            const scratchpad = task.config?.configurable?.[constants_js_1.CONFIG_KEY_SCRATCHPAD];
+            const rtn = {};
+            for (const [idx, write] of writes.entries()) {
+                const [channel] = write;
+                if (channel !== constants_js_1.PUSH) {
+                    continue;
+                }
+                const wcall = calls?.[idx];
+                const cnt = scratchpad.callCounter;
+                scratchpad.callCounter += 1;
+                if (wcall == null) {
+                    throw new Error("BUG: No call found");
+                }
+                const nextTask = this.loop.acceptPush(task, cnt, wcall);
+                if (!nextTask) {
+                    continue;
+                }
+                // Check if this task is already running
+                const existingPromise = executingTasksMap[nextTask.id];
+                if (existingPromise !== undefined) {
+                    // If the parent task was retried, the next task might already be running
+                    rtn[idx] = existingPromise;
+                }
+                else if (nextTask.writes.length > 0) {
+                    // If it already ran, return the result
+                    const returns = nextTask.writes.filter(([c]) => c === constants_js_1.RETURN);
+                    const errors = nextTask.writes.filter(([c]) => c === constants_js_1.ERROR);
+                    if (returns.length > 0) {
+                        // Task completed successfully
+                        if (returns.length === 1) {
+                            rtn[idx] = Promise.resolve(returns[0][1]);
+                        }
+                        else {
+                            // should be unreachable
+                            throw new Error(`BUG: multiple returns found for task ${nextTask.name}__${nextTask.id}`);
+                        }
+                    }
+                    else if (errors.length > 0) {
+                        if (errors.length === 1) {
+                            const errorValue = errors[0][1];
+                            // Task failed
+                            const error = 
+                            // eslint-disable-next-line no-instanceof/no-instanceof
+                            errorValue instanceof Error
+                                ? errorValue
+                                : new Error(String(errorValue));
+                            rtn[idx] = Promise.reject(error);
+                        }
+                        else {
+                            // the only way this should happen is if the task executes multiple times and writes aren't cleared
+                            throw new Error(`BUG: multiple errors found for task ${nextTask.name}__${nextTask.id}`);
+                        }
+                    }
+                }
+                else {
+                    // Schedule the next task with retry
+                    const prom = (0, retry_js_1._runWithRetry)(nextTask, retryPolicy, {
+                        [constants_js_1.CONFIG_KEY_SEND]: writer.bind(this, nextTask),
+                        // eslint-disable-next-line @typescript-eslint/no-use-before-define
+                        [constants_js_1.CONFIG_KEY_CALL]: call.bind(this, nextTask),
+                    });
+                    executingTasksMap[nextTask.id] = prom;
+                    addedPromiseSignal();
+                    rtn[idx] = prom.then(({ result, error }) => {
+                        if (error) {
+                            return Promise.reject(error);
+                        }
+                        return result;
+                    });
+                }
+            }
+            return Object.values(rtn);
+        };
+        const call = (task, func, name, input, options = {}) => {
+            const result = writer(task, [[constants_js_1.PUSH, null]], {
+                calls: [
+                    new types_js_1.Call({
+                        func,
+                        name,
+                        input,
+                        retry: options.retry,
+                        callbacks: options.callbacks,
+                    }),
+                ],
+            });
+            // eslint-disable-next-line no-instanceof/no-instanceof
+            if (result !== undefined) {
+                if (result.length === 1) {
+                    return result[0];
+                }
+                return Promise.all(result);
+            }
+            return Promise.resolve();
+        };
+        if (stepTimeout && signal) {
+            if ("any" in AbortSignal) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                signal = AbortSignal.any([
+                    signal,
+                    AbortSignal.timeout(stepTimeout),
+                ]);
+            }
+        }
+        else if (stepTimeout) {
+            signal = AbortSignal.timeout(stepTimeout);
+        }
+        if (signal?.aborted) {
+            // note: don't use throwIfAborted here because it throws a DOMException,
+            // which isn't consistent with how we throw on abort below.
+            throw new Error("Abort");
+        }
+        // Start tasks
+        Object.assign(executingTasksMap, Object.fromEntries(tasks.map((pregelTask) => {
+            return [
+                pregelTask.id,
+                (0, retry_js_1._runWithRetry)(pregelTask, retryPolicy, {
+                    [constants_js_1.CONFIG_KEY_SEND]: writer?.bind(this, pregelTask),
+                    [constants_js_1.CONFIG_KEY_CALL]: call?.bind(this, pregelTask),
+                }).catch((error) => {
+                    return { task: pregelTask, error };
+                }),
+            ];
+        })));
+        let listener;
+        const signalPromise = new Promise((_resolve, reject) => {
+            listener = () => reject(new Error("Abort"));
+            signal?.addEventListener("abort", listener);
+        }).finally(() => signal?.removeEventListener("abort", listener));
+        while (Object.keys(executingTasksMap).length > 0) {
+            const settledTask = await Promise.race([
+                ...Object.values(executingTasksMap),
+                signalPromise,
+                addedPromiseWait,
+            ]);
+            if (settledTask === promiseAddedSymbol) {
+                continue;
+            }
+            yield settledTask;
+            delete executingTasksMap[settledTask.task.id];
+        }
+    }
+    /**
+     * Determines what writes to apply based on whether the task completed successfully, and what type of error occurred.
+     *
+     * Throws an error if the error is a {@link GraphBubbleUp} error and {@link PregelLoop}#isNested is true.
+     *
+     * Note that in the case of a {@link GraphBubbleUp} error that is not a {@link GraphInterrupt}, like a {@link Command}, this method does not apply any writes.
+     *
+     * @param task - The task to commit.
+     * @param error - The error that occurred, if any.
+     * @returns The {@link GraphInterrupt} that occurred, if the user's code threw one.
+     */
+    _commit(task, error) {
+        let graphInterrupt;
+        if (error !== undefined) {
+            if ((0, errors_js_1.isGraphBubbleUp)(error)) {
+                if (this.loop.isNested) {
+                    throw error;
+                }
+                if ((0, errors_js_1.isGraphInterrupt)(error)) {
+                    graphInterrupt = error;
+                    if (error.interrupts.length) {
+                        const interrupts = error.interrupts.map((interrupt) => [constants_js_1.INTERRUPT, interrupt]);
+                        const resumes = task.writes.filter((w) => w[0] === constants_js_1.RESUME);
+                        if (resumes.length) {
+                            interrupts.push(...resumes);
+                        }
+                        this.loop.putWrites(task.id, interrupts);
+                    }
+                }
+            }
+            else {
+                this.loop.putWrites(task.id, [
+                    [constants_js_1.ERROR, { message: error.message, name: error.name }],
+                ]);
+                throw error;
+            }
+        }
+        else {
+            if (this.nodeFinished &&
+                (task.config?.tags == null || !task.config.tags.includes(constants_js_1.TAG_HIDDEN))) {
+                this.nodeFinished(String(task.name));
+            }
+            if (task.writes.length === 0) {
+                // Add no writes marker
+                task.writes.push([constants_js_1.NO_WRITES, null]);
+            }
+            // Save task writes to checkpointer
+            this.loop.putWrites(task.id, task.writes);
+        }
+        return graphInterrupt;
+    }
+}
+exports.PregelRunner = PregelRunner;
+
+
+/***/ }),
+
+/***/ 66374:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.IterableReadableWritableStream = void 0;
+const stream_1 = __nccwpck_require__(56998);
+class IterableReadableWritableStream extends stream_1.IterableReadableStream {
+    get closed() {
+        return this._closed;
+    }
+    constructor(params) {
+        let streamControllerPromiseResolver;
+        const streamControllerPromise = new Promise((resolve) => {
+            streamControllerPromiseResolver = resolve;
+        });
+        super({
+            start: (controller) => {
+                streamControllerPromiseResolver(controller);
+            },
+        });
+        Object.defineProperty(this, "modes", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "controller", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "passthroughFn", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "_closed", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: false
+        });
+        // .start() will always be called before the stream can be interacted
+        // with anyway
+        void streamControllerPromise.then((controller) => {
+            this.controller = controller;
+        });
+        this.passthroughFn = params.passthroughFn;
+        this.modes = params.modes;
+    }
+    push(chunk) {
+        this.passthroughFn?.(chunk);
+        this.controller.enqueue(chunk);
+    }
+    close() {
+        try {
+            this.controller.close();
+        }
+        catch (e) {
+            // pass
+        }
+        finally {
+            this._closed = true;
+        }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    error(e) {
+        this.controller.error(e);
+    }
+}
+exports.IterableReadableWritableStream = IterableReadableWritableStream;
+
+
+/***/ }),
+
+/***/ 98505:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.isCall = exports.Call = void 0;
+class Call {
+    constructor({ func, name, input, retry, callbacks }) {
+        Object.defineProperty(this, "func", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "name", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "input", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "retry", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "callbacks", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "__lg_type", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: "call"
+        });
+        this.func = func;
+        this.name = name;
+        this.input = input;
+        this.retry = retry;
+        this.callbacks = callbacks;
+    }
+}
+exports.Call = Call;
+function isCall(value) {
+    return (typeof value === "object" &&
+        value !== null &&
+        "__lg_type" in value &&
+        value.__lg_type === "call");
+}
+exports.isCall = isCall;
 
 
 /***/ }),
@@ -94652,7 +95569,7 @@ pregelTask, retryPolicy) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ensureLangGraphConfig = void 0;
+exports.getConfig = exports.getWriter = exports.getStore = exports.ensureLangGraphConfig = void 0;
 const singletons_1 = __nccwpck_require__(85734);
 const COPIABLE_KEYS = ["tags", "metadata", "callbacks", "configurable"];
 const CONFIG_KEYS = [
@@ -94670,6 +95587,7 @@ const CONFIG_KEYS = [
     "writer",
     "interruptBefore",
     "interruptAfter",
+    "signal",
 ];
 const DEFAULT_RECURSION_LIMIT = 25;
 function ensureLangGraphConfig(...configs) {
@@ -94733,6 +95651,30 @@ function ensureLangGraphConfig(...configs) {
     return empty;
 }
 exports.ensureLangGraphConfig = ensureLangGraphConfig;
+/**
+ * A helper utility function that returns the {@link BaseStore} that was set when the graph was initialized
+ *
+ * @returns a reference to the {@link BaseStore} that was set when the graph was initialized
+ */
+function getStore() {
+    const config = singletons_1.AsyncLocalStorageProviderSingleton.getRunnableConfig();
+    return config?.store;
+}
+exports.getStore = getStore;
+/**
+ * A helper utility function that returns the {@link LangGraphRunnableConfig#writer} if "custom" stream mode is enabled, otherwise undefined
+ *
+ * @returns a reference to the {@link LangGraphRunnableConfig#writer} if "custom" stream mode is enabled, otherwise undefined
+ */
+function getWriter() {
+    const config = singletons_1.AsyncLocalStorageProviderSingleton.getRunnableConfig();
+    return config?.configurable?.writer;
+}
+exports.getWriter = getWriter;
+function getConfig() {
+    return singletons_1.AsyncLocalStorageProviderSingleton.getRunnableConfig();
+}
+exports.getConfig = getConfig;
 
 
 /***/ }),
@@ -95133,7 +96075,7 @@ exports.initializeAsyncLocalStorageSingleton = initializeAsyncLocalStorageSingle
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.patchConfigurable = exports.gatherIteratorSync = exports.gatherIterator = exports.prefixGenerator = exports.RunnableCallable = void 0;
+exports.isGeneratorFunction = exports.isAsyncGeneratorFunction = exports.patchConfigurable = exports.gatherIteratorSync = exports.gatherIterator = exports.prefixGenerator = exports.RunnableCallable = void 0;
 const runnables_1 = __nccwpck_require__(59950);
 const singletons_1 = __nccwpck_require__(85734);
 const config_js_1 = __nccwpck_require__(56426);
@@ -95274,6 +96216,20 @@ patch) {
     }
 }
 exports.patchConfigurable = patchConfigurable;
+function isAsyncGeneratorFunction(val) {
+    return (val != null &&
+        typeof val === "function" &&
+        // eslint-disable-next-line no-instanceof/no-instanceof
+        val instanceof Object.getPrototypeOf(async function* () { }).constructor);
+}
+exports.isAsyncGeneratorFunction = isAsyncGeneratorFunction;
+function isGeneratorFunction(val) {
+    return (val != null &&
+        typeof val === "function" &&
+        // eslint-disable-next-line no-instanceof/no-instanceof
+        val instanceof Object.getPrototypeOf(function* () { }).constructor);
+}
+exports.isGeneratorFunction = isGeneratorFunction;
 
 
 /***/ }),
@@ -95298,15 +96254,14 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.MessagesAnnotation = exports.InMemoryStore = exports.AsyncBatchedStore = exports.BaseStore = exports.BaseCheckpointSaver = exports.emptyCheckpoint = exports.copyCheckpoint = exports.MemorySaver = exports.interrupt = exports.isCommand = exports.Command = exports.Send = exports.BinaryOperatorAggregate = exports.BaseChannel = exports.Annotation = exports.messagesStateReducer = exports.MessageGraph = exports.CompiledStateGraph = exports.StateGraph = exports.START = exports.Graph = exports.END = void 0;
+exports.MessagesAnnotation = exports.task = exports.entrypoint = exports.InMemoryStore = exports.AsyncBatchedStore = exports.BaseStore = exports.BaseCheckpointSaver = exports.emptyCheckpoint = exports.copyCheckpoint = exports.MemorySaver = exports.END = exports.START = exports.isCommand = exports.Command = exports.Send = exports.BinaryOperatorAggregate = exports.BaseChannel = exports.Annotation = exports.addMessages = exports.messagesStateReducer = exports.MessageGraph = exports.CompiledStateGraph = exports.StateGraph = exports.Graph = void 0;
 var index_js_1 = __nccwpck_require__(25467);
-Object.defineProperty(exports, "END", ({ enumerable: true, get: function () { return index_js_1.END; } }));
 Object.defineProperty(exports, "Graph", ({ enumerable: true, get: function () { return index_js_1.Graph; } }));
-Object.defineProperty(exports, "START", ({ enumerable: true, get: function () { return index_js_1.START; } }));
 Object.defineProperty(exports, "StateGraph", ({ enumerable: true, get: function () { return index_js_1.StateGraph; } }));
 Object.defineProperty(exports, "CompiledStateGraph", ({ enumerable: true, get: function () { return index_js_1.CompiledStateGraph; } }));
 Object.defineProperty(exports, "MessageGraph", ({ enumerable: true, get: function () { return index_js_1.MessageGraph; } }));
 Object.defineProperty(exports, "messagesStateReducer", ({ enumerable: true, get: function () { return index_js_1.messagesStateReducer; } }));
+Object.defineProperty(exports, "addMessages", ({ enumerable: true, get: function () { return index_js_1.messagesStateReducer; } }));
 Object.defineProperty(exports, "Annotation", ({ enumerable: true, get: function () { return index_js_1.Annotation; } }));
 __exportStar(__nccwpck_require__(90491), exports);
 var index_js_2 = __nccwpck_require__(64243);
@@ -95316,8 +96271,8 @@ var constants_js_1 = __nccwpck_require__(94533);
 Object.defineProperty(exports, "Send", ({ enumerable: true, get: function () { return constants_js_1.Send; } }));
 Object.defineProperty(exports, "Command", ({ enumerable: true, get: function () { return constants_js_1.Command; } }));
 Object.defineProperty(exports, "isCommand", ({ enumerable: true, get: function () { return constants_js_1.isCommand; } }));
-var interrupt_js_1 = __nccwpck_require__(77675);
-Object.defineProperty(exports, "interrupt", ({ enumerable: true, get: function () { return interrupt_js_1.interrupt; } }));
+Object.defineProperty(exports, "START", ({ enumerable: true, get: function () { return constants_js_1.START; } }));
+Object.defineProperty(exports, "END", ({ enumerable: true, get: function () { return constants_js_1.END; } }));
 var langgraph_checkpoint_1 = __nccwpck_require__(11026);
 Object.defineProperty(exports, "MemorySaver", ({ enumerable: true, get: function () { return langgraph_checkpoint_1.MemorySaver; } }));
 Object.defineProperty(exports, "copyCheckpoint", ({ enumerable: true, get: function () { return langgraph_checkpoint_1.copyCheckpoint; } }));
@@ -95327,6 +96282,9 @@ Object.defineProperty(exports, "BaseStore", ({ enumerable: true, get: function (
 Object.defineProperty(exports, "AsyncBatchedStore", ({ enumerable: true, get: function () { return langgraph_checkpoint_1.AsyncBatchedStore; } }));
 Object.defineProperty(exports, "InMemoryStore", ({ enumerable: true, get: function () { return langgraph_checkpoint_1.InMemoryStore; } }));
 __exportStar(__nccwpck_require__(13368), exports);
+var index_js_3 = __nccwpck_require__(74881);
+Object.defineProperty(exports, "entrypoint", ({ enumerable: true, get: function () { return index_js_3.entrypoint; } }));
+Object.defineProperty(exports, "task", ({ enumerable: true, get: function () { return index_js_3.task; } }));
 var messages_annotation_js_1 = __nccwpck_require__(18875);
 Object.defineProperty(exports, "MessagesAnnotation", ({ enumerable: true, get: function () { return messages_annotation_js_1.MessagesAnnotation; } }));
 
@@ -100168,14 +101126,6 @@ function getEncodingNameForModel(model) {
 exports.Tiktoken = Tiktoken;
 exports.getEncodingNameForModel = getEncodingNameForModel;
 
-
-/***/ }),
-
-/***/ 80056:
-/***/ ((module) => {
-
-"use strict";
-module.exports = /*#__PURE__*/JSON.parse('{"name":"dotenv","version":"16.4.7","description":"Loads environment variables from .env file","main":"lib/main.js","types":"lib/main.d.ts","exports":{".":{"types":"./lib/main.d.ts","require":"./lib/main.js","default":"./lib/main.js"},"./config":"./config.js","./config.js":"./config.js","./lib/env-options":"./lib/env-options.js","./lib/env-options.js":"./lib/env-options.js","./lib/cli-options":"./lib/cli-options.js","./lib/cli-options.js":"./lib/cli-options.js","./package.json":"./package.json"},"scripts":{"dts-check":"tsc --project tests/types/tsconfig.json","lint":"standard","pretest":"npm run lint && npm run dts-check","test":"tap run --allow-empty-coverage --disable-coverage --timeout=60000","test:coverage":"tap run --show-full-coverage --timeout=60000 --coverage-report=lcov","prerelease":"npm test","release":"standard-version"},"repository":{"type":"git","url":"git://github.com/motdotla/dotenv.git"},"funding":"https://dotenvx.com","keywords":["dotenv","env",".env","environment","variables","config","settings"],"readmeFilename":"README.md","license":"BSD-2-Clause","devDependencies":{"@types/node":"^18.11.3","decache":"^4.6.2","sinon":"^14.0.1","standard":"^17.0.0","standard-version":"^9.5.0","tap":"^19.2.0","typescript":"^4.8.4"},"engines":{"node":">=12"},"browser":{"fs":false}}');
 
 /***/ }),
 
