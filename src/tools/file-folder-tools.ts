@@ -353,6 +353,7 @@ export const FileFolderTools = [
         const results = findFileRecursively(rootDir, fileName, excludeDirs).map(location => {
           try {
             return {
+              fileName: path.basename(location.path),
               path: location.path,
               content: fs.readFileSync(location.path, encoding as BufferEncoding)
             };
@@ -377,6 +378,7 @@ export const FileFolderTools = [
               };
 
         return {
+          fileName: result.files?.map(f => f.fileName).join('\n'),
           fileContent: result.files?.map(f => f.content).join('\n'),
           filePath: result.files?.map(f => f.path).join('\n')
         };
