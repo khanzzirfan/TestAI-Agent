@@ -308,6 +308,9 @@ const callToolsEdge = async (state: State) => {
     return 'tools';
   }
 
+  const { messages, ...restOfTheState } = state;
+  console.log('callToolsEdge state params', JSON.stringify(restOfTheState, null, 2));
+
   if (state.hasCityBeaches) {
     return END;
   }
