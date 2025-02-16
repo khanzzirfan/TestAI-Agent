@@ -41818,7 +41818,7 @@ exports.analyzeExistingTests = analyzeExistingTests;
 const analyzeExistingTestEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools-write-tests';
+        return 'tools';
     }
     return 'run-tests';
 };
@@ -41863,7 +41863,7 @@ exports.analyzeTestResults = analyzeTestResults;
 const analyzeTestResultsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools-examine-test-results';
+        return 'tools';
     }
     else if (state.testSummary && state.testSummary.failureReasons?.length > 0) {
         return 'fix-errors';
@@ -41871,6 +41871,49 @@ const analyzeTestResultsEdges = async (state) => {
     return '__end__';
 };
 exports.analyzeTestResultsEdges = analyzeTestResultsEdges;
+
+
+/***/ }),
+
+/***/ 24779:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.callToolsEdge = void 0;
+const callToolsEdge = async (state) => {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage.tool_calls?.length) {
+        return 'tools';
+    }
+    const hasFile = state.fileName && state.filePath;
+    const hasTestFile = state.testFileName && state.testFilePath;
+    const hasBothFiles = hasFile && hasTestFile;
+    if (state.iteration > 5) {
+        return '__end__';
+    }
+    if (state.testSummary && state.testSummary?.failureReasons?.length > 0) {
+        return 'fix-errors';
+    }
+    else if (state.testSummary && state.testSummary?.failureReasons?.length === 0) {
+        return '__end__';
+    }
+    if (state.testResults) {
+        return 'analyze-results';
+    }
+    if (hasBothFiles) {
+        return 'analyze-existing-tests';
+    }
+    else if (state.fileName && state.filePath && !state.testFileFound) {
+        return 'create-new-tests';
+    }
+    if (state.fileName && state.filePath && !state.testFileName) {
+        return 'find-test-file';
+    }
+    return 'find-file';
+};
+exports.callToolsEdge = callToolsEdge;
 
 
 /***/ }),
@@ -41908,7 +41951,7 @@ exports.checkFileExists = checkFileExists;
 const checkFileExistsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools-find-file';
+        return 'tools';
     }
     if (state.fileContent === null) {
         return 'find-file';
@@ -41968,7 +42011,7 @@ exports.checkTestFile = checkTestFile;
 const checkTestFileEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools-find-test-file';
+        return 'tools';
     }
     // Route based on whether test file exists
     return state.testFileContent ? 'analyze-existing-tests' : 'create-new-tests';
@@ -42084,7 +42127,7 @@ exports.fixErrors = fixErrors;
 const fixErrorsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools-fix-errors';
+        return 'tools';
     }
     if (state.iteration > 5) {
         return '__end__';
@@ -42124,6 +42167,7 @@ __exportStar(__nccwpck_require__(40860), exports);
 __exportStar(__nccwpck_require__(26757), exports);
 __exportStar(__nccwpck_require__(74780), exports);
 __exportStar(__nccwpck_require__(38768), exports);
+__exportStar(__nccwpck_require__(24779), exports);
 
 
 /***/ }),
@@ -42165,13 +42209,9 @@ exports.runTests = runTests;
 const runTestsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools-run-tests';
+        return 'tools';
     }
-    // if (state.hasError) {
-    //   return "fix-errors";
-    // }
     return 'analyze-results';
-    // return "__end__";
 };
 exports.runTestsEdges = runTestsEdges;
 
@@ -42217,7 +42257,7 @@ exports.saveTests = saveTests;
 const writeTestsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools-create-new-tests';
+        return 'tools';
     }
     return 'find-test-file';
 };
@@ -42226,7 +42266,7 @@ exports.writeTestsEdges = writeTestsEdges;
 const saveTestsEdges = async (state) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (lastMessage.tool_calls?.length) {
-        return 'tools-write-tests';
+        return 'tools';
     }
     return 'run-tests'; // After saving, proceed to run tests
 };
@@ -42333,20 +42373,14 @@ const tool_executor_utility_1 = __nccwpck_require__(74226);
 const workflow = new langgraph_1.StateGraph(state_1.GraphState)
     // Add nodes
     .addNode('find-file', agents_1.checkFileExists)
-    .addNode('tools-find-file', tool_executor_utility_1.toolExecutor)
+    .addNode('tools', tool_executor_utility_1.toolExecutor)
     .addNode('find-test-file', agents_1.checkTestFile)
-    .addNode('tools-find-test-file', tool_executor_utility_1.toolExecutor)
     .addNode('create-new-tests', agents_1.createNewTests)
     .addNode('analyze-existing-tests', agents_1.analyzeExistingTests)
     .addNode('save-tests', agents_1.saveTests)
-    .addNode('tools-write-tests', tool_executor_utility_1.toolExecutor)
     .addNode('run-tests', agents_1.runTests)
-    .addNode('tools-run-tests', tool_executor_utility_1.toolExecutor)
     .addNode('analyze-results', agents_1.analyzeTestResults)
     .addNode('fix-errors', agents_1.fixErrors)
-    .addNode('tools-fix-errors', tool_executor_utility_1.toolExecutor)
-    .addNode('tools-examine-test-results', tool_executor_utility_1.toolExecutor)
-    .addNode('tools-create-new-tests', tool_executor_utility_1.toolExecutor)
     // Add edges with fixed flow
     .addEdge('__start__', 'find-file')
     .addConditionalEdges('find-file', agents_1.checkFileExistsEdges)
@@ -42354,17 +42388,11 @@ const workflow = new langgraph_1.StateGraph(state_1.GraphState)
     .addConditionalEdges('create-new-tests', agents_1.writeTestsEdges)
     .addConditionalEdges('analyze-existing-tests', agents_1.analyzeExistingTestEdges)
     .addConditionalEdges('save-tests', agents_1.saveTestsEdges) // Use new edge handler
-    .addConditionalEdges('tools-write-tests', agents_1.saveTestsEdges) // Route back through save flow
     .addConditionalEdges('run-tests', agents_1.runTestsEdges)
     .addConditionalEdges('analyze-results', agents_1.analyzeTestResultsEdges)
     .addConditionalEdges('fix-errors', agents_1.fixErrorsEdges)
-    .addConditionalEdges('tools-find-file', agents_1.checkFileExistsEdges)
-    .addConditionalEdges('tools-find-test-file', agents_1.checkTestFileEdges)
-    .addConditionalEdges('tools-run-tests', agents_1.runTestsEdges)
-    .addConditionalEdges('tools-fix-errors', agents_1.fixErrorsEdges)
-    .addConditionalEdges('tools-create-new-tests', agents_1.writeTestsEdges)
-    .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges)
-    .addEdge('run-tests', '__end__');
+    .addConditionalEdges('tools', agents_1.callToolsEdge)
+    .addEdge('analyze-results', '__end__');
 exports.workflow = workflow;
 
 
@@ -42580,6 +42608,10 @@ exports.GraphState = langgraph_1.Annotation.Root({
     testFilePath: (0, langgraph_1.Annotation)({
         reducer: z => z,
         default: () => ''
+    }),
+    testFileFound: (0, langgraph_1.Annotation)({
+        reducer: z => z,
+        default: () => false
     }),
     testResults: (0, langgraph_1.Annotation)({
         reducer: z => z,
@@ -42824,7 +42856,13 @@ exports.FileFolderTools = [
                     fs_1.default.mkdirSync(normalizedPath, { recursive: true });
                 }
                 if (fs_1.default.existsSync(fullPath) && !overwrite) {
+                    // read file content
+                    const fileContent = fs_1.default.readFileSync(fullPath, 'utf-8');
                     return {
+                        testFileName: fileName,
+                        testFilePath: fullPath,
+                        testFileContent: fileContent,
+                        testFileFound: true,
                         file_operation: {
                             success: false,
                             error: 'File already exists and overwrite is not enabled'
@@ -42834,6 +42872,10 @@ exports.FileFolderTools = [
                 let content = template ? '// Generated file\n\n' : '';
                 fs_1.default.writeFileSync(fullPath, content, 'utf-8');
                 return {
+                    testFileName: fileName,
+                    testFilePath: fullPath,
+                    testFileContent: content,
+                    testFileFound: true,
                     file_operation: {
                         success: true,
                         path: fullPath,
@@ -43077,10 +43119,12 @@ exports.FileFolderTools = [
                     return result;
                 };
                 const testFile = findTestFile(rootDir);
+                const testFileFound = !!testFile;
                 return {
                     testFileContent: testFile ? testFile.content : null,
                     testFilePath: testFile ? testFile.path : null,
-                    testFileName: testFile ? path_1.default.basename(testFile.path) : null
+                    testFileName: testFile ? path_1.default.basename(testFile.path) : null,
+                    testFileFound
                 };
             }
             catch (error) {
