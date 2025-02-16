@@ -4,52 +4,41 @@ import { Annotation } from '@langchain/langgraph';
 // Define the graph state with additional properties
 export const GraphState = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
-    reducer: (x, y) => x.concat(y),
-    default: () => []
+    reducer: (x, y) => x.concat(y)
   }),
   iteration: Annotation<number>({
     reducer: x => x,
     default: () => 0
   }),
   hasError: Annotation<boolean>({
-    reducer: z => z,
-    default: () => false
+    reducer: z => z
   }),
   fileName: Annotation<string>({
-    reducer: z => z,
-    default: () => ''
+    reducer: z => z
   }),
   testFileName: Annotation<string>({
-    reducer: z => z,
-    default: () => ''
+    reducer: z => z
   }),
   fileContent: Annotation<string>({
-    reducer: z => z,
-    default: () => ''
+    reducer: z => z
   }),
   filePath: Annotation<string>({
-    reducer: z => z,
-    default: () => ''
+    reducer: z => z
   }),
   testFileContent: Annotation<string>({
-    reducer: z => z,
-    default: () => ''
+    reducer: z => z
   }),
   testFilePath: Annotation<string>({
-    reducer: z => z,
-    default: () => ''
+    reducer: z => z
   }),
   testFileFound: Annotation<boolean>({
-    reducer: z => z,
-    default: () => false
+    reducer: z => z
   }),
   testResults: Annotation<any>({
-    reducer: z => z,
-    default: () => null
+    reducer: z => z
   }),
   testSummary: Annotation<any>({
-    reducer: z => z,
-    default: () => null
+    reducer: z => z
   })
 });
 

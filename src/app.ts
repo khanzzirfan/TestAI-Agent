@@ -2,13 +2,12 @@ import { MemorySaver, InMemoryStore, Command } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
 import * as core from '@actions/core';
 import { StateGraph } from '@langchain/langgraph';
-import { BaseMessage } from '@langchain/core/messages';
-import { Annotation } from '@langchain/langgraph';
 import { AIMessage } from '@langchain/core/messages';
 import { isAIMessage } from '@langchain/core/messages';
 import { ToolMessage } from '@langchain/core/messages';
 import { isCommand } from '@langchain/langgraph';
 import { CustomTools } from './tools';
+import { GraphState, State, Update } from './state';
 
 const tools = [...CustomTools];
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
@@ -40,61 +39,6 @@ export const MainGraphRun = async () => {
   const filename: string = core.getInput('file_name');
   const toolNames = CustomTools.map(tool => tool.name).join(', ');
 
-  // Define the graph state with additional properties
-  const GraphState = Annotation.Root({
-    messages: Annotation<BaseMessage[]>({
-      reducer: (x, y) => x.concat(y),
-      default: () => []
-    }),
-    iteration: Annotation<number>({
-      reducer: x => x,
-      default: () => 0
-    }),
-    hasError: Annotation<boolean>({
-      reducer: z => z,
-      default: () => false
-    }),
-    fileName: Annotation<string>({
-      reducer: z => z,
-      default: () => ''
-    }),
-    testFileName: Annotation<string>({
-      reducer: z => z,
-      default: () => ''
-    }),
-    fileContent: Annotation<string>({
-      reducer: z => z,
-      default: () => ''
-    }),
-    filePath: Annotation<string>({
-      reducer: z => z,
-      default: () => ''
-    }),
-    testFileContent: Annotation<string>({
-      reducer: z => z,
-      default: () => ''
-    }),
-    testFilePath: Annotation<string>({
-      reducer: z => z,
-      default: () => ''
-    }),
-    testFileFound: Annotation<boolean>({
-      reducer: z => z,
-      default: () => false
-    }),
-    testResults: Annotation<any>({
-      reducer: z => z,
-      default: () => null
-    }),
-    testSummary: Annotation<any>({
-      reducer: z => z,
-      default: () => null
-    })
-  });
-
-  type State = typeof GraphState.State;
-  type Update = typeof GraphState.Update;
-
   const toolExecutor = async (state: State) => {
     const message = state.messages.at(-1);
     // @ts-ignore
@@ -112,7 +56,7 @@ export const MainGraphRun = async () => {
           }
 
           const result = await tool.invoke(toolCall.args);
-          const { messageValue, ...restResult } = result;
+          const { messageValue = {}, ...restResult } = result;
           return new Command({
             update: {
               ...restResult,
@@ -144,11 +88,8 @@ export const MainGraphRun = async () => {
     // Handle mixed Command and non-Command outputs
     const combinedOutputs = toolResults.map(output => {
       if (isCommand(output)) {
+        console.log('running  command output', output);
         return output;
-      }
-      // Tool invocation result is a ToolMessage, return a normal state update
-      if (output.messages?.length) {
-        return { messages: output.messages };
       }
       // Tool invocation result is a string, convert it to a ToolMessage
       return { messages: [output] };
