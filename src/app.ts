@@ -28,7 +28,8 @@ import {
   checkFileExistsEdges,
   checkTestFileEdges,
   writeTestsEdges,
-  analyzeTestResultsEdges
+  analyzeTestResultsEdges,
+  finalNotesAgent
 } from './agents';
 
 export const MainGraphRun = async () => {
@@ -154,6 +155,7 @@ export const MainGraphRun = async () => {
     .addNode('tools-fix-errors', toolExecutor)
     .addNode('tools-examine-test-results', toolExecutor)
     .addNode('tools-create-new-tests', toolExecutor)
+    .addNode('final-notes', finalNotesAgent)
 
     // Add edges with fixed flow
     .addEdge('__start__', 'find-file')
@@ -172,7 +174,8 @@ export const MainGraphRun = async () => {
     .addConditionalEdges('tools-run-tests', runTestsEdges)
     .addConditionalEdges('tools-fix-errors', fixErrorsEdges)
     .addConditionalEdges('tools-create-new-tests', writeTestsEdges)
-    .addConditionalEdges('tools-examine-test-results', analyzeTestResultsEdges);
+    .addConditionalEdges('tools-examine-test-results', analyzeTestResultsEdges)
+    .addEdge('final-notes', '__end__');
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
   console.log('app version', 'v0.1.54-alpha.10');

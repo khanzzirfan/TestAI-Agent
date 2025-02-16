@@ -41879,7 +41879,7 @@ const analyzeTestResultsEdges = async (state) => {
     else if (!state.testSummary) {
         return 'run-tests';
     }
-    return '__end__';
+    return 'final-notes';
 };
 exports.analyzeTestResultsEdges = analyzeTestResultsEdges;
 
@@ -42135,6 +42135,7 @@ __exportStar(__nccwpck_require__(40860), exports);
 __exportStar(__nccwpck_require__(26757), exports);
 __exportStar(__nccwpck_require__(74780), exports);
 __exportStar(__nccwpck_require__(38768), exports);
+__exportStar(__nccwpck_require__(87086), exports);
 
 
 /***/ }),
@@ -42241,6 +42242,41 @@ const saveTestsEdges = async (state) => {
     return 'run-tests'; // After saving, proceed to run tests
 };
 exports.saveTestsEdges = saveTestsEdges;
+
+
+/***/ }),
+
+/***/ 87086:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.finalNotesAgent = void 0;
+const prompts_1 = __nccwpck_require__(45425);
+const llm_1 = __nccwpck_require__(26627);
+const finalNotesAgent = async (state) => {
+    const template = `
+    ### Task: Write Summary of the Test Results
+    
+    - file: **{fileName}**
+    - Test Results: **{testResults}**
+
+    Summarize the test results and provide a detailed report of the test coverage and accuracy.      
+ `;
+    const prompt = prompts_1.ChatPromptTemplate.fromMessages([['system', template], new prompts_1.MessagesPlaceholder('messages')]);
+    const formattedPrompt = await prompt.formatMessages({
+        fileName: state.fileName,
+        messages: state.messages,
+        testResults: state.testResults
+    });
+    const res = await llm_1.llm.invoke(formattedPrompt);
+    return {
+        // @ts-ignore
+        messages: [res]
+    };
+};
+exports.finalNotesAgent = finalNotesAgent;
 
 
 /***/ }),
@@ -42407,6 +42443,7 @@ const MainGraphRun = async () => {
         .addNode('tools-fix-errors', toolExecutor)
         .addNode('tools-examine-test-results', toolExecutor)
         .addNode('tools-create-new-tests', toolExecutor)
+        .addNode('final-notes', agents_1.finalNotesAgent)
         // Add edges with fixed flow
         .addEdge('__start__', 'find-file')
         .addEdge('tools-read-file', 'analyze-existing-tests')
@@ -42424,7 +42461,8 @@ const MainGraphRun = async () => {
         .addConditionalEdges('tools-run-tests', agents_1.runTestsEdges)
         .addConditionalEdges('tools-fix-errors', agents_1.fixErrorsEdges)
         .addConditionalEdges('tools-create-new-tests', agents_1.writeTestsEdges)
-        .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges);
+        .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges)
+        .addEdge('final-notes', '__end__');
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
     console.log('app version', 'v0.1.54-alpha.10');
     const query = `

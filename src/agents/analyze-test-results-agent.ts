@@ -42,5 +42,5 @@ export const analyzeTestResultsEdges = async (state: State) => {
   } else if (!state.testSummary) {
     return 'run-tests';
   }
-  return '__end__';
+  return 'final-notes';
 };
