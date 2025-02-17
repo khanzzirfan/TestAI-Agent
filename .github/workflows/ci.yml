@@ -49,7 +49,7 @@ jobs:
 
       - name: Write .env file
         id: write-env
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
@@ -79,7 +79,7 @@ jobs:
 
       - name: Write .env file
         id: write-env
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
