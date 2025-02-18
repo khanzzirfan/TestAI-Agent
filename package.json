@@ -1,7 +1,7 @@
 {
   "name": "testifyai-agent",
   "description": "GitHub Actions for TestifyAI. This action is used to generate codegaurd to TestifyAI tests.",
-  "version": "v0.1.54-alpha.13",
+  "version": "0.1.54-alpha.14",
   "author": "khanzzirfan",
   "private": true,
   "homepage": "https://github.com/khanzzirfan/TestAI-Agent.git",
@@ -36,7 +36,10 @@
     "test": "npx jest",
     "test:only": "npx jest graph-agent.test.ts --no-coverage",
     "all": "npm run format:write && npm run lint && npm run test && npm run coverage && npm run package",
-    "start:dev": "npx ts-node src/testapp/test-agent-v2.ts"
+    "start:dev": "npx ts-node src/testapp/test-agent-v2.ts",
+    "release": "commit-and-tag-version",
+    "cleanup": "rm -rf dist",
+    "rel": "npm run cleanup && npm run bundle && npm run release -- --prerelease alpha"
   },
   "license": "MIT",
   "jest": {
@@ -76,11 +79,11 @@
     "@actions/github": "^6.0.0",
     "@langchain/azure-openai": "^0.0.11",
     "@langchain/community": "^0.3.29",
-    "@langchain/openai": "^0.3.16",
     "@langchain/core": "^0.3.39",
     "@langchain/langgraph": "^0.2.45",
-    "langchain": "^0.3.15",
+    "@langchain/openai": "^0.3.16",
     "dotenv": "^16.4.7",
+    "langchain": "^0.3.15",
     "langsmith": "^0.1.55",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.2"
@@ -93,6 +96,7 @@
     "@typescript-eslint/eslint-plugin": "^8.24.0",
     "@typescript-eslint/parser": "^8.24.0",
     "@vercel/ncc": "^0.38.3",
+    "commit-and-tag-version": "^12.5.0",
     "eslint": "^9.20.0",
     "eslint-plugin-jest": "^28.11.0",
     "eslint-plugin-jsonc": "^2.19.1",
