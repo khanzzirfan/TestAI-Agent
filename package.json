@@ -1,7 +1,7 @@
 {
   "name": "testifyai-agent",
   "description": "GitHub Actions for TestifyAI. This action is used to generate codegaurd to TestifyAI tests.",
-  "version": "0.1.54-alpha.18",
+  "version": "0.1.54-alpha.19",
   "author": "khanzzirfan",
   "private": true,
   "homepage": "https://github.com/khanzzirfan/TestAI-Agent.git",
@@ -41,7 +41,7 @@
     "cleanup": "rm -rf dist",
     "stage:one": "npm run cleanup && npm run release -- --prerelease alpha",
     "stage:two": "npm run bundle && npm run release -- --prerelease alpha",
-    "stage:three": "git add. && git commit -m 'chore: release alpha' && git push --follow-tags",
+    "stage:three": "git add . && git commit -m 'chore: release alpha' && git push --follow-tags",
     "stage:all": "npm run stage:one && npm run stage:two && npm run stage:three",
     "rel": "npm run cleanup && npm run release -- --prerelease alpha && npm run bundle && npm run release -- --prerelease alpha"
   },
