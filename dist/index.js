@@ -42399,7 +42399,7 @@ const MainGraphRun = async () => {
     const callToolsEdge = async (state) => {
         const lastMessage = state.messages[state.messages.length - 1];
         if (lastMessage.tool_calls?.length) {
-            return 'tools';
+            return 'tools-find-file';
         }
         const hasFile = state.fileName && state.filePath;
         const hasTestFile = state.testFileName && state.testFilePath;
@@ -42450,7 +42450,6 @@ const MainGraphRun = async () => {
         // Add edges with fixed flow
         .addEdge('__start__', 'find-file')
         .addEdge('tools-read-file', 'analyze-existing-tests')
-        .addEdge('tools-create-new-tests', 'find-test-file')
         .addConditionalEdges('find-file', agents_1.checkFileExistsEdges)
         .addConditionalEdges('find-test-file', agents_1.checkTestFileEdges)
         .addConditionalEdges('create-new-tests', agents_1.writeTestsEdges)
@@ -42465,6 +42464,7 @@ const MainGraphRun = async () => {
         .addConditionalEdges('tools-run-tests', agents_1.runTestsEdges)
         .addConditionalEdges('tools-fix-errors', agents_1.fixErrorsEdges)
         .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges)
+        .addConditionalEdges('tools-create-new-tests', callToolsEdge)
         .addEdge('final-notes', '__end__');
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
     console.log('app version', 'v0.1.54-alpha.10');

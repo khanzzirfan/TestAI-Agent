@@ -102,7 +102,7 @@ export const MainGraphRun = async () => {
   const callToolsEdge = async (state: State) => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
     if (lastMessage.tool_calls?.length) {
-      return 'tools';
+      return 'tools-find-file';
     }
     const hasFile = state.fileName && state.filePath;
     const hasTestFile = state.testFileName && state.testFilePath;
@@ -160,7 +160,6 @@ export const MainGraphRun = async () => {
     // Add edges with fixed flow
     .addEdge('__start__', 'find-file')
     .addEdge('tools-read-file', 'analyze-existing-tests')
-    .addEdge('tools-create-new-tests', 'find-test-file')
     .addConditionalEdges('find-file', checkFileExistsEdges)
     .addConditionalEdges('find-test-file', checkTestFileEdges)
     .addConditionalEdges('create-new-tests', writeTestsEdges)
@@ -175,6 +174,7 @@ export const MainGraphRun = async () => {
     .addConditionalEdges('tools-run-tests', runTestsEdges)
     .addConditionalEdges('tools-fix-errors', fixErrorsEdges)
     .addConditionalEdges('tools-examine-test-results', analyzeTestResultsEdges)
+    .addConditionalEdges('tools-create-new-tests', callToolsEdge)
     .addEdge('final-notes', '__end__');
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
