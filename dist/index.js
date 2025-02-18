@@ -42447,6 +42447,7 @@ const MainGraphRun = async () => {
         // Add edges with fixed flow
         .addEdge('__start__', 'find-file')
         .addEdge('tools-read-file', 'analyze-existing-tests')
+        .addEdge('tools-create-new-tests', 'find-test-file')
         .addConditionalEdges('find-file', agents_1.checkFileExistsEdges)
         .addConditionalEdges('find-test-file', agents_1.checkTestFileEdges)
         .addConditionalEdges('create-new-tests', agents_1.writeTestsEdges)
@@ -42460,7 +42461,6 @@ const MainGraphRun = async () => {
         .addConditionalEdges('tools-find-test-file', agents_1.checkTestFileEdges)
         .addConditionalEdges('tools-run-tests', agents_1.runTestsEdges)
         .addConditionalEdges('tools-fix-errors', agents_1.fixErrorsEdges)
-        .addConditionalEdges('tools-create-new-tests', agents_1.writeTestsEdges)
         .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges)
         .addEdge('final-notes', '__end__');
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
@@ -42813,7 +42813,7 @@ exports.FileFolderTools = [
         name: 'create-file',
         description: 'Creates a new file with optional template content and validation',
         schema: zod_1.z.object({
-            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            reason: zod_1.z.string().describe('What is the reason that choose to call this tool from the context?'),
             path: zod_1.z.string().describe('path to the file'),
             fileName: zod_1.z.string().describe('name of the file'),
             template: zod_1.z.string().optional().describe('template name to use'),

@@ -160,6 +160,7 @@ export const MainGraphRun = async () => {
     // Add edges with fixed flow
     .addEdge('__start__', 'find-file')
     .addEdge('tools-read-file', 'analyze-existing-tests')
+    .addEdge('tools-create-new-tests', 'find-test-file')
     .addConditionalEdges('find-file', checkFileExistsEdges)
     .addConditionalEdges('find-test-file', checkTestFileEdges)
     .addConditionalEdges('create-new-tests', writeTestsEdges)
@@ -173,7 +174,6 @@ export const MainGraphRun = async () => {
     .addConditionalEdges('tools-find-test-file', checkTestFileEdges)
     .addConditionalEdges('tools-run-tests', runTestsEdges)
     .addConditionalEdges('tools-fix-errors', fixErrorsEdges)
-    .addConditionalEdges('tools-create-new-tests', writeTestsEdges)
     .addConditionalEdges('tools-examine-test-results', analyzeTestResultsEdges)
     .addEdge('final-notes', '__end__');
 

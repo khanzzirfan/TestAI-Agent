@@ -135,7 +135,7 @@ export const FileFolderTools = [
     name: 'create-file',
     description: 'Creates a new file with optional template content and validation',
     schema: z.object({
-      reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+      reason: z.string().describe('What is the reason that choose to call this tool from the context?'),
       path: z.string().describe('path to the file'),
       fileName: z.string().describe('name of the file'),
       template: z.string().optional().describe('template name to use'),
