@@ -28,8 +28,8 @@ export const runTests = async (state: State): Promise<Update> => {
     // @ts-ignore
     messages: [res],
     hasError: false,
-    testResults: null,
-    testSummary: null
+    testResults: '---',
+    testSummary: '---'
   };
 };
 

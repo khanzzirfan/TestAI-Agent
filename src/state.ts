@@ -7,11 +7,11 @@ export const GraphState = Annotation.Root({
     reducer: (x, y) => x.concat(y)
   }),
   iteration: Annotation<number>({
-    reducer: x => x,
+    reducer: (x, y) => y ?? x ?? 0,
     default: () => 0
   }),
   hasError: Annotation<boolean>({
-    reducer: (x, y) => y ?? x ?? ''
+    reducer: (x, y) => y
   }),
   fileName: Annotation<string>({
     reducer: (x, y) => y ?? x ?? ''
@@ -32,13 +32,13 @@ export const GraphState = Annotation.Root({
     reducer: (x, y) => y ?? x ?? ''
   }),
   testFileFound: Annotation<boolean>({
-    reducer: (x, y) => y ?? x ?? ''
+    reducer: (x, y) => y
   }),
   testResults: Annotation<any>({
-    reducer: (x, y) => y ?? x ?? ''
+    reducer: (x, y) => y
   }),
   testSummary: Annotation<any>({
-    reducer: (x, y) => y ?? x ?? ''
+    reducer: (x, y) => y
   })
 });
 
