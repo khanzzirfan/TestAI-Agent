@@ -41809,7 +41809,6 @@ const analyzeExistingTests = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        // @ts-ignore
         messages: [res]
     };
 };
@@ -42840,7 +42839,11 @@ exports.FileFolderTools = [
                         testFileFound: true,
                         messageValue: {
                             success: false,
-                            error: 'File already exists and overwrite is not enabled'
+                            error: 'File already exists and overwrite is not enabled',
+                            testFileName: fileName,
+                            testFilePath: fullPath,
+                            testFileContent: fileContent,
+                            testFileFound: true
                         }
                     };
                 }
@@ -42854,7 +42857,11 @@ exports.FileFolderTools = [
                     messageValue: {
                         success: true,
                         path: fullPath,
-                        message: `File created successfully at ${fullPath}`
+                        message: `File created successfully at ${fullPath}`,
+                        testFileName: fileName,
+                        testFilePath: fullPath,
+                        testFileContent: content,
+                        testFileFound: true
                     }
                 };
             }
@@ -43106,7 +43113,11 @@ exports.FileFolderTools = [
                     testFileFound,
                     messageValue: {
                         success: testFileFound,
-                        message: testFileFound ? 'Test file found' : 'Test file not found'
+                        message: testFileFound ? 'Test file found' : 'Test file not found',
+                        testFileContent: testFile ? testFile.content : null,
+                        testFilePath: testFile ? testFile.path : null,
+                        testFileName: testFile ? path_1.default.basename(testFile.path) : null,
+                        testFileFound
                     }
                 };
             }
