@@ -11,34 +11,34 @@ export const GraphState = Annotation.Root({
     default: () => 0
   }),
   hasError: Annotation<boolean>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   }),
   fileName: Annotation<string>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   }),
   testFileName: Annotation<string>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   }),
   fileContent: Annotation<string>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   }),
   filePath: Annotation<string>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   }),
   testFileContent: Annotation<string>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   }),
   testFilePath: Annotation<string>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   }),
   testFileFound: Annotation<boolean>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   }),
   testResults: Annotation<any>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   }),
   testSummary: Annotation<any>({
-    reducer: z => z
+    reducer: (x, y) => y ?? x ?? ''
   })
 });
 

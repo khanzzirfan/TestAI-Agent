@@ -42679,34 +42679,34 @@ exports.GraphState = langgraph_1.Annotation.Root({
         default: () => 0
     }),
     hasError: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     fileName: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testFileName: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     fileContent: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     filePath: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testFileContent: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testFilePath: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testFileFound: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testResults: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testSummary: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     })
 });
 
