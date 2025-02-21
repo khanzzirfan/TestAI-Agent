@@ -32,7 +32,7 @@ import {
   finalNotesAgent
 } from './agents';
 
-export const MainGraphRun = async () => {
+export const MainGraphRun = async (): Promise<string> => {
   // Initialize memory to persist state between graph runs
   const checkpointer = new MemorySaver();
   const inMemoryStore = new InMemoryStore();
@@ -209,4 +209,5 @@ export const MainGraphRun = async () => {
 
   // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
   console.log(outputContent);
+  return outputContent;
 };
