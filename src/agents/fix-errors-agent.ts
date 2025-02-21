@@ -52,8 +52,8 @@ export const fixErrors = async (state: State): Promise<Update> => {
     iteration: state.iteration + 1,
     // reset error flags
     hasError: false,
-    testResults: null,
-    testSummary: null
+    testResults: '---',
+    testSummary: '---'
   };
 };
 
