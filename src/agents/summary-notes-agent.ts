@@ -23,6 +23,7 @@ export const finalNotesAgent = async (state: State): Promise<Update> => {
   const res = await llm.invoke(formattedPrompt);
   return {
     // @ts-ignore
-    messages: [res]
+    messages: [res],
+    finalComments: res && res?.content && JSON.stringify(res?.content)
   };
 };

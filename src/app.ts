@@ -197,7 +197,7 @@ export const MainGraphRun = async (): Promise<string> => {
 
   // Use the Runnable
   const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
-  const outputContent = await app.invoke(
+  const finalState = await app.invoke(
     {
       messages: [new HumanMessage(query)],
       fileName: filename
@@ -205,9 +205,9 @@ export const MainGraphRun = async (): Promise<string> => {
     { recursionLimit: 100, configurable: { thread_id: 1001 } }
   );
 
+  const resultOfGraph = finalState.finalComments;
   console.log('result of graph for a threadId:', currentDate);
-
   // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
-  console.log(outputContent);
-  return outputContent;
+  console.log(resultOfGraph);
+  return resultOfGraph;
 };
