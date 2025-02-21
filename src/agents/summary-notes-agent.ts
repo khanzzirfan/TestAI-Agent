@@ -24,6 +24,6 @@ export const finalNotesAgent = async (state: State): Promise<Update> => {
   return {
     // @ts-ignore
     messages: [res],
-    finalComments: res && res?.content && JSON.stringify(res?.content)
+    finalComments: res && (res?.content as string)
   };
 };
