@@ -42275,7 +42275,7 @@ const finalNotesAgent = async (state) => {
     return {
         // @ts-ignore
         messages: [res],
-        finalComments: res && res?.content && JSON.stringify(res?.content)
+        finalComments: res && res?.content
     };
 };
 exports.finalNotesAgent = finalNotesAgent;
