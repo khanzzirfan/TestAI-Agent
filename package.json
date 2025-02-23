@@ -1,7 +1,7 @@
 {
   "name": "testifyai-agent",
   "description": "GitHub Actions for TestifyAI. This action is used to generate codegaurd to TestifyAI tests.",
-  "version": "v0.1.54-alpha.11",
+  "version": "0.1.54",
   "author": "khanzzirfan",
   "private": true,
   "homepage": "https://github.com/khanzzirfan/TestAI-Agent.git",
@@ -36,7 +36,14 @@
     "test": "npx jest",
     "test:only": "npx jest graph-agent.test.ts --no-coverage",
     "all": "npm run format:write && npm run lint && npm run test && npm run coverage && npm run package",
-    "start:dev": "npx ts-node src/testapp/test-agent-v2.ts"
+    "start:dev": "npx ts-node src/testapp/test-agent-v2.ts",
+    "release": "commit-and-tag-version",
+    "cleanup": "rm -rf dist",
+    "stage:one": "npm run cleanup && npm run release -- --prerelease alpha",
+    "stage:two": "npm run bundle && npm run release -- --prerelease alpha",
+    "stage:three": "git add . && git commit -m 'chore: release alpha' && git push --follow-tags",
+    "stage:all": "npm run stage:one && npm run stage:two && npm run stage:three",
+    "rel": "npm run cleanup && npm run release -- --prerelease alpha && npm run bundle && npm run release"
   },
   "license": "MIT",
   "jest": {
@@ -79,8 +86,8 @@
     "@langchain/openai": "^0.4.4",
     "@langchain/core": "^0.3.39",
     "@langchain/langgraph": "^0.2.45",
-    "langchain": "^0.3.15",
     "dotenv": "^16.4.7",
+    "langchain": "^0.3.15",
     "langsmith": "^0.1.55",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.2"
@@ -93,6 +100,7 @@
     "@typescript-eslint/eslint-plugin": "^8.24.1",
     "@typescript-eslint/parser": "^8.24.1",
     "@vercel/ncc": "^0.38.3",
+    "commit-and-tag-version": "^12.5.0",
     "eslint": "^9.20.1",
     "eslint-plugin-jest": "^28.11.0",
     "eslint-plugin-jsonc": "^2.19.1",

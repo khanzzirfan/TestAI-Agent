@@ -41809,7 +41809,6 @@ const analyzeExistingTests = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        // @ts-ignore
         messages: [res]
     };
 };
@@ -42022,7 +42021,6 @@ const createNewTests = async (state) => {
     });
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
-        // @ts-ignore
         messages: [res]
     };
 };
@@ -42086,8 +42084,8 @@ const fixErrors = async (state) => {
         iteration: state.iteration + 1,
         // reset error flags
         hasError: false,
-        testResults: null,
-        testSummary: null
+        testResults: '---',
+        testSummary: '---'
     };
 };
 exports.fixErrors = fixErrors;
@@ -42171,8 +42169,8 @@ const runTests = async (state) => {
         // @ts-ignore
         messages: [res],
         hasError: false,
-        testResults: null,
-        testSummary: null
+        testResults: '---',
+        testSummary: '---'
     };
 };
 exports.runTests = runTests;
@@ -42239,6 +42237,9 @@ const saveTestsEdges = async (state) => {
     if (lastMessage.tool_calls?.length) {
         return 'tools-write-tests';
     }
+    if (!state.testFileContent || !state.testFilePath) {
+        return 'find-test-file';
+    }
     return 'run-tests'; // After saving, proceed to run tests
 };
 exports.saveTestsEdges = saveTestsEdges;
@@ -42273,7 +42274,8 @@ const finalNotesAgent = async (state) => {
     const res = await llm_1.llm.invoke(formattedPrompt);
     return {
         // @ts-ignore
-        messages: [res]
+        messages: [res],
+        finalComments: res && res?.content
     };
 };
 exports.finalNotesAgent = finalNotesAgent;
@@ -42396,7 +42398,7 @@ const MainGraphRun = async () => {
     const callToolsEdge = async (state) => {
         const lastMessage = state.messages[state.messages.length - 1];
         if (lastMessage.tool_calls?.length) {
-            return 'tools';
+            return 'tools-find-file';
         }
         const hasFile = state.fileName && state.filePath;
         const hasTestFile = state.testFileName && state.testFilePath;
@@ -42460,8 +42462,8 @@ const MainGraphRun = async () => {
         .addConditionalEdges('tools-find-test-file', agents_1.checkTestFileEdges)
         .addConditionalEdges('tools-run-tests', agents_1.runTestsEdges)
         .addConditionalEdges('tools-fix-errors', agents_1.fixErrorsEdges)
-        .addConditionalEdges('tools-create-new-tests', agents_1.writeTestsEdges)
         .addConditionalEdges('tools-examine-test-results', agents_1.analyzeTestResultsEdges)
+        .addConditionalEdges('tools-create-new-tests', callToolsEdge)
         .addEdge('final-notes', '__end__');
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
     console.log('app version', 'v0.1.54-alpha.10');
@@ -42481,13 +42483,15 @@ const MainGraphRun = async () => {
   6. Fix any failures`;
     // Use the Runnable
     const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
-    const outputContent = await app.invoke({
+    const finalState = await app.invoke({
         messages: [new messages_1.HumanMessage(query)],
         fileName: filename
     }, { recursionLimit: 100, configurable: { thread_id: 1001 } });
+    const resultOfGraph = finalState.finalComments;
     console.log('result of graph for a threadId:', currentDate);
     // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
-    console.log(outputContent);
+    console.log(resultOfGraph);
+    return resultOfGraph;
 };
 exports.MainGraphRun = MainGraphRun;
 
@@ -42585,7 +42589,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = run;
 const core = __importStar(__nccwpck_require__(37484));
-const exec = __importStar(__nccwpck_require__(95236));
 const wait_1 = __nccwpck_require__(40910);
 const app_1 = __nccwpck_require__(168);
 /**
@@ -42614,8 +42617,10 @@ async function run() {
         // Sample LangChain code
         try {
             core.debug('Running the main graph');
-            await (0, app_1.MainGraphRun)();
+            const response = await (0, app_1.MainGraphRun)();
             core.debug('Finished running the main graph');
+            // wirte the final comments to the output
+            core.setOutput('final_comments', response);
         }
         catch (error) {
             core.setFailed(`LangChain code failed: ${error}`);
@@ -42627,33 +42632,31 @@ async function run() {
         if (error instanceof Error)
             core.setFailed(error.message);
     }
-    // Commit changes if there are any
-    try {
-        core.info('Checking for changes...');
-        let diffOutput = '';
-        await exec.exec('git', ['diff', '--name-only'], {
-            listeners: {
-                stdout: (data) => {
-                    diffOutput += data.toString();
-                }
-            }
-        });
-        if (diffOutput.trim()) {
-            core.info('Changes detected, committing...');
-            await exec.exec('git', ['config', 'user.name', 'github-actions']);
-            await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
-            await exec.exec('git', ['add', '.']);
-            await exec.exec('git', ['commit', '-m', 'Automated commit by GitHub Actions']);
-            await exec.exec('git', ['push']);
-            core.info('Changes committed and pushed.');
-        }
-        else {
-            core.info('No changes detected, skipping commit.');
-        }
-    }
-    catch (error) {
-        core.warning(`Failed to commit changes: ${error}`);
-    }
+    // // Commit changes if there are any
+    // try {
+    //   core.info('Checking for changes...');
+    //   let diffOutput = '';
+    //   await exec.exec('git', ['diff', '--name-only'], {
+    //     listeners: {
+    //       stdout: (data: Buffer) => {
+    //         diffOutput += data.toString();
+    //       }
+    //     }
+    //   });
+    //   if (diffOutput.trim()) {
+    //     core.info('Changes detected, committing...');
+    //     await exec.exec('git', ['config', 'user.name', 'github-actions']);
+    //     await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
+    //     await exec.exec('git', ['add', '.']);
+    //     await exec.exec('git', ['commit', '-m', 'Automated commit by GitHub Actions']);
+    //     await exec.exec('git', ['push']);
+    //     core.info('Changes committed and pushed.');
+    //   } else {
+    //     core.info('No changes detected, skipping commit.');
+    //   }
+    // } catch (error) {
+    //   core.warning(`Failed to commit changes: ${error}`);
+    // }
 }
 
 
@@ -42673,38 +42676,42 @@ exports.GraphState = langgraph_1.Annotation.Root({
         reducer: (x, y) => x.concat(y)
     }),
     iteration: (0, langgraph_1.Annotation)({
-        reducer: x => x,
+        reducer: (x, y) => y ?? x ?? 0,
         default: () => 0
     }),
     hasError: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y
     }),
     fileName: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testFileName: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     fileContent: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     filePath: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testFileContent: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testFilePath: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y ?? x ?? ''
     }),
     testFileFound: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y
     }),
     testResults: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y
     }),
     testSummary: (0, langgraph_1.Annotation)({
-        reducer: z => z
+        reducer: (x, y) => y
+    }),
+    finalComments: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? '',
+        default: () => ''
     })
 });
 
@@ -42813,7 +42820,7 @@ exports.FileFolderTools = [
         name: 'create-file',
         description: 'Creates a new file with optional template content and validation',
         schema: zod_1.z.object({
-            reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+            reason: zod_1.z.string().describe('What is the reason that choose to call this tool from the context?'),
             path: zod_1.z.string().describe('path to the file'),
             fileName: zod_1.z.string().describe('name of the file'),
             template: zod_1.z.string().optional().describe('template name to use'),
@@ -42837,7 +42844,11 @@ exports.FileFolderTools = [
                         testFileFound: true,
                         messageValue: {
                             success: false,
-                            error: 'File already exists and overwrite is not enabled'
+                            error: 'File already exists and overwrite is not enabled',
+                            testFileName: fileName,
+                            testFilePath: fullPath,
+                            testFileContent: fileContent,
+                            testFileFound: true
                         }
                     };
                 }
@@ -42851,7 +42862,11 @@ exports.FileFolderTools = [
                     messageValue: {
                         success: true,
                         path: fullPath,
-                        message: `File created successfully at ${fullPath}`
+                        message: `File created successfully at ${fullPath}`,
+                        testFileName: fileName,
+                        testFilePath: fullPath,
+                        testFileContent: content,
+                        testFileFound: true
                     }
                 };
             }
@@ -43103,7 +43118,11 @@ exports.FileFolderTools = [
                     testFileFound,
                     messageValue: {
                         success: testFileFound,
-                        message: testFileFound ? 'Test file found' : 'Test file not found'
+                        message: testFileFound ? 'Test file found' : 'Test file not found',
+                        testFileContent: testFile ? testFile.content : null,
+                        testFilePath: testFile ? testFile.path : null,
+                        testFileName: testFile ? path_1.default.basename(testFile.path) : null,
+                        testFileFound
                     }
                 };
             }

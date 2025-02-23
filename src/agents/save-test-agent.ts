@@ -47,5 +47,8 @@ export const saveTestsEdges = async (state: State) => {
   if (lastMessage.tool_calls?.length) {
     return 'tools-write-tests';
   }
+  if (!state.testFileContent || !state.testFilePath) {
+    return 'find-test-file';
+  }
   return 'run-tests'; // After saving, proceed to run tests
 };

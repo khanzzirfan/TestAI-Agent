@@ -135,7 +135,7 @@ export const FileFolderTools = [
     name: 'create-file',
     description: 'Creates a new file with optional template content and validation',
     schema: z.object({
-      reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+      reason: z.string().describe('What is the reason that choose to call this tool from the context?'),
       path: z.string().describe('path to the file'),
       fileName: z.string().describe('name of the file'),
       template: z.string().optional().describe('template name to use'),
@@ -161,7 +161,11 @@ export const FileFolderTools = [
             testFileFound: true,
             messageValue: {
               success: false,
-              error: 'File already exists and overwrite is not enabled'
+              error: 'File already exists and overwrite is not enabled',
+              testFileName: fileName,
+              testFilePath: fullPath,
+              testFileContent: fileContent,
+              testFileFound: true
             }
           };
         }
@@ -177,7 +181,11 @@ export const FileFolderTools = [
           messageValue: {
             success: true,
             path: fullPath,
-            message: `File created successfully at ${fullPath}`
+            message: `File created successfully at ${fullPath}`,
+            testFileName: fileName,
+            testFilePath: fullPath,
+            testFileContent: content,
+            testFileFound: true
           }
         };
       } catch (error: unknown | any) {
@@ -470,7 +478,11 @@ export const FileFolderTools = [
           testFileFound,
           messageValue: {
             success: testFileFound,
-            message: testFileFound ? 'Test file found' : 'Test file not found'
+            message: testFileFound ? 'Test file found' : 'Test file not found',
+            testFileContent: testFile ? testFile.content : null,
+            testFilePath: testFile ? testFile.path : null,
+            testFileName: testFile ? path.basename(testFile.path) : null,
+            testFileFound
           }
         };
       } catch (error: any) {

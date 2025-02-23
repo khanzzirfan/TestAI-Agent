@@ -32,7 +32,7 @@ import {
   finalNotesAgent
 } from './agents';
 
-export const MainGraphRun = async () => {
+export const MainGraphRun = async (): Promise<string> => {
   // Initialize memory to persist state between graph runs
   const checkpointer = new MemorySaver();
   const inMemoryStore = new InMemoryStore();
@@ -102,7 +102,7 @@ export const MainGraphRun = async () => {
   const callToolsEdge = async (state: State) => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
     if (lastMessage.tool_calls?.length) {
-      return 'tools';
+      return 'tools-find-file';
     }
     const hasFile = state.fileName && state.filePath;
     const hasTestFile = state.testFileName && state.testFilePath;
@@ -173,8 +173,8 @@ export const MainGraphRun = async () => {
     .addConditionalEdges('tools-find-test-file', checkTestFileEdges)
     .addConditionalEdges('tools-run-tests', runTestsEdges)
     .addConditionalEdges('tools-fix-errors', fixErrorsEdges)
-    .addConditionalEdges('tools-create-new-tests', writeTestsEdges)
     .addConditionalEdges('tools-examine-test-results', analyzeTestResultsEdges)
+    .addConditionalEdges('tools-create-new-tests', callToolsEdge)
     .addEdge('final-notes', '__end__');
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
@@ -197,7 +197,7 @@ export const MainGraphRun = async () => {
 
   // Use the Runnable
   const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
-  const outputContent = await app.invoke(
+  const finalState = await app.invoke(
     {
       messages: [new HumanMessage(query)],
       fileName: filename
@@ -205,8 +205,9 @@ export const MainGraphRun = async () => {
     { recursionLimit: 100, configurable: { thread_id: 1001 } }
   );
 
+  const resultOfGraph = finalState.finalComments;
   console.log('result of graph for a threadId:', currentDate);
-
   // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
-  console.log(outputContent);
+  console.log(resultOfGraph);
+  return resultOfGraph;
 };
