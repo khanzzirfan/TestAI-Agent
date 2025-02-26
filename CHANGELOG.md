@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.55-alpha.0](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.54...v0.1.55-alpha.0) (2025-02-26)
+
+
+### Bug Fixes
+
+* updated code for recursion limit and package manager updates ([f0b013d](https://github.com/khanzzirfan/TestAI-Agent.git/commit/f0b013d6b42126b3ed7550cb0b2d26c8ad29692b))
+
 ## [0.1.54](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.54-alpha.42...v0.1.54) (2025-02-23)
 
 ## [0.1.54-alpha.42](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.54-alpha.41...v0.1.54-alpha.42) (2025-02-23)
