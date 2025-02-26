@@ -42284,48 +42284,14 @@ exports.finalNotesAgent = finalNotesAgent;
 /***/ }),
 
 /***/ 168:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.MainGraphRun = void 0;
 const langgraph_1 = __nccwpck_require__(39405);
 const messages_1 = __nccwpck_require__(62776);
-const core = __importStar(__nccwpck_require__(37484));
 const langgraph_2 = __nccwpck_require__(39405);
 const messages_2 = __nccwpck_require__(62776);
 const messages_3 = __nccwpck_require__(62776);
@@ -42335,11 +42301,11 @@ const state_1 = __nccwpck_require__(2462);
 const tools = [...tools_1.CustomTools];
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 const agents_1 = __nccwpck_require__(36758);
-const MainGraphRun = async () => {
+const MainGraphRun = async ({ fileName, recursionLimit }) => {
     // Initialize memory to persist state between graph runs
     const checkpointer = new langgraph_1.MemorySaver();
     const inMemoryStore = new langgraph_1.InMemoryStore();
-    const filename = core.getInput('file_name');
+    const filename = fileName;
     const toolNames = tools_1.CustomTools.map(tool => tool.name).join(', ');
     const toolExecutor = async (state) => {
         const message = state.messages.at(-1);
@@ -42486,7 +42452,7 @@ const MainGraphRun = async () => {
     const finalState = await app.invoke({
         messages: [new messages_1.HumanMessage(query)],
         fileName: filename
-    }, { recursionLimit: 100, configurable: { thread_id: 1001 } });
+    }, { recursionLimit: recursionLimit || 100, configurable: { thread_id: 1001 } });
     const resultOfGraph = finalState.finalComments;
     console.log('result of graph for a threadId:', currentDate);
     // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
@@ -42601,11 +42567,12 @@ async function run() {
         /// await SampleRun()
         /** Sample code to run */
         const ms = core.getInput('milliseconds');
-        const filename = core.getInput('file_name');
+        const fileName = core.getInput('file_name');
+        const recursionLimit = parseInt(core.getInput('recursion_limit'), 10);
         // The `who-to-greet` input is defined in action metadata file
-        const whoToGreet = core.getInput('who-to-greet', { required: false });
-        core.info(`Hello, ${whoToGreet}!`);
-        core.info(`The file name is ${filename}`);
+        // const whoToGreet = core.getInput('who-to-greet', { required: false });
+        // core.info(`Hello, ${whoToGreet}!`);
+        core.info(`The file name is ${fileName} and the recursion limit is ${recursionLimit}`);
         // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
         core.debug(`Waiting ${ms} milliseconds ...`);
         // Log the current timestamp, wait, then log the new timestamp
@@ -42617,7 +42584,7 @@ async function run() {
         // Sample LangChain code
         try {
             core.debug('Running the main graph');
-            const response = await (0, app_1.MainGraphRun)();
+            const response = await (0, app_1.MainGraphRun)({ fileName, recursionLimit });
             core.debug('Finished running the main graph');
             // wirte the final comments to the output
             core.setOutput('final_comments', response);
@@ -43152,7 +43119,7 @@ exports.CustomTools = void 0;
 const npm_test_tool_1 = __nccwpck_require__(28834);
 const file_folder_tools_1 = __nccwpck_require__(48716);
 const test_result_analyzer_tool_1 = __nccwpck_require__(37543);
-exports.CustomTools = [...npm_test_tool_1.TestTools, ...file_folder_tools_1.FileFolderTools, ...test_result_analyzer_tool_1.TestResultAnalyzerTools];
+exports.CustomTools = [...npm_test_tool_1.TestTools, ...file_folder_tools_1.FileFolderTools, ...test_result_analyzer_tool_1.TestResultAnalyzerTools, ...npm_test_tool_1.InstallTools];
 
 
 /***/ }),
@@ -43163,7 +43130,7 @@ exports.CustomTools = [...npm_test_tool_1.TestTools, ...file_folder_tools_1.File
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.TestTools = void 0;
+exports.InstallTools = exports.TestTools = void 0;
 const zod_1 = __nccwpck_require__(34809);
 const tools_1 = __nccwpck_require__(3477);
 const util_1 = __nccwpck_require__(39023);
@@ -43219,6 +43186,146 @@ exports.TestTools = [
                 return {
                     hasError: true,
                     testResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messageValue: error.message
+                };
+            }
+        }
+    })
+];
+exports.InstallTools = [
+    // Enhanced npm install tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'npm-install',
+        description: 'Executes npm install commands with support for various options including force and legacy-peer-deps',
+        schema: zod_1.z.object({
+            options: zod_1.z
+                .object({
+                directory_path: zod_1.z
+                    .string()
+                    .optional()
+                    .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+                force: zod_1.z.boolean().optional().describe('Run install with --force'),
+                legacyPeerDeps: zod_1.z.boolean().optional().describe('Run install with --legacy-peer-deps')
+            })
+                .optional()
+        }),
+        func: async ({ options = {} }, runManager) => {
+            try {
+                let fullCommand = 'npm install';
+                // Add options to the command
+                if (options.directory_path)
+                    fullCommand += ` --prefix ${options.directory_path}`;
+                if (options.force)
+                    fullCommand += ' --force';
+                if (options.legacyPeerDeps)
+                    fullCommand += ' --legacy-peer-deps';
+                const { stdout, stderr } = await nodeExecutor(fullCommand);
+                return {
+                    installResults: { success: true, output: stdout },
+                    hasError: false,
+                    messageValue: stdout
+                };
+            }
+            catch (error) {
+                return {
+                    hasError: true,
+                    installResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messageValue: error.message
+                };
+            }
+        }
+    }),
+    // Enhanced yarn install tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'yarn-install',
+        description: 'Executes yarn install commands with support for various options including force and legacy-peer-deps',
+        schema: zod_1.z.object({
+            options: zod_1.z
+                .object({
+                directory_path: zod_1.z
+                    .string()
+                    .optional()
+                    .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+                force: zod_1.z.boolean().optional().describe('Run install with --force'),
+                legacyPeerDeps: zod_1.z.boolean().optional().describe('Run install with --legacy-peer-deps')
+            })
+                .optional()
+        }),
+        func: async ({ options = {} }, runManager) => {
+            try {
+                let fullCommand = 'yarn install';
+                // Add options to the command
+                if (options.directory_path)
+                    fullCommand += ` --cwd ${options.directory_path}`;
+                if (options.force)
+                    fullCommand += ' --force';
+                if (options.legacyPeerDeps)
+                    fullCommand += ' --legacy-peer-deps';
+                const { stdout, stderr } = await nodeExecutor(fullCommand);
+                return {
+                    installResults: { success: true, output: stdout },
+                    hasError: false,
+                    messageValue: stdout
+                };
+            }
+            catch (error) {
+                return {
+                    hasError: true,
+                    installResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messageValue: error.message
+                };
+            }
+        }
+    }),
+    // Enhanced pnpm install tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'pnpm-install',
+        description: 'Executes pnpm install commands with support for various options including force and legacy-peer-deps',
+        schema: zod_1.z.object({
+            options: zod_1.z
+                .object({
+                directory_path: zod_1.z
+                    .string()
+                    .optional()
+                    .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+                force: zod_1.z.boolean().optional().describe('Run install with --force'),
+                legacyPeerDeps: zod_1.z.boolean().optional().describe('Run install with --legacy-peer-deps')
+            })
+                .optional()
+        }),
+        func: async ({ options = {} }, runManager) => {
+            try {
+                let fullCommand = 'pnpm install';
+                // Add options to the command
+                if (options.directory_path)
+                    fullCommand += ` --prefix ${options.directory_path}`;
+                if (options.force)
+                    fullCommand += ' --force';
+                if (options.legacyPeerDeps)
+                    fullCommand += ' --legacy-peer-deps';
+                const { stdout, stderr } = await nodeExecutor(fullCommand);
+                return {
+                    installResults: { success: true, output: stdout },
+                    hasError: false,
+                    messageValue: stdout
+                };
+            }
+            catch (error) {
+                return {
+                    hasError: true,
+                    installResults: {
                         success: false,
                         error: error.message,
                         output: error.stdout || ''
