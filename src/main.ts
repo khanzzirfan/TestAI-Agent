@@ -13,12 +13,13 @@ export async function run(): Promise<void> {
     /// await SampleRun()
     /** Sample code to run */
     const ms: string = core.getInput('milliseconds');
-    const filename: string = core.getInput('file_name');
+    const fileName: string = core.getInput('file_name');
+    const recursionLimit: number = parseInt(core.getInput('recursion_limit'), 10);
 
     // The `who-to-greet` input is defined in action metadata file
-    const whoToGreet = core.getInput('who-to-greet', { required: false });
-    core.info(`Hello, ${whoToGreet}!`);
-    core.info(`The file name is ${filename}`);
+    // const whoToGreet = core.getInput('who-to-greet', { required: false });
+    // core.info(`Hello, ${whoToGreet}!`);
+    core.info(`The file name is ${fileName} and the recursion limit is ${recursionLimit}`);
 
     // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
     core.debug(`Waiting ${ms} milliseconds ...`);
@@ -34,7 +35,7 @@ export async function run(): Promise<void> {
     // Sample LangChain code
     try {
       core.debug('Running the main graph');
-      const response = await MainGraphRun();
+      const response = await MainGraphRun({ fileName, recursionLimit });
       core.debug('Finished running the main graph');
       // wirte the final comments to the output
       core.setOutput('final_comments', response);
