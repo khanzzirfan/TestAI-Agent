@@ -42301,7 +42301,7 @@ const state_1 = __nccwpck_require__(2462);
 const tools = [...tools_1.CustomTools];
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 const agents_1 = __nccwpck_require__(36758);
-const MainGraphRun = async ({ fileName, recursionLimit }) => {
+const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
     // Initialize memory to persist state between graph runs
     const checkpointer = new langgraph_1.MemorySaver();
     const inMemoryStore = new langgraph_1.InMemoryStore();
@@ -42433,6 +42433,9 @@ const MainGraphRun = async ({ fileName, recursionLimit }) => {
         .addEdge('final-notes', '__end__');
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
     console.log('app version', 'v0.1.54-alpha.10');
+    const additionalPromptNotes = `
+  Additional Notes: ${additionalPrompt}
+  `;
     const query = `
   You are a coding assistant with expertise in test automation.
   Generate and execute tests for ${filename}.
@@ -42446,13 +42449,19 @@ const MainGraphRun = async ({ fileName, recursionLimit }) => {
   3. Improve existing tests or create new tests
   4. Save test file
   5. Run tests with coverage
-  6. Fix any failures`;
+  6. Fix any failures
+  7. Analyze test results
+  8. Provide final notes
+
+  ${additionalPrompt ? additionalPromptNotes : ''}
+
+  `;
     // Use the Runnable
     const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
     const finalState = await app.invoke({
         messages: [new messages_1.HumanMessage(query)],
         fileName: filename
-    }, { recursionLimit: recursionLimit || 100, configurable: { thread_id: 1001 } });
+    }, { recursionLimit: recursionLimit || 200, configurable: { thread_id: 1001 } });
     const resultOfGraph = finalState.finalComments;
     console.log('result of graph for a threadId:', currentDate);
     // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
@@ -42569,6 +42578,7 @@ async function run() {
         const ms = core.getInput('milliseconds');
         const fileName = core.getInput('file_name');
         const recursionLimit = parseInt(core.getInput('recursion_limit'), 10);
+        const additionalPrompt = core.getInput('additional_prompt');
         // The `who-to-greet` input is defined in action metadata file
         // const whoToGreet = core.getInput('who-to-greet', { required: false });
         // core.info(`Hello, ${whoToGreet}!`);
@@ -42584,7 +42594,7 @@ async function run() {
         // Sample LangChain code
         try {
             core.debug('Running the main graph');
-            const response = await (0, app_1.MainGraphRun)({ fileName, recursionLimit });
+            const response = await (0, app_1.MainGraphRun)({ fileName, recursionLimit, additionalPrompt });
             core.debug('Finished running the main graph');
             // wirte the final comments to the output
             core.setOutput('final_comments', response);
