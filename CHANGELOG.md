@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.57](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.57-alpha.0...v0.1.57) (2025-02-27)
+
+## [0.1.57-alpha.0](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.56...v0.1.57-alpha.0) (2025-02-27)
+
+### Bug Fixes
+
+- updated dist files
+  ([8020506](https://github.com/khanzzirfan/TestAI-Agent.git/commit/80205069a82c0983babe6bdf091bcc4fa284e6c6))
+
+## [0.1.56](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.56-alpha.0...v0.1.56) (2025-02-27)
+
+## [0.1.56-alpha.0](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.55...v0.1.56-alpha.0) (2025-02-27)
+
+### Bug Fixes
+
+- updated additional notes prompt
+  ([c144d6f](https://github.com/khanzzirfan/TestAI-Agent.git/commit/c144d6fa34193c21c1ab400b49bdc2fca150c810))
+
+## [0.1.55](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.55-alpha.2...v0.1.55) (2025-02-26)
+
+## [0.1.55-alpha.2](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.55-alpha.1...v0.1.55-alpha.2) (2025-02-26)
+
+### Bug Fixes
+
+- updated package dist folder
+  ([d358c29](https://github.com/khanzzirfan/TestAI-Agent.git/commit/d358c29d9d7f63bac543287f324f139cb741ec80))
+
+## [0.1.55-alpha.1](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.55-alpha.0...v0.1.55-alpha.1) (2025-02-26)
+
+## [0.1.55-alpha.0](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.54...v0.1.55-alpha.0) (2025-02-26)
+
+### Bug Fixes
+
+- updated code for recursion limit and package manager updates
+  ([f0b013d](https://github.com/khanzzirfan/TestAI-Agent.git/commit/f0b013d6b42126b3ed7550cb0b2d26c8ad29692b))
+
 ## [0.1.54](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.54-alpha.42...v0.1.54) (2025-02-23)
 
 ## [0.1.54-alpha.42](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.54-alpha.41...v0.1.54-alpha.42) (2025-02-23)

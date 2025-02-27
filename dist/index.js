@@ -42284,48 +42284,14 @@ exports.finalNotesAgent = finalNotesAgent;
 /***/ }),
 
 /***/ 168:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.MainGraphRun = void 0;
 const langgraph_1 = __nccwpck_require__(39405);
 const messages_1 = __nccwpck_require__(62776);
-const core = __importStar(__nccwpck_require__(37484));
 const langgraph_2 = __nccwpck_require__(39405);
 const messages_2 = __nccwpck_require__(62776);
 const messages_3 = __nccwpck_require__(62776);
@@ -42335,11 +42301,11 @@ const state_1 = __nccwpck_require__(2462);
 const tools = [...tools_1.CustomTools];
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 const agents_1 = __nccwpck_require__(36758);
-const MainGraphRun = async () => {
+const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
     // Initialize memory to persist state between graph runs
     const checkpointer = new langgraph_1.MemorySaver();
     const inMemoryStore = new langgraph_1.InMemoryStore();
-    const filename = core.getInput('file_name');
+    const filename = fileName;
     const toolNames = tools_1.CustomTools.map(tool => tool.name).join(', ');
     const toolExecutor = async (state) => {
         const message = state.messages.at(-1);
@@ -42467,6 +42433,9 @@ const MainGraphRun = async () => {
         .addEdge('final-notes', '__end__');
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
     console.log('app version', 'v0.1.54-alpha.10');
+    const additionalPromptNotes = `
+  Additional Notes: ${additionalPrompt}
+  `;
     const query = `
   You are a coding assistant with expertise in test automation.
   Generate and execute tests for ${filename}.
@@ -42480,13 +42449,19 @@ const MainGraphRun = async () => {
   3. Improve existing tests or create new tests
   4. Save test file
   5. Run tests with coverage
-  6. Fix any failures`;
+  6. Fix any failures
+  7. Analyze test results
+  8. Provide final notes
+
+  ${additionalPrompt ? additionalPromptNotes : ''}
+
+  `;
     // Use the Runnable
     const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
     const finalState = await app.invoke({
         messages: [new messages_1.HumanMessage(query)],
         fileName: filename
-    }, { recursionLimit: 100, configurable: { thread_id: 1001 } });
+    }, { recursionLimit: recursionLimit || 200, configurable: { thread_id: 1001 } });
     const resultOfGraph = finalState.finalComments;
     console.log('result of graph for a threadId:', currentDate);
     // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
@@ -42601,11 +42576,13 @@ async function run() {
         /// await SampleRun()
         /** Sample code to run */
         const ms = core.getInput('milliseconds');
-        const filename = core.getInput('file_name');
+        const fileName = core.getInput('file_name');
+        const recursionLimit = parseInt(core.getInput('recursion_limit'), 10);
+        const additionalPrompt = core.getInput('additional_prompt');
         // The `who-to-greet` input is defined in action metadata file
-        const whoToGreet = core.getInput('who-to-greet', { required: false });
-        core.info(`Hello, ${whoToGreet}!`);
-        core.info(`The file name is ${filename}`);
+        // const whoToGreet = core.getInput('who-to-greet', { required: false });
+        // core.info(`Hello, ${whoToGreet}!`);
+        core.info(`The file name is ${fileName} and the recursion limit is ${recursionLimit}`);
         // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
         core.debug(`Waiting ${ms} milliseconds ...`);
         // Log the current timestamp, wait, then log the new timestamp
@@ -42617,7 +42594,7 @@ async function run() {
         // Sample LangChain code
         try {
             core.debug('Running the main graph');
-            const response = await (0, app_1.MainGraphRun)();
+            const response = await (0, app_1.MainGraphRun)({ fileName, recursionLimit, additionalPrompt });
             core.debug('Finished running the main graph');
             // wirte the final comments to the output
             core.setOutput('final_comments', response);
@@ -43152,7 +43129,7 @@ exports.CustomTools = void 0;
 const npm_test_tool_1 = __nccwpck_require__(28834);
 const file_folder_tools_1 = __nccwpck_require__(48716);
 const test_result_analyzer_tool_1 = __nccwpck_require__(37543);
-exports.CustomTools = [...npm_test_tool_1.TestTools, ...file_folder_tools_1.FileFolderTools, ...test_result_analyzer_tool_1.TestResultAnalyzerTools];
+exports.CustomTools = [...npm_test_tool_1.TestTools, ...file_folder_tools_1.FileFolderTools, ...test_result_analyzer_tool_1.TestResultAnalyzerTools, ...npm_test_tool_1.InstallTools];
 
 
 /***/ }),
@@ -43163,7 +43140,7 @@ exports.CustomTools = [...npm_test_tool_1.TestTools, ...file_folder_tools_1.File
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.TestTools = void 0;
+exports.InstallTools = exports.TestTools = void 0;
 const zod_1 = __nccwpck_require__(34809);
 const tools_1 = __nccwpck_require__(3477);
 const util_1 = __nccwpck_require__(39023);
@@ -43219,6 +43196,146 @@ exports.TestTools = [
                 return {
                     hasError: true,
                     testResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messageValue: error.message
+                };
+            }
+        }
+    })
+];
+exports.InstallTools = [
+    // Enhanced npm install tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'npm-install',
+        description: 'Executes npm install commands with support for various options including force and legacy-peer-deps',
+        schema: zod_1.z.object({
+            options: zod_1.z
+                .object({
+                directory_path: zod_1.z
+                    .string()
+                    .optional()
+                    .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+                force: zod_1.z.boolean().optional().describe('Run install with --force'),
+                legacyPeerDeps: zod_1.z.boolean().optional().describe('Run install with --legacy-peer-deps')
+            })
+                .optional()
+        }),
+        func: async ({ options = {} }, runManager) => {
+            try {
+                let fullCommand = 'npm install';
+                // Add options to the command
+                if (options.directory_path)
+                    fullCommand += ` --prefix ${options.directory_path}`;
+                if (options.force)
+                    fullCommand += ' --force';
+                if (options.legacyPeerDeps)
+                    fullCommand += ' --legacy-peer-deps';
+                const { stdout, stderr } = await nodeExecutor(fullCommand);
+                return {
+                    installResults: { success: true, output: stdout },
+                    hasError: false,
+                    messageValue: stdout
+                };
+            }
+            catch (error) {
+                return {
+                    hasError: true,
+                    installResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messageValue: error.message
+                };
+            }
+        }
+    }),
+    // Enhanced yarn install tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'yarn-install',
+        description: 'Executes yarn install commands with support for various options including force and legacy-peer-deps',
+        schema: zod_1.z.object({
+            options: zod_1.z
+                .object({
+                directory_path: zod_1.z
+                    .string()
+                    .optional()
+                    .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+                force: zod_1.z.boolean().optional().describe('Run install with --force'),
+                legacyPeerDeps: zod_1.z.boolean().optional().describe('Run install with --legacy-peer-deps')
+            })
+                .optional()
+        }),
+        func: async ({ options = {} }, runManager) => {
+            try {
+                let fullCommand = 'yarn install';
+                // Add options to the command
+                if (options.directory_path)
+                    fullCommand += ` --cwd ${options.directory_path}`;
+                if (options.force)
+                    fullCommand += ' --force';
+                if (options.legacyPeerDeps)
+                    fullCommand += ' --legacy-peer-deps';
+                const { stdout, stderr } = await nodeExecutor(fullCommand);
+                return {
+                    installResults: { success: true, output: stdout },
+                    hasError: false,
+                    messageValue: stdout
+                };
+            }
+            catch (error) {
+                return {
+                    hasError: true,
+                    installResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messageValue: error.message
+                };
+            }
+        }
+    }),
+    // Enhanced pnpm install tool with Command
+    new tools_1.DynamicStructuredTool({
+        name: 'pnpm-install',
+        description: 'Executes pnpm install commands with support for various options including force and legacy-peer-deps',
+        schema: zod_1.z.object({
+            options: zod_1.z
+                .object({
+                directory_path: zod_1.z
+                    .string()
+                    .optional()
+                    .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+                force: zod_1.z.boolean().optional().describe('Run install with --force'),
+                legacyPeerDeps: zod_1.z.boolean().optional().describe('Run install with --legacy-peer-deps')
+            })
+                .optional()
+        }),
+        func: async ({ options = {} }, runManager) => {
+            try {
+                let fullCommand = 'pnpm install';
+                // Add options to the command
+                if (options.directory_path)
+                    fullCommand += ` --prefix ${options.directory_path}`;
+                if (options.force)
+                    fullCommand += ' --force';
+                if (options.legacyPeerDeps)
+                    fullCommand += ' --legacy-peer-deps';
+                const { stdout, stderr } = await nodeExecutor(fullCommand);
+                return {
+                    installResults: { success: true, output: stdout },
+                    hasError: false,
+                    messageValue: stdout
+                };
+            }
+            catch (error) {
+                return {
+                    hasError: true,
+                    installResults: {
                         success: false,
                         error: error.message,
                         output: error.stdout || ''
@@ -96315,6 +96432,7 @@ module.exports = __nccwpck_require__(86358);
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AzureChatOpenAI = void 0;
 const openai_1 = __nccwpck_require__(12583);
+const env_1 = __nccwpck_require__(40895);
 const chat_models_js_1 = __nccwpck_require__(28795);
 const azure_js_1 = __nccwpck_require__(89787);
 /**
@@ -96569,7 +96687,7 @@ const azure_js_1 = __nccwpck_require__(89787);
  * const Joke = z.object({
  *   setup: z.string().describe("The setup of the joke"),
  *   punchline: z.string().describe("The punchline to the joke"),
- *   rating: z.number().optional().describe("How funny the joke is, from 1 to 10")
+ *   rating: z.number().nullable().describe("How funny the joke is, from 1 to 10")
  * }).describe('Joke to tell user.');
  *
  * const structuredLlm = llm.withStructuredOutput(Joke, { name: "Joke" });
@@ -96735,6 +96853,7 @@ class AzureChatOpenAI extends chat_models_js_1.ChatOpenAI {
     }
     get lc_aliases() {
         return {
+            ...super.lc_aliases,
             openAIApiKey: "openai_api_key",
             openAIApiVersion: "openai_api_version",
             openAIBasePath: "openai_api_base",
@@ -96745,18 +96864,96 @@ class AzureChatOpenAI extends chat_models_js_1.ChatOpenAI {
             azureOpenAIApiDeploymentName: "deployment_name",
         };
     }
+    get lc_secrets() {
+        return {
+            ...super.lc_secrets,
+            azureOpenAIApiKey: "AZURE_OPENAI_API_KEY",
+        };
+    }
+    get lc_serializable_keys() {
+        return [
+            ...super.lc_serializable_keys,
+            "azureOpenAIApiKey",
+            "azureOpenAIApiVersion",
+            "azureOpenAIBasePath",
+            "azureOpenAIEndpoint",
+            "azureOpenAIApiInstanceName",
+            "azureOpenAIApiDeploymentName",
+            "deploymentName",
+            "openAIApiKey",
+            "openAIApiVersion",
+        ];
+    }
     constructor(fields) {
-        const newFields = fields ? { ...fields } : fields;
-        if (newFields) {
-            // don't rewrite the fields if they are already set
-            newFields.azureOpenAIApiDeploymentName =
-                newFields.azureOpenAIApiDeploymentName ?? newFields.deploymentName;
-            newFields.azureOpenAIApiKey =
-                newFields.azureOpenAIApiKey ?? newFields.openAIApiKey;
-            newFields.azureOpenAIApiVersion =
-                newFields.azureOpenAIApiVersion ?? newFields.openAIApiVersion;
+        super(fields);
+        Object.defineProperty(this, "azureOpenAIApiVersion", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIApiKey", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureADTokenProvider", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIApiInstanceName", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIApiDeploymentName", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIBasePath", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIEndpoint", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        this.azureOpenAIApiKey =
+            fields?.azureOpenAIApiKey ??
+                fields?.openAIApiKey ??
+                fields?.apiKey ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_KEY");
+        this.azureOpenAIApiInstanceName =
+            fields?.azureOpenAIApiInstanceName ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_INSTANCE_NAME");
+        this.azureOpenAIApiDeploymentName =
+            fields?.azureOpenAIApiDeploymentName ??
+                fields?.deploymentName ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_DEPLOYMENT_NAME");
+        this.azureOpenAIApiVersion =
+            fields?.azureOpenAIApiVersion ??
+                fields?.openAIApiVersion ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_VERSION");
+        this.azureOpenAIBasePath =
+            fields?.azureOpenAIBasePath ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_BASE_PATH");
+        this.azureOpenAIEndpoint =
+            fields?.azureOpenAIEndpoint ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_ENDPOINT");
+        this.azureADTokenProvider = fields?.azureADTokenProvider;
+        if (!this.azureOpenAIApiKey && !this.apiKey && !this.azureADTokenProvider) {
+            throw new Error("Azure OpenAI API key or Token Provider not found");
         }
-        super(newFields);
     }
     getLsParams(options) {
         const params = super.getLsParams(options);
@@ -96787,11 +96984,14 @@ class AzureChatOpenAI extends chat_models_js_1.ChatOpenAI {
             if (!params.baseURL) {
                 delete params.baseURL;
             }
+            let env = (0, env_1.getEnv)();
+            if (env === "node" || env === "deno") {
+                env = `(${env}/${process.version}; ${process.platform}; ${process.arch})`;
+            }
+            const specifiedUserAgent = params.defaultHeaders?.["User-Agent"];
             params.defaultHeaders = {
                 ...params.defaultHeaders,
-                "User-Agent": params.defaultHeaders?.["User-Agent"]
-                    ? `${params.defaultHeaders["User-Agent"]}: langchainjs-azure-openai-v2`
-                    : `langchainjs-azure-openai-v2`,
+                "User-Agent": `langchainjs-azure-openai/2.0.0 (${env})${specifiedUserAgent ? ` ${specifiedUserAgent}` : ""}`,
             };
             this.client = new openai_1.AzureOpenAI({
                 apiVersion: this.azureOpenAIApiVersion,
@@ -96863,6 +97063,16 @@ class AzureChatOpenAI extends chat_models_js_1.ChatOpenAI {
         }
         return json;
     }
+    withStructuredOutput(outputSchema, config) {
+        const ensuredConfig = { ...config };
+        // Not all Azure gpt-4o deployments models support jsonSchema yet
+        if (this.model.startsWith("gpt-4o")) {
+            if (ensuredConfig?.method === undefined) {
+                ensuredConfig.method = "functionCalling";
+            }
+        }
+        return super.withStructuredOutput(outputSchema, ensuredConfig);
+    }
 }
 exports.AzureChatOpenAI = AzureChatOpenAI;
 
@@ -96877,22 +97087,70 @@ exports.AzureChatOpenAI = AzureChatOpenAI;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AzureOpenAIEmbeddings = void 0;
 const openai_1 = __nccwpck_require__(12583);
+const env_1 = __nccwpck_require__(40895);
 const embeddings_js_1 = __nccwpck_require__(95558);
 const azure_js_1 = __nccwpck_require__(89787);
 const openai_js_1 = __nccwpck_require__(51988);
 class AzureOpenAIEmbeddings extends embeddings_js_1.OpenAIEmbeddings {
-    constructor(fields, configuration) {
-        const newFields = { ...fields };
-        if (Object.entries(newFields).length) {
-            // don't rewrite the fields if they are already set
-            newFields.azureOpenAIApiDeploymentName =
-                newFields.azureOpenAIApiDeploymentName ?? newFields.deploymentName;
-            newFields.azureOpenAIApiKey =
-                newFields.azureOpenAIApiKey ?? newFields.apiKey;
-            newFields.azureOpenAIApiVersion =
-                newFields.azureOpenAIApiVersion ?? newFields.openAIApiVersion;
-        }
-        super(newFields, configuration);
+    constructor(fields) {
+        super(fields);
+        Object.defineProperty(this, "azureOpenAIApiVersion", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIApiKey", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureADTokenProvider", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIApiInstanceName", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIApiDeploymentName", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIBasePath", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        this.batchSize = fields?.batchSize ?? 1;
+        this.azureOpenAIApiKey =
+            fields?.azureOpenAIApiKey ??
+                fields?.apiKey ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_KEY");
+        this.azureOpenAIApiVersion =
+            fields?.azureOpenAIApiVersion ??
+                fields?.openAIApiVersion ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_VERSION");
+        this.azureOpenAIBasePath =
+            fields?.azureOpenAIBasePath ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_BASE_PATH");
+        this.azureOpenAIApiInstanceName =
+            fields?.azureOpenAIApiInstanceName ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_INSTANCE_NAME");
+        this.azureOpenAIApiDeploymentName =
+            (fields?.azureOpenAIApiEmbeddingsDeploymentName ||
+                fields?.azureOpenAIApiDeploymentName) ??
+                ((0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME") ||
+                    (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_DEPLOYMENT_NAME"));
+        this.azureADTokenProvider = fields?.azureADTokenProvider;
     }
     async embeddingWithRetry(request) {
         if (!this.client) {
@@ -96966,28 +97224,100 @@ exports.AzureOpenAIEmbeddings = AzureOpenAIEmbeddings;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AzureOpenAI = void 0;
 const openai_1 = __nccwpck_require__(12583);
+const env_1 = __nccwpck_require__(40895);
 const llms_js_1 = __nccwpck_require__(82356);
 const azure_js_1 = __nccwpck_require__(89787);
 class AzureOpenAI extends llms_js_1.OpenAI {
     get lc_aliases() {
         return {
+            ...super.lc_aliases,
             openAIApiKey: "openai_api_key",
             openAIApiVersion: "openai_api_version",
             openAIBasePath: "openai_api_base",
+            deploymentName: "deployment_name",
+            azureOpenAIEndpoint: "azure_endpoint",
+            azureOpenAIApiVersion: "openai_api_version",
+            azureOpenAIBasePath: "openai_api_base",
+            azureOpenAIApiDeploymentName: "deployment_name",
+        };
+    }
+    get lc_secrets() {
+        return {
+            ...super.lc_secrets,
+            azureOpenAIApiKey: "AZURE_OPENAI_API_KEY",
         };
     }
     constructor(fields) {
-        const newFields = fields ? { ...fields } : fields;
-        if (newFields) {
-            // don't rewrite the fields if they are already set
-            newFields.azureOpenAIApiDeploymentName =
-                newFields.azureOpenAIApiDeploymentName ?? newFields.deploymentName;
-            newFields.azureOpenAIApiKey =
-                newFields.azureOpenAIApiKey ?? newFields.openAIApiKey;
-            newFields.azureOpenAIApiVersion =
-                newFields.azureOpenAIApiVersion ?? newFields.openAIApiVersion;
+        super(fields);
+        Object.defineProperty(this, "azureOpenAIApiVersion", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIApiKey", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureADTokenProvider", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIApiInstanceName", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIApiDeploymentName", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIBasePath", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        Object.defineProperty(this, "azureOpenAIEndpoint", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
+        this.azureOpenAIApiDeploymentName =
+            (fields?.azureOpenAIApiCompletionsDeploymentName ||
+                fields?.azureOpenAIApiDeploymentName) ??
+                ((0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_COMPLETIONS_DEPLOYMENT_NAME") ||
+                    (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_DEPLOYMENT_NAME"));
+        this.azureOpenAIApiKey =
+            fields?.azureOpenAIApiKey ??
+                fields?.openAIApiKey ??
+                fields?.apiKey ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_KEY");
+        this.azureOpenAIApiInstanceName =
+            fields?.azureOpenAIApiInstanceName ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_INSTANCE_NAME");
+        this.azureOpenAIApiVersion =
+            fields?.azureOpenAIApiVersion ??
+                fields?.openAIApiVersion ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_VERSION");
+        this.azureOpenAIBasePath =
+            fields?.azureOpenAIBasePath ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_BASE_PATH");
+        this.azureOpenAIEndpoint =
+            fields?.azureOpenAIEndpoint ??
+                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_ENDPOINT");
+        this.azureADTokenProvider = fields?.azureADTokenProvider;
+        if (!this.azureOpenAIApiKey && !this.apiKey && !this.azureADTokenProvider) {
+            throw new Error("Azure OpenAI API key or Token Provider not found");
         }
-        super(newFields);
     }
     _getClientOptions(options) {
         if (!this.client) {
@@ -97117,144 +97447,12 @@ function messageToOpenAIRole(message) {
     }
 }
 exports.messageToOpenAIRole = messageToOpenAIRole;
-function openAIResponseToChatMessage(message, rawResponse, includeRawResponse) {
-    const rawToolCalls = message.tool_calls;
-    switch (message.role) {
-        case "assistant": {
-            const toolCalls = [];
-            const invalidToolCalls = [];
-            for (const rawToolCall of rawToolCalls ?? []) {
-                try {
-                    toolCalls.push((0, openai_tools_1.parseToolCall)(rawToolCall, { returnId: true }));
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                }
-                catch (e) {
-                    invalidToolCalls.push((0, openai_tools_1.makeInvalidToolCall)(rawToolCall, e.message));
-                }
-            }
-            const additional_kwargs = {
-                function_call: message.function_call,
-                tool_calls: rawToolCalls,
-            };
-            if (includeRawResponse !== undefined) {
-                additional_kwargs.__raw_response = rawResponse;
-            }
-            const response_metadata = {
-                model_name: rawResponse.model,
-                ...(rawResponse.system_fingerprint
-                    ? {
-                        usage: { ...rawResponse.usage },
-                        system_fingerprint: rawResponse.system_fingerprint,
-                    }
-                    : {}),
-            };
-            if (message.audio) {
-                additional_kwargs.audio = message.audio;
-            }
-            return new messages_1.AIMessage({
-                content: message.content || "",
-                tool_calls: toolCalls,
-                invalid_tool_calls: invalidToolCalls,
-                additional_kwargs,
-                response_metadata,
-                id: rawResponse.id,
-            });
-        }
-        default:
-            return new messages_1.ChatMessage(message.content || "", message.role ?? "unknown");
-    }
-}
-function _convertDeltaToMessageChunk(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-delta, rawResponse, defaultRole, includeRawResponse) {
-    const role = delta.role ?? defaultRole;
-    const content = delta.content ?? "";
-    let additional_kwargs;
-    if (delta.function_call) {
-        additional_kwargs = {
-            function_call: delta.function_call,
-        };
-    }
-    else if (delta.tool_calls) {
-        additional_kwargs = {
-            tool_calls: delta.tool_calls,
-        };
-    }
-    else {
-        additional_kwargs = {};
-    }
-    if (includeRawResponse) {
-        additional_kwargs.__raw_response = rawResponse;
-    }
-    if (delta.audio) {
-        additional_kwargs.audio = {
-            ...delta.audio,
-            index: rawResponse.choices[0].index,
-        };
-    }
-    const response_metadata = { usage: { ...rawResponse.usage } };
-    if (role === "user") {
-        return new messages_1.HumanMessageChunk({ content, response_metadata });
-    }
-    else if (role === "assistant") {
-        const toolCallChunks = [];
-        if (Array.isArray(delta.tool_calls)) {
-            for (const rawToolCall of delta.tool_calls) {
-                toolCallChunks.push({
-                    name: rawToolCall.function?.name,
-                    args: rawToolCall.function?.arguments,
-                    id: rawToolCall.id,
-                    index: rawToolCall.index,
-                    type: "tool_call_chunk",
-                });
-            }
-        }
-        return new messages_1.AIMessageChunk({
-            content,
-            tool_call_chunks: toolCallChunks,
-            additional_kwargs,
-            id: rawResponse.id,
-            response_metadata,
-        });
-    }
-    else if (role === "system") {
-        return new messages_1.SystemMessageChunk({ content, response_metadata });
-    }
-    else if (role === "developer") {
-        return new messages_1.SystemMessageChunk({
-            content,
-            response_metadata,
-            additional_kwargs: {
-                __openai_role__: "developer",
-            },
-        });
-    }
-    else if (role === "function") {
-        return new messages_1.FunctionMessageChunk({
-            content,
-            additional_kwargs,
-            name: delta.name,
-            response_metadata,
-        });
-    }
-    else if (role === "tool") {
-        return new messages_1.ToolMessageChunk({
-            content,
-            additional_kwargs,
-            tool_call_id: delta.tool_call_id,
-            response_metadata,
-        });
-    }
-    else {
-        return new messages_1.ChatMessageChunk({ content, role, response_metadata });
-    }
-}
 // Used in LangSmith, export is important here
 function _convertMessagesToOpenAIParams(messages, model) {
     // TODO: Function messages do not support array content, fix cast
     return messages.flatMap((message) => {
         let role = messageToOpenAIRole(message);
-        if (role === "system" && model?.startsWith("o1")) {
+        if (role === "system" && isReasoningModel(model)) {
             role = "developer";
         }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97311,8 +97509,13 @@ function _convertChatOpenAIToolTypeToOpenAITool(tool, fields) {
     }
     return (0, tools_js_1._convertToOpenAITool)(tool, fields);
 }
+function isReasoningModel(model) {
+    return model?.startsWith("o1") || model?.startsWith("o3");
+}
 /**
  * OpenAI chat model integration.
+ *
+ * To use with Azure, import the `AzureChatOpenAI` class.
  *
  * Setup:
  * Install `@langchain/openai` and set an environment variable named `OPENAI_API_KEY`.
@@ -97563,7 +97766,7 @@ function _convertChatOpenAIToolTypeToOpenAITool(tool, fields) {
  * const Joke = z.object({
  *   setup: z.string().describe("The setup of the joke"),
  *   punchline: z.string().describe("The punchline to the joke"),
- *   rating: z.number().optional().describe("How funny the joke is, from 1 to 10")
+ *   rating: z.number().nullable().describe("How funny the joke is, from 1 to 10")
  * }).describe('Joke to tell user.');
  *
  * const structuredLlm = llm.withStructuredOutput(Joke, {
@@ -97869,7 +98072,6 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
         return {
             openAIApiKey: "OPENAI_API_KEY",
             apiKey: "OPENAI_API_KEY",
-            azureOpenAIApiKey: "AZURE_OPENAI_API_KEY",
             organization: "OPENAI_ORGANIZATION",
         };
     }
@@ -97878,15 +98080,47 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
             modelName: "model",
             openAIApiKey: "openai_api_key",
             apiKey: "openai_api_key",
-            azureOpenAIApiVersion: "azure_openai_api_version",
-            azureOpenAIApiKey: "azure_openai_api_key",
-            azureOpenAIApiInstanceName: "azure_openai_api_instance_name",
-            azureOpenAIApiDeploymentName: "azure_openai_api_deployment_name",
         };
     }
-    constructor(fields, 
-    /** @deprecated */
-    configuration) {
+    get lc_serializable_keys() {
+        return [
+            "configuration",
+            "logprobs",
+            "topLogprobs",
+            "prefixMessages",
+            "supportsStrictToolCalling",
+            "modalities",
+            "audio",
+            "reasoningEffort",
+            "temperature",
+            "maxTokens",
+            "topP",
+            "frequencyPenalty",
+            "presencePenalty",
+            "n",
+            "logitBias",
+            "user",
+            "streaming",
+            "streamUsage",
+            "modelName",
+            "model",
+            "modelKwargs",
+            "stop",
+            "stopSequences",
+            "timeout",
+            "openAIApiKey",
+            "apiKey",
+            "cache",
+            "maxConcurrency",
+            "maxRetries",
+            "verbose",
+            "callbacks",
+            "tags",
+            "metadata",
+            "disableStreaming",
+        ];
+    }
+    constructor(fields) {
         super(fields ?? {});
         Object.defineProperty(this, "lc_serializable", {
             enumerable: true,
@@ -97898,25 +98132,25 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 1
+            value: void 0
         });
         Object.defineProperty(this, "topP", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 1
+            value: void 0
         });
         Object.defineProperty(this, "frequencyPenalty", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 0
+            value: void 0
         });
         Object.defineProperty(this, "presencePenalty", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 0
+            value: void 0
         });
         Object.defineProperty(this, "n", {
             enumerable: true,
@@ -97930,11 +98164,12 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
             writable: true,
             value: void 0
         });
+        /** @deprecated Use "model" instead */
         Object.defineProperty(this, "modelName", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: "gpt-3.5-turbo"
+            value: void 0
         });
         Object.defineProperty(this, "model", {
             enumerable: true,
@@ -98014,48 +98249,6 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
             writable: true,
             value: void 0
         });
-        Object.defineProperty(this, "azureOpenAIApiVersion", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiKey", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureADTokenProvider", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiInstanceName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiDeploymentName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIBasePath", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIEndpoint", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
         Object.defineProperty(this, "organization", {
             enumerable: true,
             configurable: true,
@@ -98114,40 +98307,17 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
                 fields?.configuration?.apiKey ??
                 (0, env_1.getEnvironmentVariable)("OPENAI_API_KEY");
         this.apiKey = this.openAIApiKey;
-        this.azureOpenAIApiKey =
-            fields?.azureOpenAIApiKey ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_KEY");
-        this.azureADTokenProvider = fields?.azureADTokenProvider ?? undefined;
-        if (!this.azureOpenAIApiKey && !this.apiKey && !this.azureADTokenProvider) {
-            throw new Error("OpenAI or Azure OpenAI API key or Token Provider not found");
-        }
-        this.azureOpenAIApiInstanceName =
-            fields?.azureOpenAIApiInstanceName ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_INSTANCE_NAME");
-        this.azureOpenAIApiDeploymentName =
-            fields?.azureOpenAIApiDeploymentName ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_DEPLOYMENT_NAME");
-        this.azureOpenAIApiVersion =
-            fields?.azureOpenAIApiVersion ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_VERSION");
-        this.azureOpenAIBasePath =
-            fields?.azureOpenAIBasePath ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_BASE_PATH");
         this.organization =
             fields?.configuration?.organization ??
                 (0, env_1.getEnvironmentVariable)("OPENAI_ORGANIZATION");
-        this.azureOpenAIEndpoint =
-            fields?.azureOpenAIEndpoint ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_ENDPOINT");
-        this.modelName = fields?.model ?? fields?.modelName ?? this.model;
-        this.model = this.modelName;
+        this.model = fields?.model ?? fields?.modelName ?? this.model;
+        this.modelName = this.model;
         this.modelKwargs = fields?.modelKwargs ?? {};
         this.timeout = fields?.timeout;
         this.temperature = fields?.temperature ?? this.temperature;
         this.topP = fields?.topP ?? this.topP;
         this.frequencyPenalty = fields?.frequencyPenalty ?? this.frequencyPenalty;
         this.presencePenalty = fields?.presencePenalty ?? this.presencePenalty;
-        this.maxTokens = fields?.maxTokens;
         this.logprobs = fields?.logprobs;
         this.topLogprobs = fields?.topLogprobs;
         this.n = fields?.n ?? this.n;
@@ -98159,41 +98329,16 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
         this.audio = fields?.audio;
         this.modalities = fields?.modalities;
         this.reasoningEffort = fields?.reasoningEffort;
-        if (this.azureOpenAIApiKey || this.azureADTokenProvider) {
-            if (!this.azureOpenAIApiInstanceName &&
-                !this.azureOpenAIBasePath &&
-                !this.azureOpenAIEndpoint) {
-                throw new Error("Azure OpenAI API instance name not found");
-            }
-            if (!this.azureOpenAIApiDeploymentName && this.azureOpenAIBasePath) {
-                const parts = this.azureOpenAIBasePath.split("/openai/deployments/");
-                if (parts.length === 2) {
-                    const [, deployment] = parts;
-                    this.azureOpenAIApiDeploymentName = deployment;
-                }
-            }
-            if (!this.azureOpenAIApiDeploymentName) {
-                throw new Error("Azure OpenAI API deployment name not found");
-            }
-            if (!this.azureOpenAIApiVersion) {
-                throw new Error("Azure OpenAI API version not found");
-            }
-            this.apiKey = this.apiKey ?? "";
-            // Streaming usage is not supported by Azure deployments, so default to false
-            this.streamUsage = false;
+        this.maxTokens = fields?.maxCompletionTokens ?? fields?.maxTokens;
+        if (this.model === "o1") {
+            this.disableStreaming = true;
         }
         this.streaming = fields?.streaming ?? false;
         this.streamUsage = fields?.streamUsage ?? this.streamUsage;
         this.clientConfig = {
             apiKey: this.apiKey,
             organization: this.organization,
-            baseURL: configuration?.basePath ?? fields?.configuration?.basePath,
             dangerouslyAllowBrowser: true,
-            defaultHeaders: configuration?.baseOptions?.headers ??
-                fields?.configuration?.baseOptions?.headers,
-            defaultQuery: configuration?.baseOptions?.params ??
-                fields?.configuration?.baseOptions?.params,
-            ...configuration,
             ...fields?.configuration,
         };
         // If `supportsStrictToolCalling` is explicitly set, use that value.
@@ -98261,7 +98406,6 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
             top_p: this.topP,
             frequency_penalty: this.frequencyPenalty,
             presence_penalty: this.presencePenalty,
-            max_tokens: this.maxTokens === -1 ? undefined : this.maxTokens,
             logprobs: this.logprobs,
             top_logprobs: this.topLogprobs,
             n: this.n,
@@ -98295,7 +98439,146 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
         if (reasoningEffort !== undefined) {
             params.reasoning_effort = reasoningEffort;
         }
+        if (isReasoningModel(params.model)) {
+            params.max_completion_tokens =
+                this.maxTokens === -1 ? undefined : this.maxTokens;
+        }
+        else {
+            params.max_tokens = this.maxTokens === -1 ? undefined : this.maxTokens;
+        }
         return params;
+    }
+    _convertOpenAIChatCompletionMessageToBaseMessage(message, rawResponse) {
+        const rawToolCalls = message.tool_calls;
+        switch (message.role) {
+            case "assistant": {
+                const toolCalls = [];
+                const invalidToolCalls = [];
+                for (const rawToolCall of rawToolCalls ?? []) {
+                    try {
+                        toolCalls.push((0, openai_tools_1.parseToolCall)(rawToolCall, { returnId: true }));
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    }
+                    catch (e) {
+                        invalidToolCalls.push((0, openai_tools_1.makeInvalidToolCall)(rawToolCall, e.message));
+                    }
+                }
+                const additional_kwargs = {
+                    function_call: message.function_call,
+                    tool_calls: rawToolCalls,
+                };
+                if (this.__includeRawResponse !== undefined) {
+                    additional_kwargs.__raw_response = rawResponse;
+                }
+                const response_metadata = {
+                    model_name: rawResponse.model,
+                    ...(rawResponse.system_fingerprint
+                        ? {
+                            usage: { ...rawResponse.usage },
+                            system_fingerprint: rawResponse.system_fingerprint,
+                        }
+                        : {}),
+                };
+                if (message.audio) {
+                    additional_kwargs.audio = message.audio;
+                }
+                return new messages_1.AIMessage({
+                    content: message.content || "",
+                    tool_calls: toolCalls,
+                    invalid_tool_calls: invalidToolCalls,
+                    additional_kwargs,
+                    response_metadata,
+                    id: rawResponse.id,
+                });
+            }
+            default:
+                return new messages_1.ChatMessage(message.content || "", message.role ?? "unknown");
+        }
+    }
+    _convertOpenAIDeltaToBaseMessageChunk(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delta, rawResponse, defaultRole) {
+        const role = delta.role ?? defaultRole;
+        const content = delta.content ?? "";
+        let additional_kwargs;
+        if (delta.function_call) {
+            additional_kwargs = {
+                function_call: delta.function_call,
+            };
+        }
+        else if (delta.tool_calls) {
+            additional_kwargs = {
+                tool_calls: delta.tool_calls,
+            };
+        }
+        else {
+            additional_kwargs = {};
+        }
+        if (this.__includeRawResponse) {
+            additional_kwargs.__raw_response = rawResponse;
+        }
+        if (delta.audio) {
+            additional_kwargs.audio = {
+                ...delta.audio,
+                index: rawResponse.choices[0].index,
+            };
+        }
+        const response_metadata = { usage: { ...rawResponse.usage } };
+        if (role === "user") {
+            return new messages_1.HumanMessageChunk({ content, response_metadata });
+        }
+        else if (role === "assistant") {
+            const toolCallChunks = [];
+            if (Array.isArray(delta.tool_calls)) {
+                for (const rawToolCall of delta.tool_calls) {
+                    toolCallChunks.push({
+                        name: rawToolCall.function?.name,
+                        args: rawToolCall.function?.arguments,
+                        id: rawToolCall.id,
+                        index: rawToolCall.index,
+                        type: "tool_call_chunk",
+                    });
+                }
+            }
+            return new messages_1.AIMessageChunk({
+                content,
+                tool_call_chunks: toolCallChunks,
+                additional_kwargs,
+                id: rawResponse.id,
+                response_metadata,
+            });
+        }
+        else if (role === "system") {
+            return new messages_1.SystemMessageChunk({ content, response_metadata });
+        }
+        else if (role === "developer") {
+            return new messages_1.SystemMessageChunk({
+                content,
+                response_metadata,
+                additional_kwargs: {
+                    __openai_role__: "developer",
+                },
+            });
+        }
+        else if (role === "function") {
+            return new messages_1.FunctionMessageChunk({
+                content,
+                additional_kwargs,
+                name: delta.name,
+                response_metadata,
+            });
+        }
+        else if (role === "tool") {
+            return new messages_1.ToolMessageChunk({
+                content,
+                additional_kwargs,
+                tool_call_id: delta.tool_call_id,
+                response_metadata,
+            });
+        }
+        else {
+            return new messages_1.ChatMessageChunk({ content, role, response_metadata });
+        }
     }
     /** @ignore */
     _identifyingParams() {
@@ -98329,7 +98612,7 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
             if (!delta) {
                 continue;
             }
-            const chunk = _convertDeltaToMessageChunk(delta, data, defaultRole, this.__includeRawResponse);
+            const chunk = this._convertOpenAIDeltaToBaseMessageChunk(delta, data, defaultRole);
             defaultRole = delta.role ?? defaultRole;
             const newTokenIndices = {
                 prompt: options.promptIndex ?? 0,
@@ -98515,7 +98798,7 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
                 const text = part.message?.content ?? "";
                 const generation = {
                     text,
-                    message: openAIResponseToChatMessage(part.message ?? { role: "assistant" }, data, this.__includeRawResponse),
+                    message: this._convertOpenAIChatCompletionMessageToBaseMessage(part.message ?? { role: "assistant" }, data),
                 };
                 generation.generationInfo = {
                     ...(part.finish_reason ? { finish_reason: part.finish_reason } : {}),
@@ -98672,12 +98955,7 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
     _getClientOptions(options) {
         if (!this.client) {
             const openAIEndpointConfig = {
-                azureOpenAIApiDeploymentName: this.azureOpenAIApiDeploymentName,
-                azureOpenAIApiInstanceName: this.azureOpenAIApiInstanceName,
-                azureOpenAIApiKey: this.azureOpenAIApiKey,
-                azureOpenAIBasePath: this.azureOpenAIBasePath,
                 baseURL: this.clientConfig.baseURL,
-                azureOpenAIEndpoint: this.azureOpenAIEndpoint,
             };
             const endpoint = (0, azure_js_1.getEndpoint)(openAIEndpointConfig);
             const params = {
@@ -98695,16 +98973,6 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
             ...this.clientConfig,
             ...options,
         };
-        if (this.azureOpenAIApiKey) {
-            requestOptions.headers = {
-                "api-key": this.azureOpenAIApiKey,
-                ...requestOptions.headers,
-            };
-            requestOptions.query = {
-                "api-version": this.azureOpenAIApiVersion,
-                ...requestOptions.query,
-            };
-        }
         return requestOptions;
     }
     _llmType() {
@@ -98750,6 +99018,16 @@ class ChatOpenAI extends chat_models_1.BaseChatModel {
         let outputParser;
         if (config?.strict !== undefined && method === "jsonMode") {
             throw new Error("Argument `strict` is only supported for `method` = 'function_calling'");
+        }
+        if (!this.model.startsWith("gpt-3") &&
+            !this.model.startsWith("gpt-4-") &&
+            this.model !== "gpt-4") {
+            if (method === undefined) {
+                method = "jsonSchema";
+            }
+        }
+        else if (method === "jsonSchema") {
+            console.warn(`[WARNING]: JSON Schema is not supported for model "${this.model}". Falling back to tool calling.`);
         }
         if (method === "jsonMode") {
             llm = this.bind({
@@ -98904,9 +99182,10 @@ const chunk_array_1 = __nccwpck_require__(36127);
 const azure_js_1 = __nccwpck_require__(89787);
 const openai_js_1 = __nccwpck_require__(51988);
 /**
- * Class for generating embeddings using the OpenAI API. Extends the
- * Embeddings class and implements OpenAIEmbeddingsParams and
- * AzureOpenAIInput.
+ * Class for generating embeddings using the OpenAI API.
+ *
+ * To use with Azure, import the `AzureOpenAIEmbeddings` class.
+ *
  * @example
  * ```typescript
  * // Embed a query using OpenAIEmbeddings to generate embeddings for a given text
@@ -98919,20 +99198,21 @@ const openai_js_1 = __nccwpck_require__(51988);
  * ```
  */
 class OpenAIEmbeddings extends embeddings_1.Embeddings {
-    constructor(fields, configuration) {
+    constructor(fields) {
         const fieldsWithDefaults = { maxConcurrency: 2, ...fields };
         super(fieldsWithDefaults);
-        Object.defineProperty(this, "modelName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: "text-embedding-ada-002"
-        });
         Object.defineProperty(this, "model", {
             enumerable: true,
             configurable: true,
             writable: true,
             value: "text-embedding-ada-002"
+        });
+        /** @deprecated Use "model" instead */
+        Object.defineProperty(this, "modelName", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
         });
         Object.defineProperty(this, "batchSize", {
             enumerable: true,
@@ -98963,42 +99243,6 @@ class OpenAIEmbeddings extends embeddings_1.Embeddings {
             writable: true,
             value: void 0
         });
-        Object.defineProperty(this, "azureOpenAIApiVersion", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiKey", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureADTokenProvider", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiInstanceName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiDeploymentName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIBasePath", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
         Object.defineProperty(this, "organization", {
             enumerable: true,
             configurable: true,
@@ -99017,62 +99261,24 @@ class OpenAIEmbeddings extends embeddings_1.Embeddings {
             writable: true,
             value: void 0
         });
-        let apiKey = fieldsWithDefaults?.apiKey ??
+        const apiKey = fieldsWithDefaults?.apiKey ??
             fieldsWithDefaults?.openAIApiKey ??
             (0, env_1.getEnvironmentVariable)("OPENAI_API_KEY");
-        const azureApiKey = fieldsWithDefaults?.azureOpenAIApiKey ??
-            (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_KEY");
-        this.azureADTokenProvider = fields?.azureADTokenProvider ?? undefined;
-        if (!azureApiKey && !apiKey && !this.azureADTokenProvider) {
-            throw new Error("OpenAI or Azure OpenAI API key or Token Provider not found");
-        }
-        const azureApiInstanceName = fieldsWithDefaults?.azureOpenAIApiInstanceName ??
-            (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_INSTANCE_NAME");
-        const azureApiDeploymentName = (fieldsWithDefaults?.azureOpenAIApiEmbeddingsDeploymentName ||
-            fieldsWithDefaults?.azureOpenAIApiDeploymentName) ??
-            ((0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME") ||
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_DEPLOYMENT_NAME"));
-        const azureApiVersion = fieldsWithDefaults?.azureOpenAIApiVersion ??
-            (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_VERSION");
-        this.azureOpenAIBasePath =
-            fieldsWithDefaults?.azureOpenAIBasePath ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_BASE_PATH");
         this.organization =
             fieldsWithDefaults?.configuration?.organization ??
                 (0, env_1.getEnvironmentVariable)("OPENAI_ORGANIZATION");
-        this.modelName =
+        this.model =
             fieldsWithDefaults?.model ?? fieldsWithDefaults?.modelName ?? this.model;
-        this.model = this.modelName;
-        this.batchSize =
-            fieldsWithDefaults?.batchSize ?? (azureApiKey ? 1 : this.batchSize);
+        this.modelName = this.model;
+        this.batchSize = fieldsWithDefaults?.batchSize ?? this.batchSize;
         this.stripNewLines =
             fieldsWithDefaults?.stripNewLines ?? this.stripNewLines;
         this.timeout = fieldsWithDefaults?.timeout;
         this.dimensions = fieldsWithDefaults?.dimensions;
-        this.azureOpenAIApiVersion = azureApiVersion;
-        this.azureOpenAIApiKey = azureApiKey;
-        this.azureOpenAIApiInstanceName = azureApiInstanceName;
-        this.azureOpenAIApiDeploymentName = azureApiDeploymentName;
-        if (this.azureOpenAIApiKey || this.azureADTokenProvider) {
-            if (!this.azureOpenAIApiInstanceName && !this.azureOpenAIBasePath) {
-                throw new Error("Azure OpenAI API instance name not found");
-            }
-            if (!this.azureOpenAIApiDeploymentName) {
-                throw new Error("Azure OpenAI API deployment name not found");
-            }
-            if (!this.azureOpenAIApiVersion) {
-                throw new Error("Azure OpenAI API version not found");
-            }
-            apiKey = apiKey ?? "";
-        }
         this.clientConfig = {
             apiKey,
             organization: this.organization,
-            baseURL: configuration?.basePath,
             dangerouslyAllowBrowser: true,
-            defaultHeaders: configuration?.baseOptions?.headers,
-            defaultQuery: configuration?.baseOptions?.params,
-            ...configuration,
             ...fields?.configuration,
         };
     }
@@ -99133,10 +99339,6 @@ class OpenAIEmbeddings extends embeddings_1.Embeddings {
     async embeddingWithRetry(request) {
         if (!this.client) {
             const openAIEndpointConfig = {
-                azureOpenAIApiDeploymentName: this.azureOpenAIApiDeploymentName,
-                azureOpenAIApiInstanceName: this.azureOpenAIApiInstanceName,
-                azureOpenAIApiKey: this.azureOpenAIApiKey,
-                azureOpenAIBasePath: this.azureOpenAIBasePath,
                 baseURL: this.clientConfig.baseURL,
             };
             const endpoint = (0, azure_js_1.getEndpoint)(openAIEndpointConfig);
@@ -99152,16 +99354,6 @@ class OpenAIEmbeddings extends embeddings_1.Embeddings {
             this.client = new openai_1.OpenAI(params);
         }
         const requestOptions = {};
-        if (this.azureOpenAIApiKey) {
-            requestOptions.headers = {
-                "api-key": this.azureOpenAIApiKey,
-                ...requestOptions.headers,
-            };
-            requestOptions.query = {
-                "api-version": this.azureOpenAIApiVersion,
-                ...requestOptions.query,
-            };
-        }
         return this.caller.call(async () => {
             try {
                 const res = await this.client.embeddings.create(request, requestOptions);
@@ -99219,479 +99411,13 @@ Object.defineProperty(exports, "convertPromptToOpenAI", ({ enumerable: true, get
 
 /***/ }),
 
-/***/ 56581:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.OpenAIChat = void 0;
-const openai_1 = __nccwpck_require__(12583);
-const outputs_1 = __nccwpck_require__(84034);
-const env_1 = __nccwpck_require__(40895);
-const llms_1 = __nccwpck_require__(93038);
-const azure_js_1 = __nccwpck_require__(89787);
-const openai_js_1 = __nccwpck_require__(51988);
-/**
- * @deprecated For legacy compatibility. Use ChatOpenAI instead.
- *
- * Wrapper around OpenAI large language models that use the Chat endpoint.
- *
- * To use you should have the `openai` package installed, with the
- * `OPENAI_API_KEY` environment variable set.
- *
- * To use with Azure you should have the `openai` package installed, with the
- * `AZURE_OPENAI_API_KEY`,
- * `AZURE_OPENAI_API_INSTANCE_NAME`,
- * `AZURE_OPENAI_API_DEPLOYMENT_NAME`
- * and `AZURE_OPENAI_API_VERSION` environment variable set.
- *
- * @remarks
- * Any parameters that are valid to be passed to {@link
- * https://platform.openai.com/docs/api-reference/chat/create |
- * `openai.createCompletion`} can be passed through {@link modelKwargs}, even
- * if not explicitly available on this class.
- *
- * @augments BaseLLM
- * @augments OpenAIInput
- * @augments AzureOpenAIChatInput
- * @example
- * ```typescript
- * const model = new OpenAIChat({
- *   prefixMessages: [
- *     {
- *       role: "system",
- *       content: "You are a helpful assistant that answers in pirate language",
- *     },
- *   ],
- *   maxTokens: 50,
- * });
- *
- * const res = await model.invoke(
- *   "What would be a good company name for a company that makes colorful socks?"
- * );
- * console.log({ res });
- * ```
- */
-class OpenAIChat extends llms_1.LLM {
-    static lc_name() {
-        return "OpenAIChat";
-    }
-    get callKeys() {
-        return [...super.callKeys, "options", "promptIndex"];
-    }
-    get lc_secrets() {
-        return {
-            openAIApiKey: "OPENAI_API_KEY",
-            azureOpenAIApiKey: "AZURE_OPENAI_API_KEY",
-            organization: "OPENAI_ORGANIZATION",
-        };
-    }
-    get lc_aliases() {
-        return {
-            modelName: "model",
-            openAIApiKey: "openai_api_key",
-            azureOpenAIApiVersion: "azure_openai_api_version",
-            azureOpenAIApiKey: "azure_openai_api_key",
-            azureOpenAIApiInstanceName: "azure_openai_api_instance_name",
-            azureOpenAIApiDeploymentName: "azure_openai_api_deployment_name",
-        };
-    }
-    constructor(fields, 
-    /** @deprecated */
-    configuration) {
-        super(fields ?? {});
-        Object.defineProperty(this, "lc_serializable", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: true
-        });
-        Object.defineProperty(this, "temperature", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: 1
-        });
-        Object.defineProperty(this, "topP", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: 1
-        });
-        Object.defineProperty(this, "frequencyPenalty", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: 0
-        });
-        Object.defineProperty(this, "presencePenalty", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: 0
-        });
-        Object.defineProperty(this, "n", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: 1
-        });
-        Object.defineProperty(this, "logitBias", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "maxTokens", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "modelName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: "gpt-3.5-turbo"
-        });
-        Object.defineProperty(this, "model", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: "gpt-3.5-turbo"
-        });
-        Object.defineProperty(this, "prefixMessages", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "modelKwargs", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "timeout", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "stop", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "user", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "streaming", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: false
-        });
-        Object.defineProperty(this, "openAIApiKey", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiVersion", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiKey", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiInstanceName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiDeploymentName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIBasePath", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "organization", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "client", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "clientConfig", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        this.openAIApiKey =
-            fields?.apiKey ??
-                fields?.openAIApiKey ??
-                (0, env_1.getEnvironmentVariable)("OPENAI_API_KEY");
-        this.azureOpenAIApiKey =
-            fields?.azureOpenAIApiKey ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_KEY");
-        if (!this.azureOpenAIApiKey && !this.openAIApiKey) {
-            throw new Error("OpenAI or Azure OpenAI API key not found");
-        }
-        this.azureOpenAIApiInstanceName =
-            fields?.azureOpenAIApiInstanceName ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_INSTANCE_NAME");
-        this.azureOpenAIApiDeploymentName =
-            (fields?.azureOpenAIApiCompletionsDeploymentName ||
-                fields?.azureOpenAIApiDeploymentName) ??
-                ((0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_COMPLETIONS_DEPLOYMENT_NAME") ||
-                    (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_DEPLOYMENT_NAME"));
-        this.azureOpenAIApiVersion =
-            fields?.azureOpenAIApiVersion ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_VERSION");
-        this.azureOpenAIBasePath =
-            fields?.azureOpenAIBasePath ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_BASE_PATH");
-        this.organization =
-            fields?.configuration?.organization ??
-                (0, env_1.getEnvironmentVariable)("OPENAI_ORGANIZATION");
-        this.modelName = fields?.model ?? fields?.modelName ?? this.modelName;
-        this.prefixMessages = fields?.prefixMessages ?? this.prefixMessages;
-        this.modelKwargs = fields?.modelKwargs ?? {};
-        this.timeout = fields?.timeout;
-        this.temperature = fields?.temperature ?? this.temperature;
-        this.topP = fields?.topP ?? this.topP;
-        this.frequencyPenalty = fields?.frequencyPenalty ?? this.frequencyPenalty;
-        this.presencePenalty = fields?.presencePenalty ?? this.presencePenalty;
-        this.n = fields?.n ?? this.n;
-        this.logitBias = fields?.logitBias;
-        this.maxTokens = fields?.maxTokens;
-        this.stop = fields?.stop;
-        this.user = fields?.user;
-        this.streaming = fields?.streaming ?? false;
-        if (this.n > 1) {
-            throw new Error("Cannot use n > 1 in OpenAIChat LLM. Use ChatOpenAI Chat Model instead.");
-        }
-        if (this.azureOpenAIApiKey) {
-            if (!this.azureOpenAIApiInstanceName && !this.azureOpenAIBasePath) {
-                throw new Error("Azure OpenAI API instance name not found");
-            }
-            if (!this.azureOpenAIApiDeploymentName) {
-                throw new Error("Azure OpenAI API deployment name not found");
-            }
-            if (!this.azureOpenAIApiVersion) {
-                throw new Error("Azure OpenAI API version not found");
-            }
-            this.openAIApiKey = this.openAIApiKey ?? "";
-        }
-        this.clientConfig = {
-            apiKey: this.openAIApiKey,
-            organization: this.organization,
-            baseURL: configuration?.basePath ?? fields?.configuration?.basePath,
-            dangerouslyAllowBrowser: true,
-            defaultHeaders: configuration?.baseOptions?.headers ??
-                fields?.configuration?.baseOptions?.headers,
-            defaultQuery: configuration?.baseOptions?.params ??
-                fields?.configuration?.baseOptions?.params,
-            ...configuration,
-            ...fields?.configuration,
-        };
-    }
-    /**
-     * Get the parameters used to invoke the model
-     */
-    invocationParams(options) {
-        return {
-            model: this.modelName,
-            temperature: this.temperature,
-            top_p: this.topP,
-            frequency_penalty: this.frequencyPenalty,
-            presence_penalty: this.presencePenalty,
-            n: this.n,
-            logit_bias: this.logitBias,
-            max_tokens: this.maxTokens === -1 ? undefined : this.maxTokens,
-            stop: options?.stop ?? this.stop,
-            user: this.user,
-            stream: this.streaming,
-            ...this.modelKwargs,
-        };
-    }
-    /** @ignore */
-    _identifyingParams() {
-        return {
-            model_name: this.modelName,
-            ...this.invocationParams(),
-            ...this.clientConfig,
-        };
-    }
-    /**
-     * Get the identifying parameters for the model
-     */
-    identifyingParams() {
-        return {
-            model_name: this.modelName,
-            ...this.invocationParams(),
-            ...this.clientConfig,
-        };
-    }
-    /**
-     * Formats the messages for the OpenAI API.
-     * @param prompt The prompt to be formatted.
-     * @returns Array of formatted messages.
-     */
-    formatMessages(prompt) {
-        const message = {
-            role: "user",
-            content: prompt,
-        };
-        return this.prefixMessages ? [...this.prefixMessages, message] : [message];
-    }
-    async *_streamResponseChunks(prompt, options, runManager) {
-        const params = {
-            ...this.invocationParams(options),
-            messages: this.formatMessages(prompt),
-            stream: true,
-        };
-        const stream = await this.completionWithRetry(params, options);
-        for await (const data of stream) {
-            const choice = data?.choices[0];
-            if (!choice) {
-                continue;
-            }
-            const { delta } = choice;
-            const generationChunk = new outputs_1.GenerationChunk({
-                text: delta.content ?? "",
-            });
-            yield generationChunk;
-            const newTokenIndices = {
-                prompt: options.promptIndex ?? 0,
-                completion: choice.index ?? 0,
-            };
-            // eslint-disable-next-line no-void
-            void runManager?.handleLLMNewToken(generationChunk.text ?? "", newTokenIndices);
-        }
-        if (options.signal?.aborted) {
-            throw new Error("AbortError");
-        }
-    }
-    /** @ignore */
-    async _call(prompt, options, runManager) {
-        const params = this.invocationParams(options);
-        if (params.stream) {
-            const stream = await this._streamResponseChunks(prompt, options, runManager);
-            let finalChunk;
-            for await (const chunk of stream) {
-                if (finalChunk === undefined) {
-                    finalChunk = chunk;
-                }
-                else {
-                    finalChunk = finalChunk.concat(chunk);
-                }
-            }
-            return finalChunk?.text ?? "";
-        }
-        else {
-            const response = await this.completionWithRetry({
-                ...params,
-                stream: false,
-                messages: this.formatMessages(prompt),
-            }, {
-                signal: options.signal,
-                ...options.options,
-            });
-            return response?.choices[0]?.message?.content ?? "";
-        }
-    }
-    async completionWithRetry(request, options) {
-        const requestOptions = this._getClientOptions(options);
-        return this.caller.call(async () => {
-            try {
-                const res = await this.client.chat.completions.create(request, requestOptions);
-                return res;
-            }
-            catch (e) {
-                const error = (0, openai_js_1.wrapOpenAIClientError)(e);
-                throw error;
-            }
-        });
-    }
-    /** @ignore */
-    _getClientOptions(options) {
-        if (!this.client) {
-            const openAIEndpointConfig = {
-                azureOpenAIApiDeploymentName: this.azureOpenAIApiDeploymentName,
-                azureOpenAIApiInstanceName: this.azureOpenAIApiInstanceName,
-                azureOpenAIApiKey: this.azureOpenAIApiKey,
-                azureOpenAIBasePath: this.azureOpenAIBasePath,
-                baseURL: this.clientConfig.baseURL,
-            };
-            const endpoint = (0, azure_js_1.getEndpoint)(openAIEndpointConfig);
-            const params = {
-                ...this.clientConfig,
-                baseURL: endpoint,
-                timeout: this.timeout,
-                maxRetries: 0,
-            };
-            if (!params.baseURL) {
-                delete params.baseURL;
-            }
-            this.client = new openai_1.OpenAI(params);
-        }
-        const requestOptions = {
-            ...this.clientConfig,
-            ...options,
-        };
-        if (this.azureOpenAIApiKey) {
-            requestOptions.headers = {
-                "api-key": this.azureOpenAIApiKey,
-                ...requestOptions.headers,
-            };
-            requestOptions.query = {
-                "api-version": this.azureOpenAIApiVersion,
-                ...requestOptions.query,
-            };
-        }
-        return requestOptions;
-    }
-    _llmType() {
-        return "openai";
-    }
-}
-exports.OpenAIChat = OpenAIChat;
-
-
-/***/ }),
-
 /***/ 82356:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.OpenAI = exports.OpenAIChat = void 0;
+exports.OpenAI = void 0;
 const openai_1 = __nccwpck_require__(12583);
 const base_1 = __nccwpck_require__(5485);
 const outputs_1 = __nccwpck_require__(84034);
@@ -99699,8 +99425,6 @@ const env_1 = __nccwpck_require__(40895);
 const llms_1 = __nccwpck_require__(93038);
 const chunk_array_1 = __nccwpck_require__(36127);
 const azure_js_1 = __nccwpck_require__(89787);
-const legacy_js_1 = __nccwpck_require__(56581);
-Object.defineProperty(exports, "OpenAIChat", ({ enumerable: true, get: function () { return legacy_js_1.OpenAIChat; } }));
 const openai_js_1 = __nccwpck_require__(51988);
 /**
  * Wrapper around OpenAI large language models.
@@ -99708,11 +99432,7 @@ const openai_js_1 = __nccwpck_require__(51988);
  * To use you should have the `openai` package installed, with the
  * `OPENAI_API_KEY` environment variable set.
  *
- * To use with Azure you should have the `openai` package installed, with the
- * `AZURE_OPENAI_API_KEY`,
- * `AZURE_OPENAI_API_INSTANCE_NAME`,
- * `AZURE_OPENAI_API_DEPLOYMENT_NAME`
- * and `AZURE_OPENAI_API_VERSION` environment variable set.
+ * To use with Azure, import the `AzureOpenAI` class.
  *
  * @remarks
  * Any parameters that are valid to be passed to {@link
@@ -99745,7 +99465,6 @@ class OpenAI extends llms_1.BaseLLM {
         return {
             openAIApiKey: "OPENAI_API_KEY",
             apiKey: "OPENAI_API_KEY",
-            azureOpenAIApiKey: "AZURE_OPENAI_API_KEY",
             organization: "OPENAI_ORGANIZATION",
         };
     }
@@ -99754,30 +99473,9 @@ class OpenAI extends llms_1.BaseLLM {
             modelName: "model",
             openAIApiKey: "openai_api_key",
             apiKey: "openai_api_key",
-            azureOpenAIApiVersion: "azure_openai_api_version",
-            azureOpenAIApiKey: "azure_openai_api_key",
-            azureOpenAIApiInstanceName: "azure_openai_api_instance_name",
-            azureOpenAIApiDeploymentName: "azure_openai_api_deployment_name",
         };
     }
-    constructor(fields, 
-    /** @deprecated */
-    configuration) {
-        let model = fields?.model ?? fields?.modelName;
-        if ((model?.startsWith("gpt-3.5-turbo") || model?.startsWith("gpt-4")) &&
-            !model?.includes("-instruct")) {
-            console.warn([
-                `Your chosen OpenAI model, "${model}", is a chat model and not a text-in/text-out LLM.`,
-                `Passing it into the "OpenAI" class is deprecated and only permitted for backwards-compatibility. You may experience odd behavior.`,
-                `Please use the "ChatOpenAI" class instead.`,
-                "",
-                `See this page for more information:`,
-                "|",
-                `└> https://js.langchain.com/docs/integrations/chat/openai`,
-            ].join("\n"));
-            // eslint-disable-next-line no-constructor-return
-            return new legacy_js_1.OpenAIChat(fields, configuration);
-        }
+    constructor(fields) {
         super(fields ?? {});
         Object.defineProperty(this, "lc_serializable", {
             enumerable: true,
@@ -99789,31 +99487,31 @@ class OpenAI extends llms_1.BaseLLM {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 0.7
+            value: void 0
         });
         Object.defineProperty(this, "maxTokens", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 256
+            value: void 0
         });
         Object.defineProperty(this, "topP", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 1
+            value: void 0
         });
         Object.defineProperty(this, "frequencyPenalty", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 0
+            value: void 0
         });
         Object.defineProperty(this, "presencePenalty", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 0
+            value: void 0
         });
         Object.defineProperty(this, "n", {
             enumerable: true,
@@ -99833,17 +99531,18 @@ class OpenAI extends llms_1.BaseLLM {
             writable: true,
             value: void 0
         });
-        Object.defineProperty(this, "modelName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: "gpt-3.5-turbo-instruct"
-        });
         Object.defineProperty(this, "model", {
             enumerable: true,
             configurable: true,
             writable: true,
             value: "gpt-3.5-turbo-instruct"
+        });
+        /** @deprecated Use "model" instead */
+        Object.defineProperty(this, "modelName", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
         });
         Object.defineProperty(this, "modelKwargs", {
             enumerable: true,
@@ -99899,42 +99598,6 @@ class OpenAI extends llms_1.BaseLLM {
             writable: true,
             value: void 0
         });
-        Object.defineProperty(this, "azureOpenAIApiVersion", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiKey", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureADTokenProvider", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiInstanceName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIApiDeploymentName", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
-        Object.defineProperty(this, "azureOpenAIBasePath", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: void 0
-        });
         Object.defineProperty(this, "organization", {
             enumerable: true,
             configurable: true,
@@ -99953,38 +99616,30 @@ class OpenAI extends llms_1.BaseLLM {
             writable: true,
             value: void 0
         });
-        model = model ?? this.model;
         this.openAIApiKey =
             fields?.apiKey ??
                 fields?.openAIApiKey ??
                 (0, env_1.getEnvironmentVariable)("OPENAI_API_KEY");
         this.apiKey = this.openAIApiKey;
-        this.azureOpenAIApiKey =
-            fields?.azureOpenAIApiKey ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_KEY");
-        this.azureADTokenProvider = fields?.azureADTokenProvider ?? undefined;
-        if (!this.azureOpenAIApiKey && !this.apiKey && !this.azureADTokenProvider) {
-            throw new Error("OpenAI or Azure OpenAI API key or Token Provider not found");
-        }
-        this.azureOpenAIApiInstanceName =
-            fields?.azureOpenAIApiInstanceName ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_INSTANCE_NAME");
-        this.azureOpenAIApiDeploymentName =
-            (fields?.azureOpenAIApiCompletionsDeploymentName ||
-                fields?.azureOpenAIApiDeploymentName) ??
-                ((0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_COMPLETIONS_DEPLOYMENT_NAME") ||
-                    (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_DEPLOYMENT_NAME"));
-        this.azureOpenAIApiVersion =
-            fields?.azureOpenAIApiVersion ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_API_VERSION");
-        this.azureOpenAIBasePath =
-            fields?.azureOpenAIBasePath ??
-                (0, env_1.getEnvironmentVariable)("AZURE_OPENAI_BASE_PATH");
         this.organization =
             fields?.configuration?.organization ??
                 (0, env_1.getEnvironmentVariable)("OPENAI_ORGANIZATION");
-        this.modelName = model;
-        this.model = model;
+        this.model = fields?.model ?? fields?.modelName ?? this.model;
+        if ((this.model?.startsWith("gpt-3.5-turbo") ||
+            this.model?.startsWith("gpt-4") ||
+            this.model?.startsWith("o1")) &&
+            !this.model?.includes("-instruct")) {
+            throw new Error([
+                `Your chosen OpenAI model, "${this.model}", is a chat model and not a text-in/text-out LLM.`,
+                `Passing it into the "OpenAI" class is no longer supported.`,
+                `Please use the "ChatOpenAI" class instead.`,
+                "",
+                `See this page for more information:`,
+                "|",
+                `└> https://js.langchain.com/docs/integrations/chat/openai`,
+            ].join("\n"));
+        }
+        this.modelName = this.model;
         this.modelKwargs = fields?.modelKwargs ?? {};
         this.batchSize = fields?.batchSize ?? this.batchSize;
         this.timeout = fields?.timeout;
@@ -100003,28 +99658,10 @@ class OpenAI extends llms_1.BaseLLM {
         if (this.streaming && this.bestOf && this.bestOf > 1) {
             throw new Error("Cannot stream results when bestOf > 1");
         }
-        if (this.azureOpenAIApiKey || this.azureADTokenProvider) {
-            if (!this.azureOpenAIApiInstanceName && !this.azureOpenAIBasePath) {
-                throw new Error("Azure OpenAI API instance name not found");
-            }
-            if (!this.azureOpenAIApiDeploymentName) {
-                throw new Error("Azure OpenAI API deployment name not found");
-            }
-            if (!this.azureOpenAIApiVersion) {
-                throw new Error("Azure OpenAI API version not found");
-            }
-            this.apiKey = this.apiKey ?? "";
-        }
         this.clientConfig = {
             apiKey: this.apiKey,
             organization: this.organization,
-            baseURL: configuration?.basePath ?? fields?.configuration?.basePath,
             dangerouslyAllowBrowser: true,
-            defaultHeaders: configuration?.baseOptions?.headers ??
-                fields?.configuration?.baseOptions?.headers,
-            defaultQuery: configuration?.baseOptions?.params ??
-                fields?.configuration?.baseOptions?.params,
-            ...configuration,
             ...fields?.configuration,
         };
     }
@@ -100223,10 +99860,6 @@ class OpenAI extends llms_1.BaseLLM {
     _getClientOptions(options) {
         if (!this.client) {
             const openAIEndpointConfig = {
-                azureOpenAIApiDeploymentName: this.azureOpenAIApiDeploymentName,
-                azureOpenAIApiInstanceName: this.azureOpenAIApiInstanceName,
-                azureOpenAIApiKey: this.azureOpenAIApiKey,
-                azureOpenAIBasePath: this.azureOpenAIBasePath,
                 baseURL: this.clientConfig.baseURL,
             };
             const endpoint = (0, azure_js_1.getEndpoint)(openAIEndpointConfig);
@@ -100245,16 +99878,6 @@ class OpenAI extends llms_1.BaseLLM {
             ...this.clientConfig,
             ...options,
         };
-        if (this.azureOpenAIApiKey) {
-            requestOptions.headers = {
-                "api-key": this.azureOpenAIApiKey,
-                ...requestOptions.headers,
-            };
-            requestOptions.query = {
-                "api-version": this.azureOpenAIApiVersion,
-                ...requestOptions.query,
-            };
-        }
         return requestOptions;
     }
     _llmType() {

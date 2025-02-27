@@ -21,6 +21,14 @@ inputs:
   file_name:
     description: 'File name'
     required: true
+  recursion_limit:
+    description: 'Recursion limit'
+    required: false
+    default: '10'
+  additional_prompt:
+    description: 'Additional prompt to support the AI'
+    required: false
+    default: 'null'
 
 # Define your outputs here.
 outputs:

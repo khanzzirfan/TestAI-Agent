@@ -64,3 +64,146 @@ export const TestTools = [
     }
   })
 ];
+
+export const InstallTools = [
+  // Enhanced npm install tool with Command
+  new DynamicStructuredTool({
+    name: 'npm-install',
+    description: 'Executes npm install commands with support for various options including force and legacy-peer-deps',
+    schema: z.object({
+      options: z
+        .object({
+          directory_path: z
+            .string()
+            .optional()
+            .describe(
+              'path to the directory where the command will be executed. i.e where the package.json file is located'
+            ),
+          force: z.boolean().optional().describe('Run install with --force'),
+          legacyPeerDeps: z.boolean().optional().describe('Run install with --legacy-peer-deps')
+        })
+        .optional()
+    }),
+    func: async ({ options = {} }, runManager: any) => {
+      try {
+        let fullCommand = 'npm install';
+        // Add options to the command
+        if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
+        if (options.force) fullCommand += ' --force';
+        if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
+
+        const { stdout, stderr } = await nodeExecutor(fullCommand);
+
+        return {
+          installResults: { success: true, output: stdout },
+          hasError: false,
+          messageValue: stdout
+        };
+      } catch (error: unknown | any) {
+        return {
+          hasError: true,
+          installResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messageValue: error.message
+        };
+      }
+    }
+  }),
+
+  // Enhanced yarn install tool with Command
+  new DynamicStructuredTool({
+    name: 'yarn-install',
+    description: 'Executes yarn install commands with support for various options including force and legacy-peer-deps',
+    schema: z.object({
+      options: z
+        .object({
+          directory_path: z
+            .string()
+            .optional()
+            .describe(
+              'path to the directory where the command will be executed. i.e where the package.json file is located'
+            ),
+          force: z.boolean().optional().describe('Run install with --force'),
+          legacyPeerDeps: z.boolean().optional().describe('Run install with --legacy-peer-deps')
+        })
+        .optional()
+    }),
+    func: async ({ options = {} }, runManager: any) => {
+      try {
+        let fullCommand = 'yarn install';
+        // Add options to the command
+        if (options.directory_path) fullCommand += ` --cwd ${options.directory_path}`;
+        if (options.force) fullCommand += ' --force';
+        if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
+
+        const { stdout, stderr } = await nodeExecutor(fullCommand);
+
+        return {
+          installResults: { success: true, output: stdout },
+          hasError: false,
+          messageValue: stdout
+        };
+      } catch (error: unknown | any) {
+        return {
+          hasError: true,
+          installResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messageValue: error.message
+        };
+      }
+    }
+  }),
+
+  // Enhanced pnpm install tool with Command
+  new DynamicStructuredTool({
+    name: 'pnpm-install',
+    description: 'Executes pnpm install commands with support for various options including force and legacy-peer-deps',
+    schema: z.object({
+      options: z
+        .object({
+          directory_path: z
+            .string()
+            .optional()
+            .describe(
+              'path to the directory where the command will be executed. i.e where the package.json file is located'
+            ),
+          force: z.boolean().optional().describe('Run install with --force'),
+          legacyPeerDeps: z.boolean().optional().describe('Run install with --legacy-peer-deps')
+        })
+        .optional()
+    }),
+    func: async ({ options = {} }, runManager: any) => {
+      try {
+        let fullCommand = 'pnpm install';
+        // Add options to the command
+        if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
+        if (options.force) fullCommand += ' --force';
+        if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
+
+        const { stdout, stderr } = await nodeExecutor(fullCommand);
+
+        return {
+          installResults: { success: true, output: stdout },
+          hasError: false,
+          messageValue: stdout
+        };
+      } catch (error: unknown | any) {
+        return {
+          hasError: true,
+          installResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messageValue: error.message
+        };
+      }
+    }
+  })
+];
