@@ -15,6 +15,7 @@ export async function run(): Promise<void> {
     const ms: string = core.getInput('milliseconds');
     const fileName: string = core.getInput('file_name');
     const recursionLimit: number = parseInt(core.getInput('recursion_limit'), 10);
+    const additionalPrompt: string = core.getInput('additional_prompt');
 
     // The `who-to-greet` input is defined in action metadata file
     // const whoToGreet = core.getInput('who-to-greet', { required: false });
@@ -35,7 +36,7 @@ export async function run(): Promise<void> {
     // Sample LangChain code
     try {
       core.debug('Running the main graph');
-      const response = await MainGraphRun({ fileName, recursionLimit });
+      const response = await MainGraphRun({ fileName, recursionLimit, additionalPrompt });
       core.debug('Finished running the main graph');
       // wirte the final comments to the output
       core.setOutput('final_comments', response);

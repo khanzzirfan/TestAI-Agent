@@ -33,10 +33,12 @@ import {
 
 export const MainGraphRun = async ({
   fileName,
-  recursionLimit
+  recursionLimit,
+  additionalPrompt
 }: {
   fileName: string;
   recursionLimit: number;
+  additionalPrompt: string;
 }): Promise<string> => {
   // Initialize memory to persist state between graph runs
   const checkpointer = new MemorySaver();
@@ -185,6 +187,10 @@ export const MainGraphRun = async ({
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
   console.log('app version', 'v0.1.54-alpha.10');
 
+  const additionalPromptNotes = `
+  Additional Notes: ${additionalPrompt}
+  `;
+
   const query = `
   You are a coding assistant with expertise in test automation.
   Generate and execute tests for ${filename}.
@@ -198,7 +204,13 @@ export const MainGraphRun = async ({
   3. Improve existing tests or create new tests
   4. Save test file
   5. Run tests with coverage
-  6. Fix any failures`;
+  6. Fix any failures
+  7. Analyze test results
+  8. Provide final notes
+
+  ${additionalPrompt ? additionalPromptNotes : ''}
+
+  `;
 
   // Use the Runnable
   const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
@@ -207,7 +219,7 @@ export const MainGraphRun = async ({
       messages: [new HumanMessage(query)],
       fileName: filename
     },
-    { recursionLimit: recursionLimit || 100, configurable: { thread_id: 1001 } }
+    { recursionLimit: recursionLimit || 200, configurable: { thread_id: 1001 } }
   );
 
   const resultOfGraph = finalState.finalComments;
