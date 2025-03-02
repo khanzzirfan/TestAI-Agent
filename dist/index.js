@@ -41823,24 +41823,45 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
         name: 'write_file_expert',
         prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.'
     });
-    const npmTestAgent = (0, prebuilt_1.createReactAgent)({
+    const nodeExecutorAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.NodeExecutorTool],
-        name: 'npm_expert',
-        prompt: 'You are a nodejs execution expert. Please specify the name of the test file you would like to run.'
+        name: 'node_expert',
+        prompt: 'You are a nodejs execution expert. Please use the "node_exec" tool to run the nodejs script.'
+    });
+    const npmTestAgent = (0, prebuilt_1.createReactAgent)({
+        llm: llm_1.llm,
+        tools: [tools_1.npmTestTool],
+        name: 'npm_test_expert',
+        prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests.'
+    });
+    const yarnTestAgent = (0, prebuilt_1.createReactAgent)({
+        llm: llm_1.llm,
+        tools: [tools_1.yarnTestTool],
+        name: 'yarn_test_expert',
+        prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.'
     });
     // @ts-ignore
     const { createSupervisor } = await loadSupervisor();
     // @ts-ignore
     const workflow = createSupervisor({
-        agents: [findFilesAgent, createFileAgent, readFileAgent, writeFileAgent, npmTestAgent],
+        agents: [
+            findFilesAgent,
+            createFileAgent,
+            readFileAgent,
+            writeFileAgent,
+            npmTestAgent,
+            yarnTestAgent,
+            nodeExecutorAgent
+        ],
         llm: llm_1.llm,
         prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
             'For finding files, use find_files. ' +
             'For creating files, use create_file. ' +
             'For reading files, use read_file. ' +
             'For writing files, use write_file. ' +
-            'For running tests, use npm_exec.',
+            'For running tests, use npm_test.' +
+            'For running nodejs scripts, use node_exec.',
         supervisorName: 'code_assistant_supervisor',
         outputMode: 'full_history'
     });
@@ -42501,7 +42522,7 @@ __exportStar(__nccwpck_require__(32546), exports);
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.InstallTools = exports.NodeExecutorTool = void 0;
+exports.InstallTools = exports.yarnTestTool = exports.npmTestTool = exports.NodeExecutorTool = void 0;
 const zod_1 = __nccwpck_require__(34809);
 const tools_1 = __nccwpck_require__(3477);
 const util_1 = __nccwpck_require__(39023);
@@ -42559,6 +42580,119 @@ exports.NodeExecutorTool = new tools_1.DynamicStructuredTool({
             return {
                 hasError: true,
                 executionResults: {
+                    success: false,
+                    error: error.message,
+                    output: error.stdout || ''
+                },
+                messageValue: error.message
+            };
+        }
+    }
+});
+exports.npmTestTool = new tools_1.DynamicStructuredTool({
+    name: 'npm_test',
+    description: 'Executes npm test commands with support for various options including coverage and watch mode',
+    schema: zod_1.z.object({
+        command: zod_1.z.string().describe('npm command to execute'),
+        options: zod_1.z
+            .object({
+            directory_path: zod_1.z
+                .string()
+                .optional()
+                .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+            coverage: zod_1.z.boolean().optional().describe('Run tests with coverage'),
+            json: zod_1.z.boolean().optional().describe('Output test results as JSON'),
+            watch: zod_1.z.boolean().optional().describe('Run tests in watch mode'),
+            testRegex: zod_1.z.string().optional().describe('Regular expression to match test files'),
+            updateSnapshots: zod_1.z.boolean().optional().describe('Update test snapshots')
+        })
+            .optional()
+    }),
+    func: async ({ command, options = {} }) => {
+        try {
+            const testCommandCheck = command.includes('test');
+            let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
+            // Add options to the command
+            if (options.directory_path)
+                fullCommand += ` --prefix ${options.directory_path}`;
+            // suffix json
+            fullCommand += ` -- --json`;
+            if (options.coverage)
+                fullCommand += ' --coverage';
+            // if (options.json) fullCommand += " --json";
+            if (options.testRegex)
+                fullCommand += ` --testRegex="${options.testRegex}"`;
+            if (options.updateSnapshots)
+                fullCommand += ' -u';
+            // append silent flag to suppress npm notices
+            // fullCommand += " --silent 2>/dev/null";
+            const { stdout, stderr } = await nodeExecutor(fullCommand);
+            return {
+                testResults: { success: true, output: JSON.stringify(stdout) },
+                hasError: false,
+                messageValue: stdout
+            };
+        }
+        catch (error) {
+            return {
+                hasError: true,
+                testResults: {
+                    success: false,
+                    error: error.message,
+                    output: error.stdout || ''
+                },
+                messageValue: error.message
+            };
+        }
+    }
+});
+exports.yarnTestTool = new tools_1.DynamicStructuredTool({
+    name: 'yarn_test',
+    description: 'Executes yarn test commands with support for various options including coverage and watch mode',
+    schema: zod_1.z.object({
+        command: zod_1.z.string().describe('yarn command to execute'),
+        options: zod_1.z
+            .object({
+            directory_path: zod_1.z
+                .string()
+                .optional()
+                .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
+            coverage: zod_1.z.boolean().optional().describe('Run tests with coverage'),
+            json: zod_1.z.boolean().optional().describe('Output test results as JSON'),
+            watch: zod_1.z.boolean().optional().describe('Run tests in watch mode'),
+            testRegex: zod_1.z.string().optional().describe('Regular expression to match test files'),
+            updateSnapshots: zod_1.z.boolean().optional().describe('Update test snapshots')
+        })
+            .optional()
+    }),
+    func: async ({ command, options = {} }) => {
+        try {
+            const testCommandCheck = command.includes('test');
+            let fullCommand = !command.startsWith('yarn') ? `yarn ${testCommandCheck ? '' : 'test'} ${command}` : command;
+            // Add options to the command
+            if (options.directory_path)
+                fullCommand += ` --cwd ${options.directory_path}`;
+            // suffix json
+            fullCommand += ` --json`;
+            if (options.coverage)
+                fullCommand += ' --coverage';
+            if (options.watch)
+                fullCommand += ' --watch';
+            if (options.testRegex)
+                fullCommand += ` --testRegex="${options.testRegex}"`;
+            if (options.updateSnapshots)
+                fullCommand += ' -u';
+            const { stdout, stderr } = await nodeExecutor(fullCommand);
+            return {
+                testResults: { success: true, output: JSON.stringify(stdout) },
+                hasError: false,
+                messageValue: stdout
+            };
+        }
+        catch (error) {
+            return {
+                hasError: true,
+                testResults: {
                     success: false,
                     error: error.message,
                     output: error.stdout || ''
