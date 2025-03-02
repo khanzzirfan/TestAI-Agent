@@ -11,7 +11,6 @@ import {
   NodeExecutorTool,
   testResultAnalyzerTools
 } from './tools';
-import { GraphState, State, Update } from './state';
 import { llm } from './llm';
 
 const tools = [

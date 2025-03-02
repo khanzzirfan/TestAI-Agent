@@ -38,7 +38,7 @@ const getWeather = tool(
 );
 
 export const getCoolestCities = tool(
-  ({ state }, config) => {
+  ({ state }, _config) => {
     const examples: Record<string, string[]> = {
       california: ['San Francisco', 'Los Angeles', 'San Diego'],
       'new york': ['New York City', 'Buffalo', 'Rochester']
@@ -60,7 +60,7 @@ export const getCoolestCities = tool(
 );
 
 const getCityRestaurants = tool(
-  ({ city }, config) => {
+  ({ city }, _config) => {
     const examples: Record<string, string[]> = {
       'Los Angeles': ['Le Bernardin', 'Katzs Delicatessen', 'Peter Luger Steak House'],
       'San Francisco': ['Tartine Bakery', 'Zuni Café', 'House of Prime Rib'],
@@ -84,7 +84,7 @@ const getCityRestaurants = tool(
 );
 
 const getCityLibraries = tool(
-  ({ city }, config) => {
+  ({ city }, _config) => {
     const examples: Record<string, string[]> = {
       'New York': ['New York Public Library', 'Brooklyn Public Library', 'Queens Library'],
       'San Francisco': ['San Francisco Public Library', 'Mission Bay Library', 'Chinatown Branch Library'],
@@ -109,7 +109,7 @@ const getCityLibraries = tool(
 );
 
 const getCityMonuments = tool(
-  ({ city }, config) => {
+  ({ city }, _config) => {
     const examples: Record<string, string[]> = {
       'New York': ['Statue of Liberty', 'Empire State Building', 'Brooklyn Bridge'],
       'San Francisco': ['Golden Gate Bridge', 'Coit Tower', 'Alcatraz Island'],
