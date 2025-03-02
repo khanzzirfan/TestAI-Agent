@@ -1,35 +1,30 @@
 import { MemorySaver, InMemoryStore, Command } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
-import { StateGraph } from '@langchain/langgraph';
-import { AIMessage } from '@langchain/core/messages';
-import { isAIMessage } from '@langchain/core/messages';
-import { ToolMessage } from '@langchain/core/messages';
-import { isCommand } from '@langchain/langgraph';
-import { CustomTools } from './tools';
-import { GraphState, State, Update } from './state';
-
-const tools = [...CustomTools];
-const toolMap = new Map(tools.map(tool => [tool.name, tool]));
-
+import { createReactAgent } from '@langchain/langgraph/prebuilt';
+import { createSupervisor } from '@langchain/langgraph-supervisor';
 import {
-  checkFileExists,
-  createNewTests,
-  analyzeExistingTestEdges,
-  analyzeTestResults,
-  checkTestFile,
-  saveTests,
-  saveTestsEdges,
-  runTests,
-  runTestsEdges,
-  analyzeExistingTests,
-  fixErrors,
-  fixErrorsEdges,
-  checkFileExistsEdges,
-  checkTestFileEdges,
-  writeTestsEdges,
-  analyzeTestResultsEdges,
-  finalNotesAgent
-} from './agents';
+  findFileTool,
+  findTestFileTool,
+  createFileTool,
+  writeFileTool,
+  readFileTool,
+  NodeExecutorTool,
+  testResultAnalyzerTools
+} from './tools';
+import { GraphState, State, Update } from './state';
+import { llm } from './llm';
+
+const tools = [
+  findFileTool,
+  findTestFileTool,
+  createFileTool,
+  writeFileTool,
+  readFileTool,
+  NodeExecutorTool,
+  testResultAnalyzerTools
+];
+
+const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 
 export const MainGraphRun = async ({
   fileName,
@@ -45,144 +40,57 @@ export const MainGraphRun = async ({
   const inMemoryStore = new InMemoryStore();
 
   const filename: string = fileName;
-  const toolNames = CustomTools.map(tool => tool.name).join(', ');
 
-  const toolExecutor = async (state: State) => {
-    const message = state.messages.at(-1);
-    // @ts-ignore
-    if (!isAIMessage(message) || message.tool_calls === undefined || message.tool_calls.length === 0) {
-      throw new Error('Most recent message must be an AIMessage with a tool call.');
-    }
+  // Create agents
+  const findFilesAgent = createReactAgent({
+    llm: llm,
+    tools: [findFileTool, findTestFileTool],
+    name: 'find_files_expert',
+    prompt:
+      "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for."
+  });
 
-    // Execute all tool calls in parallel with proper error handling
-    const toolResults = (await Promise.all(
-      message.tool_calls.map(async (toolCall: any) => {
-        try {
-          const tool = toolMap.get(toolCall.name);
-          if (!tool) {
-            throw new Error(`Tool ${toolCall.name} not found`);
-          }
+  const createFileAgent = createReactAgent({
+    llm: llm,
+    tools: [createFileTool],
+    name: 'create_file_expert',
+    prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.'
+  });
 
-          const result = await tool.invoke(toolCall.args);
-          const { messageValue = {}, ...restResult } = result;
-          return new Command({
-            update: {
-              ...restResult,
-              messages: [
-                new ToolMessage({
-                  content: JSON.stringify(messageValue, null, 2),
-                  tool_call_id: toolCall.id,
-                  additional_kwargs: { result }
-                })
-              ]
-            }
-          });
-        } catch (error) {
-          return new Command({
-            update: {
-              messages: [
-                new ToolMessage({
-                  content: `Tool ${toolCall.name} failed: ${error instanceof Error ? error.message : String(error)}`,
-                  tool_call_id: toolCall.id,
-                  additional_kwargs: { error }
-                })
-              ]
-            }
-          });
-        }
-      })
-    )) as any[];
+  const readFileAgent = createReactAgent({
+    llm: llm,
+    tools: [readFileTool],
+    name: 'read_file_expert',
+    prompt: 'You are a file reading expert. Please specify the name of the file you would like to read.'
+  });
 
-    // Handle mixed Command and non-Command outputs
-    const combinedOutputs = toolResults.map(output => {
-      if (isCommand(output)) {
-        console.log('running  command output', output);
-        return output;
-      }
-      // Tool invocation result is a string, convert it to a ToolMessage
-      return { messages: [output] };
-    });
-    // Return an array of values instead of an object
-    return combinedOutputs;
-  };
+  const writeFileAgent = createReactAgent({
+    llm: llm,
+    tools: [writeFileTool],
+    name: 'write_file_expert',
+    prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.'
+  });
 
-  const callToolsEdge = async (state: State) => {
-    const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
-    if (lastMessage.tool_calls?.length) {
-      return 'tools-find-file';
-    }
-    const hasFile = state.fileName && state.filePath;
-    const hasTestFile = state.testFileName && state.testFilePath;
-    const hasBothFiles = hasFile && hasTestFile;
-    const { messages, ...restOfTheState } = state;
-    console.log('callToolsEdge state params', JSON.stringify(restOfTheState, null, 2));
+  const npmTestAgent = createReactAgent({
+    llm: llm,
+    tools: [NodeExecutorTool],
+    name: 'npm_expert',
+    prompt: 'You are a nodejs execution expert. Please specify the name of the test file you would like to run.'
+  });
 
-    if (state.iteration > 5) {
-      return '__end__';
-    }
-
-    if (state.testSummary && state.testSummary?.failureReasons?.length > 0) {
-      return 'fix-errors';
-    } else if (state.testSummary && state.testSummary?.failureReasons?.length === 0) {
-      return '__end__';
-    }
-
-    if (state.testResults) {
-      return 'analyze-results';
-    }
-
-    if (hasBothFiles) {
-      return 'analyze-existing-tests';
-    }
-
-    if (state.filePath) {
-      // found source file, now find test file
-      return 'find-test-file';
-    }
-
-    return 'find-file';
-  };
-
-  // Create and compile the graph
-  const workflow = new StateGraph(GraphState)
-    // Add nodes
-    .addNode('find-file', checkFileExists)
-    .addNode('find-test-file', checkTestFile)
-    .addNode('create-new-tests', createNewTests)
-    .addNode('analyze-existing-tests', analyzeExistingTests)
-    .addNode('save-tests', saveTests)
-    .addNode('run-tests', runTests)
-    .addNode('analyze-results', analyzeTestResults)
-    .addNode('fix-errors', fixErrors)
-    .addNode('tools-find-file', toolExecutor)
-    .addNode('tools-find-test-file', toolExecutor)
-    .addNode('tools-read-file', toolExecutor)
-    .addNode('tools-write-tests', toolExecutor)
-    .addNode('tools-run-tests', toolExecutor)
-    .addNode('tools-fix-errors', toolExecutor)
-    .addNode('tools-examine-test-results', toolExecutor)
-    .addNode('tools-create-new-tests', toolExecutor)
-    .addNode('final-notes', finalNotesAgent)
-
-    // Add edges with fixed flow
-    .addEdge('__start__', 'find-file')
-    .addEdge('tools-read-file', 'analyze-existing-tests')
-    .addConditionalEdges('find-file', checkFileExistsEdges)
-    .addConditionalEdges('find-test-file', checkTestFileEdges)
-    .addConditionalEdges('create-new-tests', writeTestsEdges)
-    .addConditionalEdges('analyze-existing-tests', analyzeExistingTestEdges)
-    .addConditionalEdges('save-tests', saveTestsEdges) // Use new edge handler
-    .addConditionalEdges('run-tests', runTestsEdges)
-    .addConditionalEdges('analyze-results', analyzeTestResultsEdges)
-    .addConditionalEdges('fix-errors', fixErrorsEdges)
-    .addConditionalEdges('tools-write-tests', saveTestsEdges) // Route
-    .addConditionalEdges('tools-find-file', checkFileExistsEdges)
-    .addConditionalEdges('tools-find-test-file', checkTestFileEdges)
-    .addConditionalEdges('tools-run-tests', runTestsEdges)
-    .addConditionalEdges('tools-fix-errors', fixErrorsEdges)
-    .addConditionalEdges('tools-examine-test-results', analyzeTestResultsEdges)
-    .addConditionalEdges('tools-create-new-tests', callToolsEdge)
-    .addEdge('final-notes', '__end__');
+  const workflow = createSupervisor({
+    agents: [findFilesAgent, createFileAgent, readFileAgent, writeFileAgent, npmTestAgent],
+    llm: llm,
+    prompt:
+      'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
+      'For finding files, use find_files. ' +
+      'For creating files, use create_file. ' +
+      'For reading files, use read_file. ' +
+      'For writing files, use write_file. ' +
+      'For running tests, use npm_exec.',
+    supervisorName: 'code_assistant_supervisor',
+    outputMode: 'full_history'
+  });
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
   console.log('app version', 'v0.1.54-alpha.10');
@@ -193,10 +101,8 @@ export const MainGraphRun = async ({
 
   const query = `
   You are a coding assistant with expertise in test automation.
+  You have been assigned with the following task:
   Generate and execute tests for ${filename}.
-
-  Use the available tools: ${toolNames}.
-  Current time: {time}
 
   Guidelines:
   1. Verify the source file exists
@@ -216,13 +122,12 @@ export const MainGraphRun = async ({
   const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
   const finalState = await app.invoke(
     {
-      messages: [new HumanMessage(query)],
-      fileName: filename
+      messages: [new HumanMessage(query)]
     },
     { recursionLimit: recursionLimit || 200, configurable: { thread_id: 1001 } }
   );
 
-  const resultOfGraph = finalState.finalComments;
+  const resultOfGraph = finalState.messages[finalState.messages.length - 1].content as string;
   console.log('result of graph for a threadId:', currentDate);
   // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
   console.log(resultOfGraph);

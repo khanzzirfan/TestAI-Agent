@@ -129,371 +129,367 @@ const validateFilePath: ValidateFilePath = filePath => {
   return absolutePath;
 };
 
-export const FileFolderTools = [
-  // Enhanced create file tool
-  new DynamicStructuredTool({
-    name: 'create-file',
-    description: 'Creates a new file with optional template content and validation',
-    schema: z.object({
-      reason: z.string().describe('What is the reason that choose to call this tool from the context?'),
-      path: z.string().describe('path to the file'),
-      fileName: z.string().describe('name of the file'),
-      template: z.string().optional().describe('template name to use'),
-      overwrite: z.boolean().optional().describe('overwrite if file exists')
-    }),
-    func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager: any) => {
-      try {
-        const normalizedPath = path.normalize(dirPath);
-        const fullPath = path.join(normalizedPath, fileName);
-        validateFilePath(fullPath);
+export const createFileTool = new DynamicStructuredTool({
+  name: 'create_file',
+  description: 'Creates a new file with optional template content and validation',
+  schema: z.object({
+    reason: z.string().describe('What is the reason that choose to call this tool from the context?'),
+    path: z.string().describe('path to the file'),
+    fileName: z.string().describe('name of the file'),
+    template: z.string().optional().describe('template name to use'),
+    overwrite: z.boolean().optional().describe('overwrite if file exists')
+  }),
+  func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager: any) => {
+    try {
+      const normalizedPath = path.normalize(dirPath);
+      const fullPath = path.join(normalizedPath, fileName);
+      validateFilePath(fullPath);
 
-        if (!fs.existsSync(normalizedPath)) {
-          fs.mkdirSync(normalizedPath, { recursive: true });
-        }
+      if (!fs.existsSync(normalizedPath)) {
+        fs.mkdirSync(normalizedPath, { recursive: true });
+      }
 
-        if (fs.existsSync(fullPath) && !overwrite) {
-          // read file content
-          const fileContent = fs.readFileSync(fullPath, 'utf-8');
-          return {
-            testFileName: fileName,
-            testFilePath: fullPath,
-            testFileContent: fileContent,
-            testFileFound: true,
-            messageValue: {
-              success: false,
-              error: 'File already exists and overwrite is not enabled',
-              testFileName: fileName,
-              testFilePath: fullPath,
-              testFileContent: fileContent,
-              testFileFound: true
-            }
-          };
-        }
-
-        let content = template ? '// Generated file\n\n' : '';
-        fs.writeFileSync(fullPath, content, 'utf-8');
-
+      if (fs.existsSync(fullPath) && !overwrite) {
+        // read file content
+        const fileContent = fs.readFileSync(fullPath, 'utf-8');
         return {
           testFileName: fileName,
           testFilePath: fullPath,
-          testFileContent: content,
+          testFileContent: fileContent,
           testFileFound: true,
           messageValue: {
-            success: true,
-            path: fullPath,
-            message: `File created successfully at ${fullPath}`,
+            success: false,
+            error: 'File already exists and overwrite is not enabled',
             testFileName: fileName,
             testFilePath: fullPath,
-            testFileContent: content,
+            testFileContent: fileContent,
             testFileFound: true
           }
         };
-      } catch (error: unknown | any) {
-        return {
-          file_operation: {
-            success: false,
-            error: error.message
-          }
-        };
       }
-    }
-  }),
 
-  // Enhanced write file tool
-  new DynamicStructuredTool({
-    name: 'write-file',
-    description: 'Writes content to a file with backup and validation options',
-    schema: z.object({
-      reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
-      path: z.string().describe('path to the file'),
-      fileName: z.string().describe('name of the file'),
-      content: z.string().describe('content to write'),
-      createBackup: z.boolean().optional().describe('create backup of existing file'),
-      appendContent: z.boolean().optional().describe('append instead of overwrite')
-    }),
-    func: async (
-      { path: dirPath, fileName, content, createBackup = false, appendContent = false },
-      runManager: any
-    ) => {
-      try {
-        const fullPath = path.join(dirPath, fileName);
-        validateFilePath(fullPath);
+      let content = template ? '// Generated file\n\n' : '';
+      fs.writeFileSync(fullPath, content, 'utf-8');
 
-        // Create backup if requested and file exists
-        if (createBackup && fs.existsSync(fullPath)) {
-          const backupPath = `${fullPath}.backup-${Date.now()}`;
-          fs.copyFileSync(fullPath, backupPath);
+      return {
+        testFileName: fileName,
+        testFilePath: fullPath,
+        testFileContent: content,
+        testFileFound: true,
+        messageValue: {
+          success: true,
+          path: fullPath,
+          message: `File created successfully at ${fullPath}`,
+          testFileName: fileName,
+          testFilePath: fullPath,
+          testFileContent: content,
+          testFileFound: true
         }
-
-        // Write content
-        if (appendContent && fs.existsSync(fullPath)) {
-          fs.appendFileSync(fullPath, '\n' + content, 'utf-8');
-        } else {
-          fs.writeFileSync(fullPath, content, 'utf-8');
-        }
-
-        return {
-          messageValue: fullPath
-        };
-      } catch (error: unknown | any) {
-        return {
+      };
+    } catch (error: unknown | any) {
+      return {
+        file_operation: {
           success: false,
-          messageValue: error.message
-        };
-      }
-    }
-  }),
-
-  // Enhanced list files tool
-  new DynamicStructuredTool({
-    name: 'list-files',
-    description: 'Lists files in a directory with filtering and detailed information',
-    schema: z.object({
-      reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
-      path: z.string().describe('path to the directory'),
-      pattern: z.string().optional().describe('file pattern to match'),
-      exclude: z.array(z.string()).optional().describe('directories to exclude'),
-      includeDetails: z.boolean().optional().describe('include file details')
-    }),
-    func: async ({ path: dirPath, pattern, exclude, includeDetails = false }, runManager: any) => {
-      try {
-        const absolutePath = validateFilePath(dirPath);
-        const files = listFilesRecursively(
-          absolutePath,
-          exclude || ['node_modules', 'public', 'dist', 'coverage', '.git'],
-          pattern
-        );
-
-        if (!includeDetails) {
-          return {
-            success: true,
-            messageValue: {
-              files: files.map(f => f.path)
-            }
-          };
+          error: error.message
         }
+      };
+    }
+  }
+});
 
-        const fileDirPath = path.dirname(absolutePath);
+// Enhanced write file tool
 
+export const writeFileTool = new DynamicStructuredTool({
+  name: 'write_file',
+  description: 'Writes content to a file with backup and validation options',
+  schema: z.object({
+    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+    path: z.string().describe('path to the file'),
+    fileName: z.string().describe('name of the file'),
+    content: z.string().describe('content to write'),
+    createBackup: z.boolean().optional().describe('create backup of existing file'),
+    appendContent: z.boolean().optional().describe('append instead of overwrite')
+  }),
+  func: async ({ path: dirPath, fileName, content, createBackup = false, appendContent = false }, runManager: any) => {
+    try {
+      const fullPath = path.join(dirPath, fileName);
+      validateFilePath(fullPath);
+
+      // Create backup if requested and file exists
+      if (createBackup && fs.existsSync(fullPath)) {
+        const backupPath = `${fullPath}.backup-${Date.now()}`;
+        fs.copyFileSync(fullPath, backupPath);
+      }
+
+      // Write content
+      if (appendContent && fs.existsSync(fullPath)) {
+        fs.appendFileSync(fullPath, '\n' + content, 'utf-8');
+      } else {
+        fs.writeFileSync(fullPath, content, 'utf-8');
+      }
+
+      return {
+        messageValue: fullPath
+      };
+    } catch (error: unknown | any) {
+      return {
+        success: false,
+        messageValue: error.message
+      };
+    }
+  }
+});
+
+// Enhanced list files tool
+export const listFilesTool = new DynamicStructuredTool({
+  name: 'list_files',
+  description: 'Lists files in a directory with filtering and detailed information',
+  schema: z.object({
+    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+    path: z.string().describe('path to the directory'),
+    pattern: z.string().optional().describe('file pattern to match'),
+    exclude: z.array(z.string()).optional().describe('directories to exclude'),
+    includeDetails: z.boolean().optional().describe('include file details')
+  }),
+  func: async ({ path: dirPath, pattern, exclude, includeDetails = false }, runManager: any) => {
+    try {
+      const absolutePath = validateFilePath(dirPath);
+      const files = listFilesRecursively(
+        absolutePath,
+        exclude || ['node_modules', 'public', 'dist', 'coverage', '.git'],
+        pattern
+      );
+
+      if (!includeDetails) {
         return {
           success: true,
-          messageValue: files
-        };
-      } catch (error: unknown | any) {
-        return {
-          success: false,
-          messageValue: error.message
+          messageValue: {
+            files: files.map(f => f.path)
+          }
         };
       }
+
+      const fileDirPath = path.dirname(absolutePath);
+
+      return {
+        success: true,
+        messageValue: files
+      };
+    } catch (error: unknown | any) {
+      return {
+        success: false,
+        messageValue: error.message
+      };
     }
+  }
+});
+
+// Enhanced read file tool with Command
+export const readFileTool = new DynamicStructuredTool({
+  name: 'read_file',
+  description: 'Reads file content with encoding options and metadata',
+  schema: z.object({
+    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+    path: z.string().describe('path to the file'),
+    encoding: z.string().optional().describe('file encoding'),
+    includeMetadata: z.boolean().optional().describe('include file metadata')
   }),
+  func: async ({ path: filePath, encoding = 'utf-8', includeMetadata = false }, runManager: any) => {
+    try {
+      const absolutePath = validateFilePath(filePath);
+      const content = fs.readFileSync(absolutePath, { encoding: encoding as BufferEncoding });
+      let result: { content: string; metadata?: FileMetadata } = { content };
 
-  // Enhanced read file tool with Command
-  new DynamicStructuredTool({
-    name: 'read-file',
-    description: 'Reads file content with encoding options and metadata',
-    schema: z.object({
-      reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
-      path: z.string().describe('path to the file'),
-      encoding: z.string().optional().describe('file encoding'),
-      includeMetadata: z.boolean().optional().describe('include file metadata')
-    }),
-    func: async ({ path: filePath, encoding = 'utf-8', includeMetadata = false }, runManager: any) => {
-      try {
-        const absolutePath = validateFilePath(filePath);
-        const content = fs.readFileSync(absolutePath, { encoding: encoding as BufferEncoding });
-        let result: { content: string; metadata?: FileMetadata } = { content };
+      if (includeMetadata) {
+        const stats = fs.statSync(absolutePath);
+        result.metadata = {
+          size: stats.size,
+          created: stats.birthtime,
+          modified: stats.mtime,
+          accessed: stats.atime
+        };
+      }
 
-        if (includeMetadata) {
-          const stats = fs.statSync(absolutePath);
-          result.metadata = {
-            size: stats.size,
-            created: stats.birthtime,
-            modified: stats.mtime,
-            accessed: stats.atime
+      return {
+        messageValue: {
+          success: true,
+          ...result
+        }
+      };
+    } catch (error: unknown | any) {
+      return {
+        messageValue: {
+          success: false,
+          error: error.message
+        }
+      };
+    }
+  }
+});
+
+export const findFileTool = new DynamicStructuredTool({
+  name: 'find_file',
+  description: 'Recursively searches for a file and returns its content',
+  schema: z.object({
+    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+    path: z.string().describe('path or name of the file to find'),
+    searchRoot: z.string().optional().describe('current root directory to start search from'),
+    excludeDirs: z.array(z.string()).optional().describe('directories to exclude from search'),
+    encoding: z.string().optional().describe('encoding to use when reading file content')
+  }),
+  func: async (
+    {
+      path: filePath,
+      excludeDirs = DEFAULT_EXCLUDE_DIRS,
+      encoding = 'utf8'
+    }: {
+      path: string;
+      excludeDirs?: string[];
+      encoding?: string;
+    },
+    runManager: any
+  ) => {
+    try {
+      const searchRoot = process.cwd();
+      const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+      const fileName = path.basename(filePath);
+
+      // Find all matching files and get their content
+      const results = findFileRecursively(rootDir, fileName, excludeDirs).map(location => {
+        try {
+          return {
+            fileName: path.basename(location.path),
+            path: location.path,
+            content: fs.readFileSync(location.path, encoding as BufferEncoding)
+          };
+        } catch (err) {
+          return {
+            path: location.path,
+            content: null
           };
         }
+      });
 
-        return {
-          messageValue: {
-            success: true,
-            ...result
-          }
-        };
-      } catch (error: unknown | any) {
-        return {
-          messageValue: {
-            success: false,
-            error: error.message
-          }
-        };
-      }
-    }
-  }),
-  // Enhanced find file tool
-  new DynamicStructuredTool({
-    name: 'find-file',
-    description: 'Recursively searches for a file and returns its content',
-    schema: z.object({
-      reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
-      path: z.string().describe('path or name of the file to find'),
-      searchRoot: z.string().optional().describe('current root directory to start search from'),
-      excludeDirs: z.array(z.string()).optional().describe('directories to exclude from search'),
-      encoding: z.string().optional().describe('encoding to use when reading file content')
-    }),
-    func: async (
-      {
-        path: filePath,
-        excludeDirs = DEFAULT_EXCLUDE_DIRS,
-        encoding = 'utf8'
-      }: {
-        path: string;
-        excludeDirs?: string[];
-        encoding?: string;
-      },
-      runManager: any
-    ) => {
-      try {
-        const searchRoot = process.cwd();
-        const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
-        const fileName = path.basename(filePath);
-
-        // Find all matching files and get their content
-        const results = findFileRecursively(rootDir, fileName, excludeDirs).map(location => {
-          try {
-            return {
-              fileName: path.basename(location.path),
-              path: location.path,
-              content: fs.readFileSync(location.path, encoding as BufferEncoding)
+      const result =
+        results.length === 0
+          ? {
+              exists: false,
+              message: 'File not found'
+            }
+          : {
+              exists: true,
+              files: results,
+              message: 'Files found'
             };
-          } catch (err) {
-            return {
-              path: location.path,
-              content: null
-            };
-          }
-        });
 
-        const result =
-          results.length === 0
-            ? {
-                exists: false,
-                message: 'File not found'
-              }
-            : {
-                exists: true,
-                files: results,
-                message: 'Files found'
-              };
-
-        return {
-          fileName: result.files?.map(f => f.fileName).join('\n'),
-          fileContent: result.files?.map(f => f.content).join('\n'),
-          filePath: result.files?.map(f => f.path).join('\n'),
-          messageValue: result
-        };
-      } catch (error: any) {
-        return {
-          messageValue: {
-            exists: false,
-            error: error.message
-          }
-        };
-      }
+      return {
+        fileName: result.files?.map(f => f.fileName).join('\n'),
+        fileContent: result.files?.map(f => f.content).join('\n'),
+        filePath: result.files?.map(f => f.path).join('\n'),
+        messageValue: result
+      };
+    } catch (error: any) {
+      return {
+        messageValue: {
+          exists: false,
+          error: error.message
+        }
+      };
     }
+  }
+});
+
+export const findTestFileTool = new DynamicStructuredTool({
+  name: 'find_test_file',
+  description: 'Recursively finds and reads corresponding test file content',
+  schema: z.object({
+    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+    sourcePath: z.string().describe('path to the source file'),
+    extensions: z.array(z.string()).optional().describe('test file extensions to look for'),
+    searchRoot: z.string().optional().describe('current root directory to start search from')
   }),
-  new DynamicStructuredTool({
-    name: 'find-test-file',
-    description: 'Recursively finds and reads corresponding test file content',
-    schema: z.object({
-      reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
-      sourcePath: z.string().describe('path to the source file'),
-      extensions: z.array(z.string()).optional().describe('test file extensions to look for'),
-      searchRoot: z.string().optional().describe('current root directory to start search from')
-    }),
-    func: async (
-      {
-        sourcePath,
-        extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts']
-      }: {
-        sourcePath: string;
-        extensions?: string[];
-      },
-      runManager: any
-    ) => {
-      try {
-        // Get the file name without extension to search for test files
-        const searchRoot = process.cwd();
-        const sourceFileName = path.basename(sourcePath, path.extname(sourcePath));
-        const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+  func: async (
+    {
+      sourcePath,
+      extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts']
+    }: {
+      sourcePath: string;
+      extensions?: string[];
+    },
+    runManager: any
+  ) => {
+    try {
+      // Get the file name without extension to search for test files
+      const searchRoot = process.cwd();
+      const sourceFileName = path.basename(sourcePath, path.extname(sourcePath));
+      const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
 
-        // Function to check if a file is a test file for our source
-        const isMatchingTestFile = (fileName: string) => {
-          return extensions.some(
-            ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`)
-          );
-        };
+      // Function to check if a file is a test file for our source
+      const isMatchingTestFile = (fileName: string) => {
+        return extensions.some(
+          ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`)
+        );
+      };
 
-        // Find matching test file recursively
-        const findTestFile = (dir: string): { path: string; content: string } | null => {
-          let result: { path: string; content: string } | null = null;
-          const search = (currentDir: string) => {
-            if (result) return; // Stop if we found a match
+      // Find matching test file recursively
+      const findTestFile = (dir: string): { path: string; content: string } | null => {
+        let result: { path: string; content: string } | null = null;
+        const search = (currentDir: string) => {
+          if (result) return; // Stop if we found a match
 
-            const files = fs.readdirSync(currentDir);
-            for (const file of files) {
-              if (result) break; // Stop if we found a match
+          const files = fs.readdirSync(currentDir);
+          for (const file of files) {
+            if (result) break; // Stop if we found a match
 
-              const filePath = path.join(currentDir, file);
-              const stat = fs.statSync(filePath);
+            const filePath = path.join(currentDir, file);
+            const stat = fs.statSync(filePath);
 
-              if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
-                search(filePath); // Recurse into subdirectories
-              } else if (isMatchingTestFile(file)) {
-                try {
-                  const content = fs.readFileSync(filePath, 'utf8');
-                  result = {
-                    path: filePath,
-                    content: content
-                  };
-                  break;
-                } catch (err) {
-                  console.warn(`Could not read file: ${filePath}`);
-                }
+            if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
+              search(filePath); // Recurse into subdirectories
+            } else if (isMatchingTestFile(file)) {
+              try {
+                const content = fs.readFileSync(filePath, 'utf8');
+                result = {
+                  path: filePath,
+                  content: content
+                };
+                break;
+              } catch (err) {
+                console.warn(`Could not read file: ${filePath}`);
               }
             }
-          };
-
-          search(dir);
-          return result;
+          }
         };
 
-        const testFile = findTestFile(rootDir);
-        const testFileFound = !!testFile;
+        search(dir);
+        return result;
+      };
 
-        return {
+      const testFile = findTestFile(rootDir);
+      const testFileFound = !!testFile;
+
+      return {
+        testFileContent: testFile ? testFile.content : null,
+        testFilePath: testFile ? testFile.path : null,
+        testFileName: testFile ? path.basename(testFile.path) : null,
+        testFileFound,
+        messageValue: {
+          success: testFileFound,
+          message: testFileFound ? 'Test file found' : 'Test file not found',
           testFileContent: testFile ? testFile.content : null,
           testFilePath: testFile ? testFile.path : null,
           testFileName: testFile ? path.basename(testFile.path) : null,
-          testFileFound,
-          messageValue: {
-            success: testFileFound,
-            message: testFileFound ? 'Test file found' : 'Test file not found',
-            testFileContent: testFile ? testFile.content : null,
-            testFilePath: testFile ? testFile.path : null,
-            testFileName: testFile ? path.basename(testFile.path) : null,
-            testFileFound
-          }
-        };
-      } catch (error: any) {
-        return {
-          testFileContent: null,
-          messageValue: {
-            success: false,
-            error: error.message
-          }
-        };
-      }
+          testFileFound
+        }
+      };
+    } catch (error: any) {
+      return {
+        testFileContent: null,
+        messageValue: {
+          success: false,
+          error: error.message
+        }
+      };
     }
-  })
-];
+  }
+});
