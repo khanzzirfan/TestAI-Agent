@@ -1,7 +1,7 @@
 import { MemorySaver, InMemoryStore, Command } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
-import { createSupervisor } from '@langchain/langgraph-supervisor';
+// import { createSupervisor } from '@langchain/langgraph-supervisor';
 import {
   findFileTool,
   findTestFileTool,
@@ -13,6 +13,9 @@ import {
 } from './tools';
 import { llm } from './llm';
 
+// @ts-ignore
+// const createSupervisor = require('@langchain/langgraph-supervisor').createSupervisor;
+
 const tools = [
   findFileTool,
   findTestFileTool,
@@ -22,6 +25,11 @@ const tools = [
   NodeExecutorTool,
   testResultAnalyzerTools
 ];
+
+async function loadSupervisor() {
+  const supervisor = await import('@langchain/langgraph-supervisor');
+  return supervisor;
+}
 
 const toolMap = new Map(tools.map(tool => [tool.name, tool]));
 
@@ -77,6 +85,9 @@ export const MainGraphRun = async ({
     prompt: 'You are a nodejs execution expert. Please specify the name of the test file you would like to run.'
   });
 
+  // @ts-ignore
+  const { createSupervisor } = await loadSupervisor();
+  // @ts-ignore
   const workflow = createSupervisor({
     agents: [findFilesAgent, createFileAgent, readFileAgent, writeFileAgent, npmTestAgent],
     llm: llm,

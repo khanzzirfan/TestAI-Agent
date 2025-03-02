@@ -24,7 +24,7 @@
     "node": ">=21"
   },
   "scripts": {
-    "bundle": "npm run format:write && npm run esbundle",
+    "bundle": "npm run format:write && npm run package",
     "esbundle": "npx esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js",
     "ci-test": "npx jest",
     "coverage": "npx make-coverage-badge --output-path ./badges/coverage.svg",
@@ -32,7 +32,7 @@
     "format:check": "npx prettier --check .",
     "lint": "npx eslint . -c ./.github/linters/.eslintrc.yml",
     "local-action": "npx local-action . src/main.ts .env",
-    "package": "npx ncc build src/index.ts -o dist --source-map --license licenses.txt",
+    "package": "npx ncc build src/index.ts -o dist --no-cache  --source-map --license licenses.txt",
     "package:watch": "npm run package -- --watch",
     "test": "npx jest",
     "test:only": "npx jest graph-agent.test.ts --no-coverage",
