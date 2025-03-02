@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.1.57-alpha.3](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.57-alpha.2...v0.1.57-alpha.3) (2025-03-02)
+
 ## [0.1.57-alpha.2](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.57-alpha.1...v0.1.57-alpha.2) (2025-03-02)
 
 ## [0.1.57-alpha.1](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.57...v0.1.57-alpha.1) (2025-03-02)
