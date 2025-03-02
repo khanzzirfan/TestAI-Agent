@@ -9,7 +9,9 @@ import {
   writeFileTool,
   readFileTool,
   NodeExecutorTool,
-  testResultAnalyzerTools
+  testResultAnalyzerTools,
+  npmTestTool,
+  yarnTestTool
 } from './tools';
 import { llm } from './llm';
 
@@ -78,18 +80,40 @@ export const MainGraphRun = async ({
     prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.'
   });
 
-  const npmTestAgent = createReactAgent({
+  const nodeExecutorAgent = createReactAgent({
     llm: llm,
     tools: [NodeExecutorTool],
-    name: 'npm_expert',
-    prompt: 'You are a nodejs execution expert. Please specify the name of the test file you would like to run.'
+    name: 'node_expert',
+    prompt: 'You are a nodejs execution expert. Please use the "node_exec" tool to run the nodejs script.'
+  });
+
+  const npmTestAgent = createReactAgent({
+    llm: llm,
+    tools: [npmTestTool],
+    name: 'npm_test_expert',
+    prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests.'
+  });
+
+  const yarnTestAgent = createReactAgent({
+    llm: llm,
+    tools: [yarnTestTool],
+    name: 'yarn_test_expert',
+    prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.'
   });
 
   // @ts-ignore
   const { createSupervisor } = await loadSupervisor();
   // @ts-ignore
   const workflow = createSupervisor({
-    agents: [findFilesAgent, createFileAgent, readFileAgent, writeFileAgent, npmTestAgent],
+    agents: [
+      findFilesAgent,
+      createFileAgent,
+      readFileAgent,
+      writeFileAgent,
+      npmTestAgent,
+      yarnTestAgent,
+      nodeExecutorAgent
+    ],
     llm: llm,
     prompt:
       'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
@@ -97,7 +121,8 @@ export const MainGraphRun = async ({
       'For creating files, use create_file. ' +
       'For reading files, use read_file. ' +
       'For writing files, use write_file. ' +
-      'For running tests, use npm_exec.',
+      'For running tests, use npm_test.' +
+      'For running nodejs scripts, use node_exec.',
     supervisorName: 'code_assistant_supervisor',
     outputMode: 'full_history'
   });
