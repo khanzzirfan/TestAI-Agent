@@ -41880,9 +41880,9 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
   2. Check for existing test file
   3. Improve existing tests or create new tests
   4. Save test file
-  5. Run tests with coverage
-  6. Fix any failures
-  7. Analyze test results
+  5. Run tests with coverage in silent mode
+  6. Analyze test results and ignore warnings
+  7. Fix any failures by ignoring warnings and re-run tests until all tests pass
   8. Provide final notes
 
   ${additionalPrompt ? additionalPromptNotes : ''}
