@@ -41883,7 +41883,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
   5. Run tests with coverage in silent mode
   6. Analyze test results and ignore warnings
   7. Fix any failures by ignoring warnings and re-run tests until all tests pass
-  8. Provide final notes
+  8. Provide final summary of the test results and coverage details in markdown format
 
   ${additionalPrompt ? additionalPromptNotes : ''}
 
