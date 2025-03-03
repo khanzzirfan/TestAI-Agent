@@ -139,7 +139,7 @@ export const createFileTool = new DynamicStructuredTool({
     template: z.string().optional().describe('template name to use'),
     overwrite: z.boolean().optional().describe('overwrite if file exists')
   }),
-  func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager: any) => {
+  func: async ({ path: dirPath, fileName, template, overwrite = false }) => {
     try {
       const normalizedPath = path.normalize(dirPath);
       const fullPath = path.join(normalizedPath, fileName);
@@ -168,7 +168,7 @@ export const createFileTool = new DynamicStructuredTool({
         };
       }
 
-      let content = template ? '// Generated file\n\n' : '';
+      const content = template ?? '// Generated file\n\n';
       fs.writeFileSync(fullPath, content, 'utf-8');
 
       return {
