@@ -45529,7 +45529,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         llm: llm_1.llm,
         tools: [tools_1.jsonDiffTool],
         name: 'json_diff_expert',
-        prompt: 'You are a json diff expert. Please use the "json_diff" tool to compare two json objects.'
+        prompt: 'You are a json diff expert. Please use the "json_diff" tool to compare two json objects. Pass the two json objects (json1, json2) as input.'
     });
     // @ts-ignore
     const { createSupervisor } = await loadSupervisor();
@@ -46164,10 +46164,10 @@ exports.jsonDiffTool = new tools_1.DynamicStructuredTool({
     description: 'Compares two JSON objects and returns the differences',
     schema: zod_1.z.object({
         reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
-        object1: zod_1.z.record(zod_1.z.string(), zod_1.z.string()).describe('first JSON object'),
-        object2: zod_1.z.record(zod_1.z.string(), zod_1.z.string()).describe('second JSON object')
+        json1: zod_1.z.record(zod_1.z.string(), zod_1.z.string()).describe('json1 JSON object'),
+        json2: zod_1.z.record(zod_1.z.string(), zod_1.z.string()).describe('json2 JSON object')
     }),
-    func: async ({ object1, object2 }) => {
+    func: async ({ json1: object1, json2: object2 }) => {
         try {
             const differences = (0, differencewith_1.default)(Object.entries(object1), Object.entries(object2), isEqual_1.default);
             const missingKeys = (0, difference_1.default)((0, keys_1.default)(object1), (0, keys_1.default)(object2));
