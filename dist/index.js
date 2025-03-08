@@ -41792,8 +41792,7 @@ async function loadSupervisor() {
     const supervisor = await Promise.all(/* import() */[__nccwpck_require__.e(543), __nccwpck_require__.e(430), __nccwpck_require__.e(485)]).then(__nccwpck_require__.bind(__nccwpck_require__, 71485));
     return supervisor;
 }
-const toolMap = new Map(tools.map(tool => [tool.name, tool]));
-const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
+const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDefaultPrompt }) => {
     // Initialize memory to persist state between graph runs
     const checkpointer = new langgraph_1.MemorySaver();
     const inMemoryStore = new langgraph_1.InMemoryStore();
@@ -41841,6 +41840,12 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
         name: 'yarn_test_expert',
         prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.'
     });
+    const localiseTransformerAgent = (0, prebuilt_1.createReactAgent)({
+        llm: llm_1.llm,
+        tools: [],
+        name: 'localise_transformer',
+        prompt: 'You are a localisation expert without tools. Please use the knowledge built in you to transform the text to the desired language.'
+    });
     // @ts-ignore
     const { createSupervisor } = await loadSupervisor();
     // @ts-ignore
@@ -41852,7 +41857,8 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
             writeFileAgent,
             npmTestAgent,
             yarnTestAgent,
-            nodeExecutorAgent
+            nodeExecutorAgent,
+            localiseTransformerAgent
         ],
         llm: llm_1.llm,
         prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
@@ -41861,6 +41867,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
             'For reading files, use read_file. ' +
             'For writing files, use write_file. ' +
             'For running tests, use npm_test.' +
+            'For running localisation, use localise_transformer.' +
             'For running nodejs scripts, use node_exec.',
         supervisorName: 'code_assistant_supervisor',
         outputMode: 'full_history'
@@ -41870,7 +41877,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
     const additionalPromptNotes = `
   Additional Notes: ${additionalPrompt}
   `;
-    const query = `
+    const prompt = `
   You are a coding assistant with expertise in test automation.
   You have been assigned with the following task:
   Generate and execute tests for ${filename}.
@@ -41885,13 +41892,12 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt }) => {
   7. Fix any failures by ignoring warnings and re-run tests until all tests pass
   8. Provide final summary of the test results and coverage details in markdown format
 
-  ${additionalPrompt ? additionalPromptNotes : ''}
-
   `;
+    const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;
     // Use the Runnable
     const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
     const finalState = await app.invoke({
-        messages: [new messages_1.HumanMessage(query)]
+        messages: [new messages_1.HumanMessage(finalPrompt)]
     }, { recursionLimit: recursionLimit || 200, configurable: { thread_id: 1001 } });
     const resultOfGraph = finalState.messages[finalState.messages.length - 1].content;
     console.log('result of graph for a threadId:', currentDate);
@@ -42006,11 +42012,9 @@ async function run() {
         /** Sample code to run */
         const ms = core.getInput('milliseconds');
         const fileName = core.getInput('file_name');
-        const recursionLimit = parseInt(core.getInput('recursion_limit'), 10);
+        const recursionLimit = parseInt(core.getInput('recursion_limit'), 100);
         const additionalPrompt = core.getInput('additional_prompt');
-        // The `who-to-greet` input is defined in action metadata file
-        // const whoToGreet = core.getInput('who-to-greet', { required: false });
-        // core.info(`Hello, ${whoToGreet}!`);
+        const useDefaultPrompt = core.getInput('use_default_prompt') === 'true';
         core.info(`The file name is ${fileName} and the recursion limit is ${recursionLimit}`);
         // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
         core.debug(`Waiting ${ms} milliseconds ...`);
@@ -42023,7 +42027,12 @@ async function run() {
         // Sample LangChain code
         try {
             core.debug('Running the main graph');
-            const response = await (0, app_1.MainGraphRun)({ fileName, recursionLimit, additionalPrompt });
+            const response = await (0, app_1.MainGraphRun)({
+                fileName,
+                recursionLimit,
+                additionalPrompt,
+                useDefaultPrompt
+            });
             core.debug('Finished running the main graph');
             // wirte the final comments to the output
             core.setOutput('final_comments', response);
@@ -42038,31 +42047,6 @@ async function run() {
         if (error instanceof Error)
             core.setFailed(error.message);
     }
-    // // Commit changes if there are any
-    // try {
-    //   core.info('Checking for changes...');
-    //   let diffOutput = '';
-    //   await exec.exec('git', ['diff', '--name-only'], {
-    //     listeners: {
-    //       stdout: (data: Buffer) => {
-    //         diffOutput += data.toString();
-    //       }
-    //     }
-    //   });
-    //   if (diffOutput.trim()) {
-    //     core.info('Changes detected, committing...');
-    //     await exec.exec('git', ['config', 'user.name', 'github-actions']);
-    //     await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
-    //     await exec.exec('git', ['add', '.']);
-    //     await exec.exec('git', ['commit', '-m', 'Automated commit by GitHub Actions']);
-    //     await exec.exec('git', ['push']);
-    //     core.info('Changes committed and pushed.');
-    //   } else {
-    //     core.info('No changes detected, skipping commit.');
-    //   }
-    // } catch (error) {
-    //   core.warning(`Failed to commit changes: ${error}`);
-    // }
 }
 
 
