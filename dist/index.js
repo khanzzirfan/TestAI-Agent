@@ -42067,7 +42067,7 @@ const tools_1 = __nccwpck_require__(3477);
 const fs_1 = __importDefault(__nccwpck_require__(79896));
 const path_1 = __importDefault(__nccwpck_require__(16928));
 // Configuration constants
-const DEFAULT_EXCLUDE_DIRS = ['node_modules', 'public', 'dist', 'coverage', '.git', 'build'];
+const DEFAULT_EXCLUDE_DIRS = ['node_modules', 'dist', 'coverage', '.git', 'build'];
 const findFileRecursively = (searchPath, targetFile, excludeDirs = ['node_modules', 'public', 'dist', 'coverage', '.git']) => {
     let results = [];
     const search = (currentDir) => {
