@@ -503,10 +503,10 @@ export const jsonDiffTool = new DynamicStructuredTool({
   description: 'Compares two JSON objects and returns the differences',
   schema: z.object({
     reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
-    object1: z.record(z.string(), z.string()).describe('first JSON object'),
-    object2: z.record(z.string(), z.string()).describe('second JSON object')
+    json1: z.record(z.string(), z.string()).describe('json1 JSON object'),
+    json2: z.record(z.string(), z.string()).describe('json2 JSON object')
   }),
-  func: async ({ object1, object2 }) => {
+  func: async ({ json1: object1, json2: object2 }) => {
     try {
       const differences = differenceWith(Object.entries(object1), Object.entries(object2), isEqual);
       const missingKeys = difference(keys(object1), keys(object2));
