@@ -11,7 +11,8 @@ import {
   NodeExecutorTool,
   testResultAnalyzerTools,
   npmTestTool,
-  yarnTestTool
+  yarnTestTool,
+  jsonDiffTool
 } from './tools';
 import { llm } from './llm';
 
@@ -109,6 +110,13 @@ export const MainGraphRun = async ({
       'You are a localisation expert without tools. Please use the knowledge built in you to transform the text to the desired language.'
   });
 
+  const jsonDiffAgent = createReactAgent({
+    llm: llm,
+    tools: [jsonDiffTool],
+    name: 'json_diff_expert',
+    prompt: 'You are a json diff expert. Please use the "json_diff" tool to compare two json objects.'
+  });
+
   // @ts-ignore
   const { createSupervisor } = await loadSupervisor();
   // @ts-ignore
@@ -121,7 +129,8 @@ export const MainGraphRun = async ({
       npmTestAgent,
       yarnTestAgent,
       nodeExecutorAgent,
-      localiseTransformerAgent
+      localiseTransformerAgent,
+      jsonDiffAgent
     ],
     llm: llm,
     prompt:
@@ -132,6 +141,7 @@ export const MainGraphRun = async ({
       'For writing files, use write_file. ' +
       'For running tests, use npm_test.' +
       'For running localisation, use localise_transformer.' +
+      'For comparing json objects, use json_diff.' +
       'For running nodejs scripts, use node_exec.',
     supervisorName: 'code_assistant_supervisor',
     outputMode: 'full_history'

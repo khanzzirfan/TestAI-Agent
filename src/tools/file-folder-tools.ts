@@ -2,6 +2,10 @@ import { z } from 'zod';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import fs from 'fs';
 import path from 'path';
+import differenceWith from 'lodash/differencewith';
+import isEqual from 'lodash/isEqual';
+import keys from 'lodash/keys';
+import difference from 'lodash/difference';
 
 // Configuration constants
 const DEFAULT_EXCLUDE_DIRS = ['node_modules', 'dist', 'coverage', '.git', 'build'];
@@ -485,6 +489,35 @@ export const findTestFileTool = new DynamicStructuredTool({
     } catch (error: any) {
       return {
         testFileContent: null,
+        messageValue: {
+          success: false,
+          error: error.message
+        }
+      };
+    }
+  }
+});
+
+export const jsonDiffTool = new DynamicStructuredTool({
+  name: 'json_diff',
+  description: 'Compares two JSON objects and returns the differences',
+  schema: z.object({
+    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+    object1: z.record(z.string(), z.string()).describe('first JSON object'),
+    object2: z.record(z.string(), z.string()).describe('second JSON object')
+  }),
+  func: async ({ object1, object2 }) => {
+    try {
+      const differences = differenceWith(Object.entries(object1), Object.entries(object2), isEqual);
+      const missingKeys = difference(keys(object1), keys(object2));
+      return {
+        messageValue: {
+          differences,
+          missingKeys
+        }
+      };
+    } catch (error: any) {
+      return {
         messageValue: {
           success: false,
           error: error.message
