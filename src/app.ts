@@ -33,16 +33,16 @@ async function loadSupervisor() {
   return supervisor;
 }
 
-const toolMap = new Map(tools.map(tool => [tool.name, tool]));
-
 export const MainGraphRun = async ({
   fileName,
   recursionLimit,
-  additionalPrompt
+  additionalPrompt,
+  useDefaultPrompt
 }: {
   fileName: string;
   recursionLimit: number;
   additionalPrompt: string;
+  useDefaultPrompt: boolean;
 }): Promise<string> => {
   // Initialize memory to persist state between graph runs
   const checkpointer = new MemorySaver();
@@ -101,6 +101,14 @@ export const MainGraphRun = async ({
     prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.'
   });
 
+  const localiseTransformerAgent = createReactAgent({
+    llm: llm,
+    tools: [],
+    name: 'localise_transformer',
+    prompt:
+      'You are a localisation expert without tools. Please use the knowledge built in you to transform the text to the desired language.'
+  });
+
   // @ts-ignore
   const { createSupervisor } = await loadSupervisor();
   // @ts-ignore
@@ -112,7 +120,8 @@ export const MainGraphRun = async ({
       writeFileAgent,
       npmTestAgent,
       yarnTestAgent,
-      nodeExecutorAgent
+      nodeExecutorAgent,
+      localiseTransformerAgent
     ],
     llm: llm,
     prompt:
@@ -122,6 +131,7 @@ export const MainGraphRun = async ({
       'For reading files, use read_file. ' +
       'For writing files, use write_file. ' +
       'For running tests, use npm_test.' +
+      'For running localisation, use localise_transformer.' +
       'For running nodejs scripts, use node_exec.',
     supervisorName: 'code_assistant_supervisor',
     outputMode: 'full_history'
@@ -134,7 +144,7 @@ export const MainGraphRun = async ({
   Additional Notes: ${additionalPrompt}
   `;
 
-  const query = `
+  const prompt = `
   You are a coding assistant with expertise in test automation.
   You have been assigned with the following task:
   Generate and execute tests for ${filename}.
@@ -149,15 +159,15 @@ export const MainGraphRun = async ({
   7. Fix any failures by ignoring warnings and re-run tests until all tests pass
   8. Provide final summary of the test results and coverage details in markdown format
 
-  ${additionalPrompt ? additionalPromptNotes : ''}
-
   `;
+
+  const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;
 
   // Use the Runnable
   const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
   const finalState = await app.invoke(
     {
-      messages: [new HumanMessage(query)]
+      messages: [new HumanMessage(finalPrompt)]
     },
     { recursionLimit: recursionLimit || 200, configurable: { thread_id: 1001 } }
   );
