@@ -114,7 +114,8 @@ export const MainGraphRun = async ({
     llm: llm,
     tools: [jsonDiffTool],
     name: 'json_diff_expert',
-    prompt: 'You are a json diff expert. Please use the "json_diff" tool to compare two json objects.'
+    prompt:
+      'You are a json diff expert. Please use the "json_diff" tool to compare two json objects. Pass the two json objects (json1, json2) as input.'
   });
 
   // @ts-ignore
