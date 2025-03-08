@@ -2,12 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-## [0.1.57-alpha.21](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.57-alpha.20...v0.1.57-alpha.21) (2025-03-08)
+## [0.1.57-alpha.22](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.57-alpha.21...v0.1.57-alpha.22) (2025-03-08)
 
+## [0.1.57-alpha.21](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.57-alpha.20...v0.1.57-alpha.21) (2025-03-08)
 
 ### Bug Fixes
 
-* updated additional prompt for localization and additional agent added ([2bf5a30](https://github.com/khanzzirfan/TestAI-Agent.git/commit/2bf5a303043e0bf37eaa1afa7e338387209358fd))
+- updated additional prompt for localization and additional agent added
+  ([2bf5a30](https://github.com/khanzzirfan/TestAI-Agent.git/commit/2bf5a303043e0bf37eaa1afa7e338387209358fd))
 
 ## [0.1.57-alpha.20](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.57-alpha.19...v0.1.57-alpha.20) (2025-03-03)
 
