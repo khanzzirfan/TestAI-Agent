@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 // Configuration constants
-const DEFAULT_EXCLUDE_DIRS = ['node_modules', 'public', 'dist', 'coverage', '.git', 'build'];
+const DEFAULT_EXCLUDE_DIRS = ['node_modules', 'dist', 'coverage', '.git', 'build'];
 
 // Enhanced find file function with recursive search
 interface FileMetadata {
