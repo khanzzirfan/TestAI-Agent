@@ -12,7 +12,8 @@ import {
   testResultAnalyzerTools,
   npmTestTool,
   yarnTestTool,
-  jsonDiffTool
+  jsonDiffTool,
+  findPackageManagerFileTool
 } from './tools';
 import { llm } from './llm';
 
@@ -58,6 +59,17 @@ export const MainGraphRun = async ({
     name: 'find_files_expert',
     prompt:
       "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for."
+  });
+
+  // find package manager file
+  const findPackageManagerFileAgent = createReactAgent({
+    llm: llm,
+    tools: [findPackageManagerFileTool],
+    name: 'find_package_manager_file_expert',
+    prompt:
+      'You are a package manager file search expert. Please specify the package manager file you would like to find. ' +
+      "You can use the 'find_package_manager_file' tool to search for a package manager file. " +
+      "The package manager is 'package.json' "
   });
 
   const createFileAgent = createReactAgent({
@@ -124,6 +136,7 @@ export const MainGraphRun = async ({
   const workflow = createSupervisor({
     agents: [
       findFilesAgent,
+      findPackageManagerFileAgent,
       createFileAgent,
       readFileAgent,
       writeFileAgent,
@@ -137,6 +150,7 @@ export const MainGraphRun = async ({
     prompt:
       'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
       'For finding files, use find_files. ' +
+      'For finding package manager files and script commands, use find_package_manager_file. ' +
       'For creating files, use create_file. ' +
       'For reading files, use read_file. ' +
       'For writing files, use write_file. ' +
@@ -149,7 +163,7 @@ export const MainGraphRun = async ({
   });
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
-  console.log('app version', 'v0.1.54-alpha.10');
+  console.log('app version', 'v0.1.54-alpha.11');
 
   const additionalPromptNotes = `
   Additional Notes: ${additionalPrompt}

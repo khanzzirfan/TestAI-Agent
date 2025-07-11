@@ -526,3 +526,52 @@ export const jsonDiffTool = new DynamicStructuredTool({
     }
   }
 });
+
+export const findPackageManagerFileTool = new DynamicStructuredTool({
+  name: 'find_package_manager_file',
+  description: 'Finds the package manager file (package.json or yarn.lock) in the project directory',
+  schema: z.object({
+    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+    searchRoot: z.string().optional().describe('current root directory to start search from')
+  }),
+  func: async ({ searchRoot }: { searchRoot?: string }) => {
+    try {
+      const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+      const packageJsonPath = path.join(rootDir, 'package.json');
+      const yarnLockPath = path.join(rootDir, 'yarn.lock');
+
+      const checkYarnLock = fs.existsSync(yarnLockPath);
+      if (fs.existsSync(packageJsonPath)) {
+        const content = fs.readFileSync(packageJsonPath, 'utf-8');
+        return {
+          packageManager: checkYarnLock ? 'yarn' : 'npm',
+          packageManagerContent: JSON.parse(content),
+          messageValue: {
+            success: true,
+            message: 'Found package.json',
+            packageManager: checkYarnLock ? 'yarn' : 'npm',
+            packageManagerContent: JSON.parse(content)
+          }
+        };
+      } else {
+        return {
+          packageManager: 'unknown',
+          packageManagerContent: null,
+          messageValue: {
+            success: false,
+            message: 'No package manager file found'
+          }
+        };
+      }
+    } catch (error: any) {
+      return {
+        packageManager: 'unknown',
+        packageManagerContent: null,
+        messageValue: {
+          success: false,
+          error: error.message
+        }
+      };
+    }
+  }
+});

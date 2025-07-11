@@ -43,6 +43,14 @@ export const GraphState = Annotation.Root({
   finalComments: Annotation<string>({
     reducer: (x, y) => y ?? x ?? '',
     default: () => ''
+  }),
+  packageManager: Annotation<string>({
+    reducer: (x, y) => y ?? x ?? 'npm',
+    default: () => 'npm'
+  }),
+  packageManagerContent: Annotation<any>({
+    reducer: (x, y) => y ?? x ?? {},
+    default: () => ({})
   })
 });
 
