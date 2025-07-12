@@ -16,13 +16,14 @@ export const GraphState = Annotation.Root({
   fileName: Annotation<string>({
     reducer: (x, y) => y ?? x ?? ''
   }),
-  testFileName: Annotation<string>({
-    reducer: (x, y) => y ?? x ?? ''
-  }),
+
   fileContent: Annotation<string>({
     reducer: (x, y) => y ?? x ?? ''
   }),
   filePath: Annotation<string>({
+    reducer: (x, y) => y ?? x ?? ''
+  }),
+  testFileName: Annotation<string>({
     reducer: (x, y) => y ?? x ?? ''
   }),
   testFileContent: Annotation<string>({

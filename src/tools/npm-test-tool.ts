@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { ToolMessage } from '@langchain/core/messages';
 import { DynamicStructuredTool } from '@langchain/core/tools';
+import { Command } from '@langchain/langgraph';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 
@@ -29,7 +31,7 @@ export const NodeExecutorTool = new DynamicStructuredTool({
       })
       .optional()
   }),
-  func: async ({ command, options = {} }, runManager: any) => {
+  func: async ({ command, options = {} }, runManager: any, config: any) => {
     try {
       let fullCommand = command;
       // Add options to the command
@@ -55,21 +57,37 @@ export const NodeExecutorTool = new DynamicStructuredTool({
         stdout = stdout.substring(0, 5000);
       }
 
-      return {
-        executionResults: { success: true, output: stdout },
-        hasError: false,
-        messageValue: stdout
-      };
+      return new Command({
+        // update state keys
+        update: {
+          testResults: { success: true, output: JSON.stringify(stdout) },
+          hasError: false,
+          messages: [
+            new ToolMessage({
+              content: 'Command executed successfully',
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     } catch (error: unknown | any) {
-      return {
-        hasError: true,
-        executionResults: {
-          success: false,
-          error: error.message,
-          output: error.stdout || ''
-        },
-        messageValue: error.message
-      };
+      return new Command({
+        // update state keys
+        update: {
+          hasError: true,
+          testResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messages: [
+            new ToolMessage({
+              content: `Error executing command: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     }
   }
 });
@@ -97,7 +115,7 @@ export const npmTestTool = new DynamicStructuredTool({
       })
       .optional()
   }),
-  func: async ({ command, options = {} }) => {
+  func: async ({ command, options = {} }, runManager: any, config: any) => {
     try {
       const testCommandCheck = command.includes('test');
       let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -122,21 +140,37 @@ export const npmTestTool = new DynamicStructuredTool({
         console.warn('stdout is too long, trimming to 10000 characters');
         stdout = stdout.substring(0, 5000);
       }
-      return {
-        testResults: { success: true, output: JSON.stringify(stdout) },
-        hasError: false,
-        messageValue: stdout
-      };
+      return new Command({
+        // update state keys
+        update: {
+          testResults: { success: true, output: JSON.stringify(stdout) },
+          hasError: false,
+          messages: [
+            new ToolMessage({
+              content: 'Test command executed successfully',
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     } catch (error: unknown | any) {
-      return {
-        hasError: true,
-        testResults: {
-          success: false,
-          error: error.message,
-          output: error.stdout || ''
-        },
-        messageValue: error.message
-      };
+      return new Command({
+        // update state keys
+        update: {
+          hasError: true,
+          testResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messages: [
+            new ToolMessage({
+              content: `Error executing test command: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     }
   }
 });
@@ -163,7 +197,7 @@ export const yarnTestTool = new DynamicStructuredTool({
       })
       .optional()
   }),
-  func: async ({ command, options = {} }) => {
+  func: async ({ command, options = {} }, runManager: any, config: any) => {
     try {
       const testCommandCheck = command.includes('test');
       let fullCommand = !command.startsWith('yarn') ? `yarn ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -187,21 +221,37 @@ export const yarnTestTool = new DynamicStructuredTool({
         stdout = stdout.substring(0, 5000);
       }
 
-      return {
-        testResults: { success: true, output: JSON.stringify(stdout) },
-        hasError: false,
-        messageValue: stdout
-      };
+      return new Command({
+        // update state keys
+        update: {
+          testResults: { success: true, output: JSON.stringify(stdout) },
+          hasError: false,
+          messages: [
+            new ToolMessage({
+              content: 'Yarn test command executed successfully',
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     } catch (error: unknown | any) {
-      return {
-        hasError: true,
-        testResults: {
-          success: false,
-          error: error.message,
-          output: error.stdout || ''
-        },
-        messageValue: error.message
-      };
+      return new Command({
+        // update state keys
+        update: {
+          hasError: true,
+          testResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messages: [
+            new ToolMessage({
+              content: `Error executing yarn test command: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     }
   }
 });

@@ -3,8 +3,8 @@ import { z } from 'zod';
 
 export const testResultFormat = z.object({
   status: z.enum(['passed', 'failed', 'skipped']),
-  errorMessage: z.string().max(100, 'Must be at most 100 characters').optional(),
-  stackTrace: z.string().max(100, 'Must be at most 100 characters').optional()
+  errorMessage: z.string().max(100, 'Must be at most 100 characters').nullable(),
+  stackTrace: z.string().max(100, 'Must be at most 100 characters').nullable()
 });
 
 export const exampleTestFileAndItsContentFormat = z.object({
@@ -14,7 +14,7 @@ export const exampleTestFileAndItsContentFormat = z.object({
     .describe('A brief summary of what the test file covers'),
   keySnippets: z
     .array(z.string().max(1000))
-    .optional()
+    .nullable()
     .describe(
       'Key imports, test wrappers, mock style, key code snippets or assertions that are useful for learning and observability'
     )
@@ -22,29 +22,29 @@ export const exampleTestFileAndItsContentFormat = z.object({
 
 export const createFileResponseFormat = z.object({
   success: z.boolean(),
-  error: z.string().max(100, 'Must be at most 100 characters').optional(),
-  fileName: z.string().max(100, 'Must be at most 100 characters').optional(),
-  filePath: z.string().max(200, 'Must be at most 200 characters').optional(),
-  fileContent: z.string().max(1000, 'Must be at most 1000 characters').optional(),
-  fileFound: z.boolean().optional()
+  error: z.string().max(100, 'Must be at most 100 characters').nullable(),
+  fileName: z.string().max(100, 'Must be at most 100 characters').nullable(),
+  filePath: z.string().max(200, 'Must be at most 200 characters').nullable(),
+  fileContent: z.string().max(1000, 'Must be at most 1000 characters').nullable(),
+  fileFound: z.boolean().nullable()
 });
 
 export const writeFileResponseFormat = z.object({
   success: z.boolean(),
-  error: z.string().max(100, 'Must be at most 100 characters').optional(),
-  fileName: z.string().max(100, 'Must be at most 100 characters').optional(),
-  filePath: z.string().max(200, 'Must be at most 200 characters').optional(),
-  fileContent: z.string().max(1000, 'Must be at most 1000 characters').optional(),
-  fileFound: z.boolean().optional()
+  error: z.string().max(100, 'Must be at most 100 characters').nullable(),
+  fileName: z.string().max(100, 'Must be at most 100 characters').nullable(),
+  filePath: z.string().max(200, 'Must be at most 200 characters').nullable(),
+  fileContent: z.string().max(1000, 'Must be at most 1000 characters').nullable(),
+  fileFound: z.boolean().nullable()
 });
 
 export const findFilesAndTestFilesResponseFormat = z.object({
-  fileName: z.string().max(100, 'Must be at most 100 characters').optional(),
-  filePath: z.string().max(200, 'Must be at most 200 characters').optional(),
-  fileContent: z.string().max(1000, 'Must be at most 1000 characters').optional(),
-  fileFound: z.boolean().optional(),
-  testFileName: z.string().max(100, 'Must be at most 100 characters').optional(),
-  testFilePath: z.string().max(200, 'Must be at most 200 characters').optional(),
-  testFileContent: z.string().max(1000, 'Must be at most 1000 characters').optional(),
-  testFileFound: z.boolean().optional()
+  fileName: z.string().max(100, 'Must be at most 100 characters').nullable(),
+  filePath: z.string().max(200, 'Must be at most 200 characters').nullable(),
+  fileContent: z.string().max(1000, 'Must be at most 1000 characters').nullable(),
+  fileFound: z.boolean().nullable(),
+  testFileName: z.string().max(100, 'Must be at most 100 characters').nullable(),
+  testFilePath: z.string().max(200, 'Must be at most 200 characters').nullable(),
+  testFileContent: z.string().max(1000, 'Must be at most 1000 characters').nullable(),
+  testFileFound: z.boolean().nullable()
 });

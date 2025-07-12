@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { DynamicStructuredTool } from '@langchain/core/tools';
 import { ToolMessage } from '@langchain/core/messages';
-
+import { DynamicStructuredTool } from '@langchain/core/tools';
+import { Command } from '@langchain/langgraph';
 // New tool: Json Test Result Analyzer
 export const testResultAnalyzerTools = new DynamicStructuredTool({
   name: 'json_test_result_analyzer',
@@ -53,7 +53,7 @@ export const testResultAnalyzerTools = new DynamicStructuredTool({
       })
       .describe('parsed JSON test results')
   }),
-  func: async ({ result }, runManager: any) => {
+  func: async ({ result }, runManager: any, config: any) => {
     try {
       const testResults = result;
       const totalTests = testResults.numTotalTests;
@@ -61,42 +61,26 @@ export const testResultAnalyzerTools = new DynamicStructuredTool({
       const totalFailed = testResults.numFailedTests;
       const totalSkipped = testResults.numPendingTests;
 
-      return {
-        testSummary: {
-          totalTests,
-          totalPassed,
-          totalFailed,
-          totalSkipped,
-          failureReasons: testResults.failureReasons || [],
-          coverage: {
-            lines: {
-              total: testResults.coverage.lines.total,
-              covered: testResults.coverage.lines.covered,
-              skipped: testResults.coverage.lines.skipped,
-              pct: testResults.coverage.lines.pct
-            },
-            statements: {
-              total: testResults.coverage.statements.total,
-              covered: testResults.coverage.statements.covered,
-              skipped: testResults.coverage.statements.skipped,
-              pct: testResults.coverage.statements.pct
-            },
-            functions: {
-              total: testResults.coverage.functions.total,
-              covered: testResults.coverage.functions.covered,
-              skipped: testResults.coverage.functions.skipped,
-              pct: testResults.coverage.functions.pct
-            },
-            branches: {
-              total: testResults.coverage.branches.total,
-              covered: testResults.coverage.branches.covered,
-              skipped: testResults.coverage.branches.skipped,
-              pct: testResults.coverage.branches.pct
-            }
-          }
-        },
-        output: `Total tests: ${totalTests}, Passed: ${totalPassed}, Failed: ${totalFailed}, Skipped: ${totalSkipped}`
-      };
+      return new Command({
+        // update state keys
+        update: {
+          testResults: testResults,
+          testSummary: {
+            totalTests,
+            totalPassed,
+            totalFailed,
+            totalSkipped,
+            failureReasons: testResults.failureReasons || [],
+            coverage: testResults.coverage || {}
+          },
+          messages: [
+            new ToolMessage({
+              content: `Test results analyzed: ${totalPassed} passed, ${totalFailed} failed, ${totalSkipped} skipped.`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     } catch (error: unknown | any) {
       return {
         testSummary: {

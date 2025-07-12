@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { ToolMessage } from '@langchain/core/messages';
 import { DynamicStructuredTool } from '@langchain/core/tools';
+import { Command } from '@langchain/langgraph';
 import fs from 'fs';
 import path from 'path';
 import differenceWith from 'lodash/differencewith';
@@ -143,7 +145,7 @@ export const createFileTool = new DynamicStructuredTool({
     template: z.string().optional().describe('template name to use'),
     overwrite: z.boolean().optional().describe('overwrite if file exists')
   }),
-  func: async ({ path: dirPath, fileName, template, overwrite = false }) => {
+  func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager: any, config: any) => {
     try {
       const normalizedPath = path.normalize(dirPath);
       const fullPath = path.join(normalizedPath, fileName);
@@ -156,47 +158,54 @@ export const createFileTool = new DynamicStructuredTool({
       if (fs.existsSync(fullPath) && !overwrite) {
         // read file content
         const fileContent = fs.readFileSync(fullPath, 'utf-8');
-        return {
-          testFileName: fileName,
-          testFilePath: fullPath,
-          testFileContent: fileContent,
-          testFileFound: true,
-          messageValue: {
-            success: false,
-            error: 'File already exists and overwrite is not enabled',
+        return new Command({
+          // update state keys
+          update: {
             testFileName: fileName,
             testFilePath: fullPath,
             testFileContent: fileContent,
-            testFileFound: true
+            testFileFound: true,
+            messages: [
+              new ToolMessage({
+                content: `File already exists at ${fullPath}. Use 'overwrite' option to replace it.`,
+                tool_call_id: config.toolCall.id
+              })
+            ]
           }
-        };
+        });
       }
 
       const content = template ?? '// Generated file\n\n';
       fs.writeFileSync(fullPath, content, 'utf-8');
 
-      return {
-        testFileName: fileName,
-        testFilePath: fullPath,
-        testFileContent: content,
-        testFileFound: true,
-        messageValue: {
-          success: true,
-          path: fullPath,
-          message: `File created successfully at ${fullPath}`,
+      return new Command({
+        // update state keys
+        update: {
           testFileName: fileName,
           testFilePath: fullPath,
           testFileContent: content,
-          testFileFound: true
+          testFileFound: true,
+          messages: [
+            new ToolMessage({
+              content: `File created successfully at ${fullPath}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
     } catch (error: unknown | any) {
-      return {
-        file_operation: {
-          success: false,
-          error: error.message
+      return new Command({
+        // update state keys
+        update: {
+          hasError: true,
+          messages: [
+            new ToolMessage({
+              content: `Error creating file: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
     }
   }
 });
@@ -214,7 +223,11 @@ export const writeFileTool = new DynamicStructuredTool({
     createBackup: z.boolean().optional().describe('create backup of existing file'),
     appendContent: z.boolean().optional().describe('append instead of overwrite')
   }),
-  func: async ({ path: dirPath, fileName, content, createBackup = false, appendContent = false }, runManager: any) => {
+  func: async (
+    { path: dirPath, fileName, content, createBackup = false, appendContent = false },
+    runManager: any,
+    config: any
+  ) => {
     try {
       const fullPath = path.join(dirPath, fileName);
       validateFilePath(fullPath);
@@ -232,14 +245,34 @@ export const writeFileTool = new DynamicStructuredTool({
         fs.writeFileSync(fullPath, content, 'utf-8');
       }
 
-      return {
-        messageValue: fullPath
-      };
+      return new Command({
+        // update state keys
+        update: {
+          testFileName: fileName,
+          testFilePath: fullPath,
+          testFileContent: content,
+          testFileFound: true,
+          messages: [
+            new ToolMessage({
+              content: `File written successfully at ${fullPath}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     } catch (error: unknown | any) {
-      return {
-        success: false,
-        messageValue: error.message
-      };
+      return new Command({
+        // update state keys
+        update: {
+          hasError: true,
+          messages: [
+            new ToolMessage({
+              content: `Error writing file: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     }
   }
 });
@@ -255,7 +288,7 @@ export const listFilesTool = new DynamicStructuredTool({
     exclude: z.array(z.string()).optional().describe('directories to exclude'),
     includeDetails: z.boolean().optional().describe('include file details')
   }),
-  func: async ({ path: dirPath, pattern, exclude, includeDetails = false }, runManager: any) => {
+  func: async ({ path: dirPath, pattern, exclude, includeDetails = false }, runManager: any, config: any) => {
     try {
       const absolutePath = validateFilePath(dirPath);
       const files = listFilesRecursively(
@@ -265,25 +298,53 @@ export const listFilesTool = new DynamicStructuredTool({
       );
 
       if (!includeDetails) {
-        return {
-          success: true,
-          messageValue: {
-            files: files.map(f => f.path)
+        return new Command({
+          // update state keys
+          update: {
+            success: true,
+            messageValue: {
+              files: files.map(f => f.path)
+            },
+            messages: [
+              new ToolMessage({
+                content: `Listed ${files.length} files in ${absolutePath}`,
+                tool_call_id: config.toolCall.id
+              })
+            ]
           }
-        };
+        });
       }
 
       const fileDirPath = path.dirname(absolutePath);
 
-      return {
-        success: true,
-        messageValue: files
-      };
+      return new Command({
+        // update state keys
+        update: {
+          success: true,
+          messageValue: files,
+          messages: [
+            new ToolMessage({
+              content: `Listed ${files.length} files in ${fileDirPath}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     } catch (error: unknown | any) {
-      return {
-        success: false,
-        messageValue: error.message
-      };
+      return new Command({
+        // update state keys
+        update: {
+          success: false,
+          messageValue: error.message,
+          messages: [
+            new ToolMessage({
+              content: `Error listing files: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ],
+          hasError: true
+        }
+      });
     }
   }
 });
@@ -298,7 +359,7 @@ export const readFileTool = new DynamicStructuredTool({
     encoding: z.string().optional().describe('file encoding'),
     includeMetadata: z.boolean().optional().describe('include file metadata')
   }),
-  func: async ({ path: filePath, encoding = 'utf-8', includeMetadata = false }, runManager: any) => {
+  func: async ({ path: filePath, encoding = 'utf-8', includeMetadata = false }, runManager: any, config: any) => {
     try {
       const absolutePath = validateFilePath(filePath);
       const content = fs.readFileSync(absolutePath, { encoding: encoding as BufferEncoding });
@@ -314,19 +375,35 @@ export const readFileTool = new DynamicStructuredTool({
         };
       }
 
-      return {
-        messageValue: {
-          success: true,
-          ...result
+      return new Command({
+        // update state keys
+        update: {
+          testFileContent: result.content,
+          testFilePath: absolutePath,
+          testFileName: path.basename(absolutePath),
+          testFileFound: true,
+          messages: [
+            new ToolMessage({
+              content: `File read successfully from ${absolutePath}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
     } catch (error: unknown | any) {
-      return {
-        messageValue: {
-          success: false,
-          error: error.message
+      return new Command({
+        // update state keys
+        update: {
+          error: error.message,
+          hasError: true,
+          messages: [
+            new ToolMessage({
+              content: `Error reading file: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
     }
   }
 });
@@ -351,7 +428,8 @@ export const findFileTool = new DynamicStructuredTool({
       excludeDirs?: string[];
       encoding?: string;
     },
-    runManager: any
+    runManager: any,
+    config: any
   ) => {
     try {
       const searchRoot = process.cwd();
@@ -386,19 +464,33 @@ export const findFileTool = new DynamicStructuredTool({
               message: 'Files found'
             };
 
-      return {
-        fileName: result.files?.map(f => f.fileName).join('\n'),
-        fileContent: result.files?.map(f => f.content).join('\n'),
-        filePath: result.files?.map(f => f.path).join('\n'),
-        messageValue: result
-      };
-    } catch (error: any) {
-      return {
-        messageValue: {
-          exists: false,
-          error: error.message
+      return new Command({
+        // update state keys
+        update: {
+          fileName: result.files?.map(f => f.fileName).join('\n'),
+          fileContent: result.files?.map(f => f.content).join('\n'),
+          filePath: result.files?.map(f => f.path).join('\n'),
+          messages: [
+            new ToolMessage({
+              content: result.message,
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
+    } catch (error: any) {
+      return new Command({
+        // update state keys
+        update: {
+          hasError: true,
+          messages: [
+            new ToolMessage({
+              content: `Error finding file: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
     }
   }
 });
@@ -415,12 +507,13 @@ export const findTestFileTool = new DynamicStructuredTool({
   func: async (
     {
       sourcePath,
-      extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts']
+      extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts', '.test.js', '.spec.js', '.test.jsx', '.spec.jsx']
     }: {
       sourcePath: string;
       extensions?: string[];
     },
-    runManager: any
+    runManager: any,
+    config: any
   ) => {
     try {
       // Get the file name without extension to search for test files
@@ -472,28 +565,37 @@ export const findTestFileTool = new DynamicStructuredTool({
       const testFile = findTestFile(rootDir);
       const testFileFound = !!testFile;
 
-      return {
-        testFileContent: testFile ? testFile.content : null,
-        testFilePath: testFile ? testFile.path : null,
-        testFileName: testFile ? path.basename(testFile.path) : null,
-        testFileFound,
-        messageValue: {
-          success: testFileFound,
-          message: testFileFound ? 'Test file found' : 'Test file not found',
+      return new Command({
+        // update state keys
+        update: {
           testFileContent: testFile ? testFile.content : null,
           testFilePath: testFile ? testFile.path : null,
           testFileName: testFile ? path.basename(testFile.path) : null,
-          testFileFound
+          testFileFound,
+          messages: [
+            new ToolMessage({
+              content: testFileFound
+                ? `Successfully found test file at ${testFile.path}`
+                : 'No matching test file found',
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
     } catch (error: any) {
-      return {
-        testFileContent: null,
-        messageValue: {
-          success: false,
-          error: error.message
+      return new Command({
+        // update state keys
+        update: {
+          testFileContent: null,
+          testFileFound: false,
+          messages: [
+            new ToolMessage({
+              content: `Error finding test file: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
     }
   }
 });
@@ -534,7 +636,7 @@ export const findPackageManagerFileTool = new DynamicStructuredTool({
     reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
     searchRoot: z.string().optional().describe('current root directory to start search from')
   }),
-  func: async ({ searchRoot }: { searchRoot?: string }) => {
+  func: async ({ searchRoot }: { searchRoot?: string }, runManager: any, config: any) => {
     try {
       const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
       const packageJsonPath = path.join(rootDir, 'package.json');
@@ -543,35 +645,48 @@ export const findPackageManagerFileTool = new DynamicStructuredTool({
       const checkYarnLock = fs.existsSync(yarnLockPath);
       if (fs.existsSync(packageJsonPath)) {
         const content = fs.readFileSync(packageJsonPath, 'utf-8');
-        return {
-          packageManager: checkYarnLock ? 'yarn' : 'npm',
-          packageManagerContent: JSON.parse(content),
-          messageValue: {
-            success: true,
-            message: 'Found package.json',
+        return new Command({
+          // update state keys
+          update: {
             packageManager: checkYarnLock ? 'yarn' : 'npm',
-            packageManagerContent: JSON.parse(content)
+            packageManagerContent: JSON.parse(content),
+            messages: [
+              new ToolMessage({
+                content: `Found package manager file at ${packageJsonPath}`,
+                tool_call_id: config.toolCall.id
+              })
+            ]
           }
-        };
+        });
       } else {
-        return {
-          packageManager: 'unknown',
-          packageManagerContent: null,
-          messageValue: {
-            success: false,
-            message: 'No package manager file found'
+        return new Command({
+          // update state keys
+          update: {
+            packageManager: 'unknown',
+            packageManagerContent: null,
+            messages: [
+              new ToolMessage({
+                content: 'No package manager file found in the project directory',
+                tool_call_id: config.toolCall.id
+              })
+            ]
           }
-        };
+        });
       }
     } catch (error: any) {
-      return {
-        packageManager: 'unknown',
-        packageManagerContent: null,
-        messageValue: {
-          success: false,
-          error: error.message
+      return new Command({
+        // update state keys
+        update: {
+          packageManager: 'unknown',
+          packageManagerContent: null,
+          messages: [
+            new ToolMessage({
+              content: `Error finding package manager file: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
     }
   }
 });
@@ -585,13 +700,17 @@ export const findExampleTestFileAndItsContent = new DynamicStructuredTool({
     searchRoot: z.string().optional().describe('current root directory to start search from'),
     extensions: z.array(z.string()).optional().describe('test file extensions to look for')
   }),
-  func: async ({
-    searchRoot,
-    extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts', '.test.js', '.spec.js', '.test.jsx', '.spec.jsx']
-  }: {
-    searchRoot?: string;
-    extensions?: string[];
-  }) => {
+  func: async (
+    {
+      searchRoot,
+      extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts', '.test.js', '.spec.js', '.test.jsx', '.spec.jsx']
+    }: {
+      searchRoot?: string;
+      extensions?: string[];
+    },
+    runManager: any,
+    config: any
+  ) => {
     try {
       const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
       const results: FileResult[] = [];
@@ -644,23 +763,34 @@ export const findExampleTestFileAndItsContent = new DynamicStructuredTool({
         };
       });
 
-      return {
-        success: true,
-        exampleTestFiles: exampleFiles,
-        messageValue: {
+      return new Command({
+        // update state keys
+        update: {
           success: true,
-          message: `Found ${exampleFiles.length} example test files`,
-          exampleTestFiles: exampleFiles
+          exampleTestFiles: exampleFiles,
+          messages: [
+            new ToolMessage({
+              content: `Found ${exampleFiles.length} example test files`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
     } catch (error: any) {
-      return {
-        success: false,
-        messageValue: {
+      return new Command({
+        // update state keys
+        update: {
           success: false,
-          error: error.message
+          error: error.message,
+          messages: [
+            new ToolMessage({
+              content: `Error finding example test files: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ],
+          hasError: true
         }
-      };
+      });
     }
   }
 });
