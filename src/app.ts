@@ -1,4 +1,4 @@
-import { MemorySaver, InMemoryStore, Command } from '@langchain/langgraph';
+import { MemorySaver, InMemoryStore } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 // import { createSupervisor } from '@langchain/langgraph-supervisor';
@@ -9,26 +9,15 @@ import {
   writeFileTool,
   readFileTool,
   NodeExecutorTool,
-  testResultAnalyzerTools,
   npmTestTool,
   yarnTestTool,
-  jsonDiffTool,
   findPackageManagerFileTool
 } from './tools';
 import { llm } from './llm';
+import { testResultFormat } from './structured_format';
 
 // @ts-ignore
 // const createSupervisor = require('@langchain/langgraph-supervisor').createSupervisor;
-
-const tools = [
-  findFileTool,
-  findTestFileTool,
-  createFileTool,
-  writeFileTool,
-  readFileTool,
-  NodeExecutorTool,
-  testResultAnalyzerTools
-];
 
 async function loadSupervisor() {
   const supervisor = await import('@langchain/langgraph-supervisor');
@@ -104,30 +93,16 @@ export const MainGraphRun = async ({
     llm: llm,
     tools: [npmTestTool],
     name: 'npm_test_expert',
-    prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests.'
+    prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests.',
+    responseFormat: testResultFormat
   });
 
   const yarnTestAgent = createReactAgent({
     llm: llm,
     tools: [yarnTestTool],
     name: 'yarn_test_expert',
-    prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.'
-  });
-
-  const localiseTransformerAgent = createReactAgent({
-    llm: llm,
-    tools: [],
-    name: 'localise_transformer',
-    prompt:
-      'You are a localisation expert without tools. Please use the knowledge built in you to transform the text to the desired language.'
-  });
-
-  const jsonDiffAgent = createReactAgent({
-    llm: llm,
-    tools: [jsonDiffTool],
-    name: 'json_diff_expert',
-    prompt:
-      'You are a json diff expert. Please use the "json_diff" tool to compare two json objects. Pass the two json objects (json1, json2) as input.'
+    prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.',
+    responseFormat: testResultFormat
   });
 
   // @ts-ignore
@@ -142,9 +117,7 @@ export const MainGraphRun = async ({
       writeFileAgent,
       npmTestAgent,
       yarnTestAgent,
-      nodeExecutorAgent,
-      localiseTransformerAgent,
-      jsonDiffAgent
+      nodeExecutorAgent
     ],
     llm: llm,
     prompt:
@@ -155,15 +128,13 @@ export const MainGraphRun = async ({
       'For reading files, use read_file. ' +
       'For writing files, use write_file. ' +
       'For running tests, use npm_test.' +
-      'For running localisation, use localise_transformer.' +
-      'For comparing json objects, use json_diff.' +
       'For running nodejs scripts, use node_exec.',
     supervisorName: 'code_assistant_supervisor',
     outputMode: 'full_history'
   });
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
-  console.log('app version', 'v0.1.54-alpha.11');
+  console.log('app version', 'v0.1.60-alpha.01');
 
   const additionalPromptNotes = `
   Additional Notes: ${additionalPrompt}
