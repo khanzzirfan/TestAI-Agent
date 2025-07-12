@@ -1,7 +1,14 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See
-[commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+
+## [0.1.69-alpha.7](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.6...v0.1.69-alpha.7) (2025-07-12)
+
+
+### Bug Fixes
+
+* updated silent execution command ([77c56f0](https://github.com/khanzzirfan/TestAI-Agent.git/commit/77c56f08eb082e080b658057bcc6ac0a47a00e8a))
+* updated tests ([a30bec0](https://github.com/khanzzirfan/TestAI-Agent.git/commit/a30bec0aadf081cfa062e8829fcf9d2fe5d84211))
 
 ## [0.1.69-alpha.6](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.5...v0.1.69-alpha.6) (2025-07-12)
 
