@@ -35225,6 +35225,7 @@ const prebuilt_1 = __nccwpck_require__(95286);
 const tools_1 = __nccwpck_require__(72003);
 const llm_1 = __nccwpck_require__(26627);
 const structured_format_1 = __nccwpck_require__(18267);
+const state_1 = __nccwpck_require__(2462);
 // @ts-ignore
 // const createSupervisor = require('@langchain/langgraph-supervisor').createSupervisor;
 async function loadSupervisor() {
@@ -35241,7 +35242,9 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         llm: llm_1.llm,
         tools: [tools_1.findFileTool, tools_1.findTestFileTool],
         name: 'find_files_expert',
-        prompt: "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for."
+        prompt: "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for.",
+        stateSchema: state_1.GraphState,
+        responseFormat: structured_format_1.findFilesAndTestFilesResponseFormat
     });
     // find example test files
     const findExampleTestFileAgent = (0, prebuilt_1.createReactAgent)({
@@ -35267,6 +35270,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         llm: llm_1.llm,
         tools: [tools_1.createFileTool],
         name: 'create_file_expert',
+        responseFormat: structured_format_1.createFileResponseFormat,
         prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.'
     });
     const readFileAgent = (0, prebuilt_1.createReactAgent)({
@@ -35279,6 +35283,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         llm: llm_1.llm,
         tools: [tools_1.writeFileTool],
         name: 'write_file_expert',
+        responseFormat: structured_format_1.writeFileResponseFormat,
         prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.'
     });
     const nodeExecutorAgent = (0, prebuilt_1.createReactAgent)({
@@ -35306,15 +35311,15 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
     // @ts-ignore
     const workflow = createSupervisor({
         agents: [
-            findFilesAgent,
-            findExampleTestFileAgent,
-            findPackageManagerFileAgent,
-            createFileAgent,
-            readFileAgent,
-            writeFileAgent,
-            npmTestAgent,
-            yarnTestAgent,
-            nodeExecutorAgent
+            findFilesAgent
+            // findExampleTestFileAgent,
+            // findPackageManagerFileAgent,
+            // createFileAgent,
+            // readFileAgent,
+            // writeFileAgent,
+            // npmTestAgent,
+            // yarnTestAgent,
+            // nodeExecutorAgent
         ],
         llm: llm_1.llm,
         prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
@@ -35327,7 +35332,8 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
             'For running tests, use npm_test.' +
             'For running nodejs scripts, use node_exec.',
         supervisorName: 'code_assistant_supervisor',
-        outputMode: 'full_history'
+        outputMode: 'full_history',
+        stateSchema: state_1.GraphState
     });
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
     console.log('app version', 'v0.1.60-alpha.01');
@@ -35510,6 +35516,70 @@ async function run() {
 
 /***/ }),
 
+/***/ 2462:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GraphState = void 0;
+const langgraph_1 = __nccwpck_require__(39405);
+// Define the graph state with additional properties
+exports.GraphState = langgraph_1.Annotation.Root({
+    messages: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => x.concat(y)
+    }),
+    iteration: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? 0,
+        default: () => 0
+    }),
+    hasError: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y
+    }),
+    fileName: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    testFileName: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    fileContent: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    filePath: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    testFileContent: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    testFilePath: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    testFileFound: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y
+    }),
+    testResults: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y
+    }),
+    testSummary: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y
+    }),
+    finalComments: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? '',
+        default: () => ''
+    }),
+    packageManager: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? 'npm',
+        default: () => 'npm'
+    }),
+    packageManagerContent: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? {},
+        default: () => ({})
+    })
+});
+
+
+/***/ }),
+
 /***/ 18267:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -35541,7 +35611,7 @@ __exportStar(__nccwpck_require__(79409), exports);
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.exampleTestFileAndItsContentFormat = exports.testResultFormat = void 0;
+exports.findFilesAndTestFilesResponseFormat = exports.writeFileResponseFormat = exports.createFileResponseFormat = exports.exampleTestFileAndItsContentFormat = exports.testResultFormat = void 0;
 // write a zod schema to format the test result
 const zod_1 = __nccwpck_require__(50924);
 exports.testResultFormat = zod_1.z.object({
@@ -35558,6 +35628,32 @@ exports.exampleTestFileAndItsContentFormat = zod_1.z.object({
         .array(zod_1.z.string().max(1000))
         .optional()
         .describe('Key imports, test wrappers, mock style, key code snippets or assertions that are useful for learning and observability')
+});
+exports.createFileResponseFormat = zod_1.z.object({
+    success: zod_1.z.boolean(),
+    error: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
+    fileName: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
+    filePath: zod_1.z.string().max(200, 'Must be at most 200 characters').optional(),
+    fileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').optional(),
+    fileFound: zod_1.z.boolean().optional()
+});
+exports.writeFileResponseFormat = zod_1.z.object({
+    success: zod_1.z.boolean(),
+    error: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
+    fileName: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
+    filePath: zod_1.z.string().max(200, 'Must be at most 200 characters').optional(),
+    fileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').optional(),
+    fileFound: zod_1.z.boolean().optional()
+});
+exports.findFilesAndTestFilesResponseFormat = zod_1.z.object({
+    fileName: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
+    filePath: zod_1.z.string().max(200, 'Must be at most 200 characters').optional(),
+    fileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').optional(),
+    fileFound: zod_1.z.boolean().optional(),
+    testFileName: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
+    testFilePath: zod_1.z.string().max(200, 'Must be at most 200 characters').optional(),
+    testFileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').optional(),
+    testFileFound: zod_1.z.boolean().optional()
 });
 
 
