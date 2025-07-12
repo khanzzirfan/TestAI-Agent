@@ -98,6 +98,8 @@ export const npmTestTool = new DynamicStructuredTool({
     'Executes npm test commands from root directory with support for various options including coverage and watch mode',
   schema: z.object({
     command: z.string().describe('npm command to execute'),
+    silent: z.boolean().describe('Run command in silent mode'),
+    json: z.boolean().describe('Output test results as JSON'),
     options: z
       .object({
         directory_path: z
@@ -108,14 +110,13 @@ export const npmTestTool = new DynamicStructuredTool({
           ),
         testFilePath: z.string().optional().describe('Path to the single test file to run and collect coverage'),
         coverage: z.boolean().optional().describe('Run tests with coverage'),
-        json: z.boolean().optional().describe('Output test results as JSON'),
         watch: z.boolean().optional().describe('Run tests in watch mode'),
         testRegex: z.string().optional().describe('Regular expression to match test files'),
         updateSnapshots: z.boolean().optional().describe('Update test snapshots')
       })
       .optional()
   }),
-  func: async ({ command, options = {} }, runManager: any, config: any) => {
+  func: async ({ command, silent = true, options = {} }, runManager: any, config: any) => {
     try {
       const testCommandCheck = command.includes('test');
       let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -123,6 +124,7 @@ export const npmTestTool = new DynamicStructuredTool({
       if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
       // suffix json
       fullCommand += ` -- --json`;
+      if (silent) fullCommand += ' --silent';
       if (options.coverage && !fullCommand.includes('--coverage') && options.testFilePath) {
         fullCommand += ' --coverage';
         // run coverage with test file name --collectCoverageFrom=testFileName
@@ -180,6 +182,8 @@ export const yarnTestTool = new DynamicStructuredTool({
   description: 'Executes yarn test commands with support for various options including coverage and watch mode',
   schema: z.object({
     command: z.string().describe('yarn command to execute'),
+    silent: z.boolean().describe('Run command in silent mode'),
+    json: z.boolean().describe('Output test results as JSON'),
     options: z
       .object({
         directory_path: z
@@ -197,7 +201,7 @@ export const yarnTestTool = new DynamicStructuredTool({
       })
       .optional()
   }),
-  func: async ({ command, options = {} }, runManager: any, config: any) => {
+  func: async ({ command, silent = true, options = {} }, runManager: any, config: any) => {
     try {
       const testCommandCheck = command.includes('test');
       let fullCommand = !command.startsWith('yarn') ? `yarn ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -205,6 +209,7 @@ export const yarnTestTool = new DynamicStructuredTool({
       if (options.directory_path) fullCommand += ` --cwd ${options.directory_path}`;
       // suffix json
       fullCommand += ` --json`;
+      if (silent) fullCommand += ' --silent';
       if (options.coverage && options.testFilePath) {
         fullCommand += ' --coverage';
         // run coverage with test file name --collectCoverageFrom=testFileName
