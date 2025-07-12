@@ -15,8 +15,14 @@ import {
   findExampleTestFileAndItsContent
 } from './tools';
 import { llm } from './llm';
-import { testResultFormat, exampleTestFileAndItsContentFormat } from './structured_format';
-
+import {
+  testResultFormat,
+  exampleTestFileAndItsContentFormat,
+  createFileResponseFormat,
+  writeFileResponseFormat,
+  findFilesAndTestFilesResponseFormat
+} from './structured_format';
+import { GraphState } from './state';
 // @ts-ignore
 // const createSupervisor = require('@langchain/langgraph-supervisor').createSupervisor;
 
@@ -48,7 +54,9 @@ export const MainGraphRun = async ({
     tools: [findFileTool, findTestFileTool],
     name: 'find_files_expert',
     prompt:
-      "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for."
+      "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for.",
+    stateSchema: GraphState,
+    responseFormat: findFilesAndTestFilesResponseFormat
   });
 
   // find example test files
@@ -79,6 +87,7 @@ export const MainGraphRun = async ({
     llm: llm,
     tools: [createFileTool],
     name: 'create_file_expert',
+    responseFormat: createFileResponseFormat,
     prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.'
   });
 
@@ -93,6 +102,7 @@ export const MainGraphRun = async ({
     llm: llm,
     tools: [writeFileTool],
     name: 'write_file_expert',
+    responseFormat: writeFileResponseFormat,
     prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.'
   });
 
@@ -124,15 +134,15 @@ export const MainGraphRun = async ({
   // @ts-ignore
   const workflow = createSupervisor({
     agents: [
-      findFilesAgent,
-      findExampleTestFileAgent,
-      findPackageManagerFileAgent,
-      createFileAgent,
-      readFileAgent,
-      writeFileAgent,
-      npmTestAgent,
-      yarnTestAgent,
-      nodeExecutorAgent
+      findFilesAgent
+      // findExampleTestFileAgent,
+      // findPackageManagerFileAgent,
+      // createFileAgent,
+      // readFileAgent,
+      // writeFileAgent,
+      // npmTestAgent,
+      // yarnTestAgent,
+      // nodeExecutorAgent
     ],
     llm: llm,
     prompt:
@@ -146,7 +156,8 @@ export const MainGraphRun = async ({
       'For running tests, use npm_test.' +
       'For running nodejs scripts, use node_exec.',
     supervisorName: 'code_assistant_supervisor',
-    outputMode: 'full_history'
+    outputMode: 'full_history',
+    stateSchema: GraphState
   });
 
   const app = workflow.compile({ checkpointer, store: inMemoryStore });
