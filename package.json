@@ -1,7 +1,7 @@
 {
   "name": "testifyai-agent",
   "description": "GitHub Actions for TestifyAI. This action is used to generate codegaurd to TestifyAI tests.",
-  "version": "0.1.66-alpha.0",
+  "version": "0.1.66",
   "author": "khanzzirfan",
   "private": true,
   "homepage": "https://github.com/khanzzirfan/TestAI-Agent.git",
@@ -38,7 +38,7 @@
     "test:only": "npx jest graph-agent.test.ts --no-coverage",
     "all": "npm run format:write && npm run lint && npm run test && npm run coverage && npm run package",
     "start:dev": "npx ts-node src/testapp/test-agent-v2.ts",
-    "release": "commit-and-tag-version",
+    "release": "commit-and-tag-version --prerelease alpha",
     "cleanup": "rm -rf dist",
     "stage:one": "npm run cleanup && npm run release -- --prerelease alpha",
     "stage:two": "npm run bundle && npm run release -- --prerelease alpha",
