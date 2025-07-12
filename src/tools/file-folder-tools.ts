@@ -137,15 +137,14 @@ const validateFilePath: ValidateFilePath = filePath => {
 
 export const createFileTool = new DynamicStructuredTool({
   name: 'create_file',
-  description: 'Creates a new file with optional template content and validation',
+  description: 'Creates a new file with completed content',
   schema: z.object({
     reason: z.string().describe('What is the reason that choose to call this tool from the context?'),
     path: z.string().describe('path to the file'),
     fileName: z.string().describe('name of the file'),
-    template: z.string().optional().describe('template name to use'),
     overwrite: z.boolean().optional().describe('overwrite if file exists')
   }),
-  func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager: any, config: any) => {
+  func: async ({ path: dirPath, fileName, overwrite = false }, runManager: any, config: any) => {
     try {
       const normalizedPath = path.normalize(dirPath);
       const fullPath = path.join(normalizedPath, fileName);
@@ -175,7 +174,7 @@ export const createFileTool = new DynamicStructuredTool({
         });
       }
 
-      const content = template ?? '// Generated file\n\n';
+      const content = '// Generated file\n\n';
       fs.writeFileSync(fullPath, content, 'utf-8');
 
       return new Command({
