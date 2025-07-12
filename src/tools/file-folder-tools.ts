@@ -161,14 +161,8 @@ export const createFileTool = new DynamicStructuredTool({
           testFilePath: fullPath,
           testFileContent: fileContent,
           testFileFound: true,
-          messageValue: {
-            success: false,
-            error: 'File already exists and overwrite is not enabled',
-            testFileName: fileName,
-            testFilePath: fullPath,
-            testFileContent: fileContent,
-            testFileFound: true
-          }
+          success: false,
+          error: 'File already exists and overwrite is not enabled'
         };
       }
 
@@ -180,15 +174,9 @@ export const createFileTool = new DynamicStructuredTool({
         testFilePath: fullPath,
         testFileContent: content,
         testFileFound: true,
-        messageValue: {
-          success: true,
-          path: fullPath,
-          message: `File created successfully at ${fullPath}`,
-          testFileName: fileName,
-          testFilePath: fullPath,
-          testFileContent: content,
-          testFileFound: true
-        }
+        success: true,
+        path: fullPath,
+        message: `File created successfully at ${fullPath}`
       };
     } catch (error: unknown | any) {
       return {
@@ -233,12 +221,12 @@ export const writeFileTool = new DynamicStructuredTool({
       }
 
       return {
-        messageValue: fullPath
+        output: fullPath
       };
     } catch (error: unknown | any) {
       return {
         success: false,
-        messageValue: error.message
+        output: error.message
       };
     }
   }
@@ -267,9 +255,7 @@ export const listFilesTool = new DynamicStructuredTool({
       if (!includeDetails) {
         return {
           success: true,
-          messageValue: {
-            files: files.map(f => f.path)
-          }
+          files: files.map(f => f.path)
         };
       }
 
@@ -277,12 +263,12 @@ export const listFilesTool = new DynamicStructuredTool({
 
       return {
         success: true,
-        messageValue: files
+        output: files
       };
     } catch (error: unknown | any) {
       return {
         success: false,
-        messageValue: error.message
+        output: error.message
       };
     }
   }
@@ -315,17 +301,13 @@ export const readFileTool = new DynamicStructuredTool({
       }
 
       return {
-        messageValue: {
-          success: true,
-          ...result
-        }
+        success: true,
+        ...result
       };
     } catch (error: unknown | any) {
       return {
-        messageValue: {
-          success: false,
-          error: error.message
-        }
+        success: false,
+        error: error.message
       };
     }
   }
@@ -477,22 +459,14 @@ export const findTestFileTool = new DynamicStructuredTool({
         testFilePath: testFile ? testFile.path : null,
         testFileName: testFile ? path.basename(testFile.path) : null,
         testFileFound,
-        messageValue: {
-          success: testFileFound,
-          message: testFileFound ? 'Test file found' : 'Test file not found',
-          testFileContent: testFile ? testFile.content : null,
-          testFilePath: testFile ? testFile.path : null,
-          testFileName: testFile ? path.basename(testFile.path) : null,
-          testFileFound
-        }
+        success: testFileFound,
+        message: testFileFound ? 'Test file found' : 'Test file not found'
       };
     } catch (error: any) {
       return {
         testFileContent: null,
-        messageValue: {
-          success: false,
-          error: error.message
-        }
+        success: false,
+        error: error.message
       };
     }
   }
@@ -511,17 +485,13 @@ export const jsonDiffTool = new DynamicStructuredTool({
       const differences = differenceWith(Object.entries(object1), Object.entries(object2), isEqual);
       const missingKeys = difference(keys(object1), keys(object2));
       return {
-        messageValue: {
-          differences,
-          missingKeys
-        }
+        differences,
+        missingKeys
       };
     } catch (error: any) {
       return {
-        messageValue: {
-          success: false,
-          error: error.message
-        }
+        success: false,
+        error: error.message
       };
     }
   }
@@ -546,31 +516,23 @@ export const findPackageManagerFileTool = new DynamicStructuredTool({
         return {
           packageManager: checkYarnLock ? 'yarn' : 'npm',
           packageManagerContent: JSON.parse(content),
-          messageValue: {
-            success: true,
-            message: 'Found package.json',
-            packageManager: checkYarnLock ? 'yarn' : 'npm',
-            packageManagerContent: JSON.parse(content)
-          }
+          success: true,
+          message: 'Found package.json'
         };
       } else {
         return {
           packageManager: 'unknown',
           packageManagerContent: null,
-          messageValue: {
-            success: false,
-            message: 'No package manager file found'
-          }
+          success: false,
+          message: 'No package manager file found'
         };
       }
     } catch (error: any) {
       return {
         packageManager: 'unknown',
         packageManagerContent: null,
-        messageValue: {
-          success: false,
-          error: error.message
-        }
+        success: false,
+        error: error.message
       };
     }
   }
@@ -647,19 +609,12 @@ export const findExampleTestFileAndItsContent = new DynamicStructuredTool({
       return {
         success: true,
         exampleTestFiles: exampleFiles,
-        messageValue: {
-          success: true,
-          message: `Found ${exampleFiles.length} example test files`,
-          exampleTestFiles: exampleFiles
-        }
+        message: `Found ${exampleFiles.length} example test files`
       };
     } catch (error: any) {
       return {
         success: false,
-        messageValue: {
-          success: false,
-          error: error.message
-        }
+        error: error.message
       };
     }
   }

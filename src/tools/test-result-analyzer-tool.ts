@@ -95,14 +95,14 @@ export const testResultAnalyzerTools = new DynamicStructuredTool({
             }
           }
         },
-        messageValue: `Total tests: ${totalTests}, Passed: ${totalPassed}, Failed: ${totalFailed}, Skipped: ${totalSkipped}`
+        output: `Total tests: ${totalTests}, Passed: ${totalPassed}, Failed: ${totalFailed}, Skipped: ${totalSkipped}`
       };
     } catch (error: unknown | any) {
       return {
         testSummary: {
           error: error.message
         },
-        messageValue: error.message
+        output: error.message
       };
     }
   }

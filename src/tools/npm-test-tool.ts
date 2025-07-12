@@ -24,7 +24,8 @@ export const NodeExecutorTool = new DynamicStructuredTool({
         json: z.boolean().optional().describe('Output test results as JSON'),
         watch: z.boolean().optional().describe('Run tests in watch mode'),
         testRegex: z.string().optional().describe('Regular expression to match test files'),
-        updateSnapshots: z.boolean().optional().describe('Update test snapshots')
+        updateSnapshots: z.boolean().optional().describe('Update test snapshots'),
+        testFilePath: z.string().optional().describe('Path to the single test file to run and collect coverage')
       })
       .optional()
   }),
@@ -35,28 +36,36 @@ export const NodeExecutorTool = new DynamicStructuredTool({
       if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
       if (options.force) fullCommand += ' --force';
       if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
-      if (options.coverage) fullCommand += ' --coverage';
+      if (options.coverage) {
+        fullCommand += ' --coverage';
+        // run coverage with test file name --collectCoverageFrom=testFileName
+        if (options.testFilePath) {
+          fullCommand += ` --collectCoverageFrom="${options.testFilePath}"`;
+        }
+      }
       if (options.json) fullCommand += ' --json';
       if (options.watch) fullCommand += ' --watch';
       if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`;
       if (options.updateSnapshots) fullCommand += ' -u';
 
-      const { stdout, stderr } = await nodeExecutor(fullCommand);
+      let { stdout, stderr } = await nodeExecutor(fullCommand);
+      // check the length of stdout and trim it to max 10000 characters
+      if (stdout.length > 10000) {
+        console.warn('stdout is too long, trimming to 10000 characters');
+        stdout = stdout.substring(0, 5000);
+      }
 
       return {
-        executionResults: { success: true, output: stdout },
+        success: true,
         hasError: false,
-        messageValue: stdout
+        output: stdout
       };
     } catch (error: unknown | any) {
       return {
         hasError: true,
-        executionResults: {
-          success: false,
-          error: error.message,
-          output: error.stdout || ''
-        },
-        messageValue: error.message
+        success: false,
+        error: error.message,
+        output: error.stdout || ''
       };
     }
   }
@@ -111,19 +120,16 @@ export const npmTestTool = new DynamicStructuredTool({
         stdout = stdout.substring(0, 5000);
       }
       return {
-        testResults: { success: true, output: JSON.stringify(stdout) },
-        hasError: false,
-        messageValue: stdout
+        success: true,
+        output: JSON.stringify(stdout),
+        hasError: false
       };
     } catch (error: unknown | any) {
       return {
         hasError: true,
-        testResults: {
-          success: false,
-          error: error.message,
-          output: error.stdout || ''
-        },
-        messageValue: error.message
+        success: false,
+        error: error.message,
+        output: error.stdout || ''
       };
     }
   }
@@ -176,19 +182,16 @@ export const yarnTestTool = new DynamicStructuredTool({
       }
 
       return {
-        testResults: { success: true, output: JSON.stringify(stdout) },
-        hasError: false,
-        messageValue: stdout
+        success: true,
+        output: stdout,
+        hasError: false
       };
     } catch (error: unknown | any) {
       return {
         hasError: true,
-        testResults: {
-          success: false,
-          error: error.message,
-          output: error.stdout || ''
-        },
-        messageValue: error.message
+        success: false,
+        error: error.message,
+        output: error.stdout || ''
       };
     }
   }
@@ -231,12 +234,9 @@ export const InstallTools = [
       } catch (error: unknown | any) {
         return {
           hasError: true,
-          installResults: {
-            success: false,
-            error: error.message,
-            output: error.stdout || ''
-          },
-          messageValue: error.message
+          success: false,
+          error: error.message,
+          output: error.stdout || ''
         };
       }
     }
@@ -271,19 +271,16 @@ export const InstallTools = [
         const { stdout, stderr } = await nodeExecutor(fullCommand);
 
         return {
-          installResults: { success: true, output: stdout },
-          hasError: false,
-          messageValue: stdout
+          success: true,
+          output: stdout,
+          hasError: false
         };
       } catch (error: unknown | any) {
         return {
           hasError: true,
-          installResults: {
-            success: false,
-            error: error.message,
-            output: error.stdout || ''
-          },
-          messageValue: error.message
+          success: false,
+          error: error.message,
+          output: error.stdout || ''
         };
       }
     }
@@ -318,19 +315,16 @@ export const InstallTools = [
         const { stdout, stderr } = await nodeExecutor(fullCommand);
 
         return {
-          installResults: { success: true, output: stdout },
-          hasError: false,
-          messageValue: stdout
+          success: true,
+          output: stdout,
+          hasError: false
         };
       } catch (error: unknown | any) {
         return {
           hasError: true,
-          installResults: {
-            success: false,
-            error: error.message,
-            output: error.stdout || ''
-          },
-          messageValue: error.message
+          success: false,
+          error: error.message,
+          output: error.stdout || ''
         };
       }
     }
