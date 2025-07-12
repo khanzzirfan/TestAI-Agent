@@ -6,3 +6,16 @@ export const testResultFormat = z.object({
   errorMessage: z.string().max(100, 'Must be at most 100 characters').optional(),
   stackTrace: z.string().max(100, 'Must be at most 100 characters').optional()
 });
+
+export const exampleTestFileAndItsContentFormat = z.object({
+  summary: z
+    .string()
+    .max(300, 'Must be at most 300 characters')
+    .describe('A brief summary of what the test file covers'),
+  keySnippets: z
+    .array(z.string().max(1000))
+    .optional()
+    .describe(
+      'Key imports, test wrappers, mock style, key code snippets or assertions that are useful for learning and observability'
+    )
+});

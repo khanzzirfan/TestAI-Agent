@@ -35224,17 +35224,9 @@ const prebuilt_1 = __nccwpck_require__(95286);
 // import { createSupervisor } from '@langchain/langgraph-supervisor';
 const tools_1 = __nccwpck_require__(72003);
 const llm_1 = __nccwpck_require__(26627);
+const structured_format_1 = __nccwpck_require__(18267);
 // @ts-ignore
 // const createSupervisor = require('@langchain/langgraph-supervisor').createSupervisor;
-const tools = [
-    tools_1.findFileTool,
-    tools_1.findTestFileTool,
-    tools_1.createFileTool,
-    tools_1.writeFileTool,
-    tools_1.readFileTool,
-    tools_1.NodeExecutorTool,
-    tools_1.testResultAnalyzerTools
-];
 async function loadSupervisor() {
     const supervisor = await __nccwpck_require__.e(/* import() */ 933).then(__nccwpck_require__.bind(__nccwpck_require__, 28933));
     return supervisor;
@@ -35250,6 +35242,17 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         tools: [tools_1.findFileTool, tools_1.findTestFileTool],
         name: 'find_files_expert',
         prompt: "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for."
+    });
+    // find example test files
+    const findExampleTestFileAgent = (0, prebuilt_1.createReactAgent)({
+        llm: llm_1.llm,
+        tools: [tools_1.findExampleTestFileAndItsContent],
+        name: 'find_example_test_file_expert',
+        prompt: 'You are an example test file search expert. Please specify the reason for finding example test files. ' +
+            "You can use the 'find_example_test_file_and_its_content' tool to search for example test files in the project directory. " +
+            'The example test files will be used for observation and learning. ' +
+            'The example test files will be used to improve the existing tests or create new tests.',
+        responseFormat: structured_format_1.exampleTestFileAndItsContentFormat
     });
     // find package manager file
     const findPackageManagerFileAgent = (0, prebuilt_1.createReactAgent)({
@@ -35288,25 +35291,15 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         llm: llm_1.llm,
         tools: [tools_1.npmTestTool],
         name: 'npm_test_expert',
-        prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests.'
+        prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests.',
+        responseFormat: structured_format_1.testResultFormat
     });
     const yarnTestAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.yarnTestTool],
         name: 'yarn_test_expert',
-        prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.'
-    });
-    const localiseTransformerAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [],
-        name: 'localise_transformer',
-        prompt: 'You are a localisation expert without tools. Please use the knowledge built in you to transform the text to the desired language.'
-    });
-    const jsonDiffAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.jsonDiffTool],
-        name: 'json_diff_expert',
-        prompt: 'You are a json diff expert. Please use the "json_diff" tool to compare two json objects. Pass the two json objects (json1, json2) as input.'
+        prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.',
+        responseFormat: structured_format_1.testResultFormat
     });
     // @ts-ignore
     const { createSupervisor } = await loadSupervisor();
@@ -35314,32 +35307,30 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
     const workflow = createSupervisor({
         agents: [
             findFilesAgent,
+            findExampleTestFileAgent,
             findPackageManagerFileAgent,
             createFileAgent,
             readFileAgent,
             writeFileAgent,
             npmTestAgent,
             yarnTestAgent,
-            nodeExecutorAgent,
-            localiseTransformerAgent,
-            jsonDiffAgent
+            nodeExecutorAgent
         ],
         llm: llm_1.llm,
         prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
             'For finding files, use find_files. ' +
+            'For finding example test files, use find_example_test_file_and_its_content. ' +
             'For finding package manager files and script commands, use find_package_manager_file. ' +
             'For creating files, use create_file. ' +
             'For reading files, use read_file. ' +
             'For writing files, use write_file. ' +
             'For running tests, use npm_test.' +
-            'For running localisation, use localise_transformer.' +
-            'For comparing json objects, use json_diff.' +
             'For running nodejs scripts, use node_exec.',
         supervisorName: 'code_assistant_supervisor',
         outputMode: 'full_history'
     });
     const app = workflow.compile({ checkpointer, store: inMemoryStore });
-    console.log('app version', 'v0.1.54-alpha.11');
+    console.log('app version', 'v0.1.60-alpha.01');
     const additionalPromptNotes = `
   Additional Notes: ${additionalPrompt}
   `;
@@ -35349,14 +35340,15 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
   Generate and execute tests for ${filename}.
 
   Guidelines:
-  1. Verify the source file exists
-  2. Check for existing test file
-  3. Improve existing tests or create new tests
-  4. Save test file
-  5. Run tests with coverage in silent mode
-  6. Analyze test results and ignore warnings
-  7. Fix any failures by ignoring warnings and re-run tests until all tests pass
-  8. Provide final summary of the test results and coverage details in markdown format
+  1. Learn from example test files found in the project directory for observation and learning.
+  2. Verify the source file exists
+  3. Check for existing test file for a given source file
+  4. Improve existing tests or create new tests  for the source file
+  5. Save test file
+  6. Run tests with coverage in silent mode
+  7. Analyze test results and ignore warnings
+  8. Fix any failures by ignoring warnings and re-run tests until all tests pass
+  9. Provide final summary of the test results and coverage details in markdown format
 
   `;
     const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;
@@ -35518,6 +35510,59 @@ async function run() {
 
 /***/ }),
 
+/***/ 18267:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(79409), exports);
+
+
+/***/ }),
+
+/***/ 79409:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.exampleTestFileAndItsContentFormat = exports.testResultFormat = void 0;
+// write a zod schema to format the test result
+const zod_1 = __nccwpck_require__(50924);
+exports.testResultFormat = zod_1.z.object({
+    status: zod_1.z.enum(['passed', 'failed', 'skipped']),
+    errorMessage: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
+    stackTrace: zod_1.z.string().max(100, 'Must be at most 100 characters').optional()
+});
+exports.exampleTestFileAndItsContentFormat = zod_1.z.object({
+    summary: zod_1.z
+        .string()
+        .max(300, 'Must be at most 300 characters')
+        .describe('A brief summary of what the test file covers'),
+    keySnippets: zod_1.z
+        .array(zod_1.z.string().max(1000))
+        .optional()
+        .describe('Key imports, test wrappers, mock style, key code snippets or assertions that are useful for learning and observability')
+});
+
+
+/***/ }),
+
 /***/ 48716:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -35527,7 +35572,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.findPackageManagerFileTool = exports.jsonDiffTool = exports.findTestFileTool = exports.findFileTool = exports.readFileTool = exports.listFilesTool = exports.writeFileTool = exports.createFileTool = void 0;
+exports.findExampleTestFileAndItsContent = exports.findPackageManagerFileTool = exports.jsonDiffTool = exports.findTestFileTool = exports.findFileTool = exports.readFileTool = exports.listFilesTool = exports.writeFileTool = exports.createFileTool = void 0;
 const zod_1 = __nccwpck_require__(50924);
 const tools_1 = __nccwpck_require__(3477);
 const fs_1 = __importDefault(__nccwpck_require__(79896));
@@ -36008,6 +36053,84 @@ exports.findPackageManagerFileTool = new tools_1.DynamicStructuredTool({
             return {
                 packageManager: 'unknown',
                 packageManagerContent: null,
+                messageValue: {
+                    success: false,
+                    error: error.message
+                }
+            };
+        }
+    }
+});
+exports.findExampleTestFileAndItsContent = new tools_1.DynamicStructuredTool({
+    name: 'find_example_test_file_and_its_content',
+    description: 'Finds a few example test files in the project directory for observation and learning, and returns their content',
+    schema: zod_1.z.object({
+        reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
+        searchRoot: zod_1.z.string().optional().describe('current root directory to start search from'),
+        extensions: zod_1.z.array(zod_1.z.string()).optional().describe('test file extensions to look for')
+    }),
+    func: async ({ searchRoot, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts', '.test.js', '.spec.js', '.test.jsx', '.spec.jsx'] }) => {
+        try {
+            const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+            const results = [];
+            // Function to check if a file is a test file for our source
+            const isMatchingTestFile = (fileName) => {
+                return extensions.some(ext => fileName.endsWith(ext));
+            };
+            // Find matching test files recursively
+            const findTestFiles = (dir) => {
+                const files = fs_1.default.readdirSync(dir);
+                for (const file of files) {
+                    const filePath = path_1.default.join(dir, file);
+                    const stat = fs_1.default.statSync(filePath);
+                    if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
+                        findTestFiles(filePath); // Recurse into subdirectories
+                    }
+                    else if (isMatchingTestFile(file)) {
+                        results.push({
+                            path: filePath,
+                            isDirectory: false,
+                            metadata: {
+                                size: stat.size,
+                                created: stat.birthtime,
+                                modified: stat.mtime,
+                                accessed: stat.atime
+                            }
+                        });
+                    }
+                }
+            };
+            findTestFiles(rootDir);
+            // Return up to 5 example test files with their content
+            const exampleFiles = results.slice(0, 5).map(f => {
+                let content = '';
+                try {
+                    content = fs_1.default.readFileSync(f.path, 'utf-8');
+                }
+                catch (err) {
+                    content = '[Error reading file]';
+                }
+                return {
+                    path: f.path,
+                    size: f.metadata.size,
+                    created: f.metadata.created,
+                    modified: f.metadata.modified,
+                    content
+                };
+            });
+            return {
+                success: true,
+                exampleTestFiles: exampleFiles,
+                messageValue: {
+                    success: true,
+                    message: `Found ${exampleFiles.length} example test files`,
+                    exampleTestFiles: exampleFiles
+                }
+            };
+        }
+        catch (error) {
+            return {
+                success: false,
                 messageValue: {
                     success: false,
                     error: error.message

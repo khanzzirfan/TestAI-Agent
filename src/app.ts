@@ -11,10 +11,11 @@ import {
   NodeExecutorTool,
   npmTestTool,
   yarnTestTool,
-  findPackageManagerFileTool
+  findPackageManagerFileTool,
+  findExampleTestFileAndItsContent
 } from './tools';
 import { llm } from './llm';
-import { testResultFormat } from './structured_format';
+import { testResultFormat, exampleTestFileAndItsContentFormat } from './structured_format';
 
 // @ts-ignore
 // const createSupervisor = require('@langchain/langgraph-supervisor').createSupervisor;
@@ -48,6 +49,19 @@ export const MainGraphRun = async ({
     name: 'find_files_expert',
     prompt:
       "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for."
+  });
+
+  // find example test files
+  const findExampleTestFileAgent = createReactAgent({
+    llm: llm,
+    tools: [findExampleTestFileAndItsContent],
+    name: 'find_example_test_file_expert',
+    prompt:
+      'You are an example test file search expert. Please specify the reason for finding example test files. ' +
+      "You can use the 'find_example_test_file_and_its_content' tool to search for example test files in the project directory. " +
+      'The example test files will be used for observation and learning. ' +
+      'The example test files will be used to improve the existing tests or create new tests.',
+    responseFormat: exampleTestFileAndItsContentFormat
   });
 
   // find package manager file
@@ -111,6 +125,7 @@ export const MainGraphRun = async ({
   const workflow = createSupervisor({
     agents: [
       findFilesAgent,
+      findExampleTestFileAgent,
       findPackageManagerFileAgent,
       createFileAgent,
       readFileAgent,
@@ -123,6 +138,7 @@ export const MainGraphRun = async ({
     prompt:
       'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
       'For finding files, use find_files. ' +
+      'For finding example test files, use find_example_test_file_and_its_content. ' +
       'For finding package manager files and script commands, use find_package_manager_file. ' +
       'For creating files, use create_file. ' +
       'For reading files, use read_file. ' +
@@ -146,14 +162,15 @@ export const MainGraphRun = async ({
   Generate and execute tests for ${filename}.
 
   Guidelines:
-  1. Verify the source file exists
-  2. Check for existing test file
-  3. Improve existing tests or create new tests
-  4. Save test file
-  5. Run tests with coverage in silent mode
-  6. Analyze test results and ignore warnings
-  7. Fix any failures by ignoring warnings and re-run tests until all tests pass
-  8. Provide final summary of the test results and coverage details in markdown format
+  1. Learn from example test files found in the project directory for observation and learning.
+  2. Verify the source file exists
+  3. Check for existing test file for a given source file
+  4. Improve existing tests or create new tests  for the source file
+  5. Save test file
+  6. Run tests with coverage in silent mode
+  7. Analyze test results and ignore warnings
+  8. Fix any failures by ignoring warnings and re-run tests until all tests pass
+  9. Provide final summary of the test results and coverage details in markdown format
 
   `;
 

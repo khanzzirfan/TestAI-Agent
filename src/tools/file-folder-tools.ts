@@ -575,3 +575,92 @@ export const findPackageManagerFileTool = new DynamicStructuredTool({
     }
   }
 });
+
+export const findExampleTestFileAndItsContent = new DynamicStructuredTool({
+  name: 'find_example_test_file_and_its_content',
+  description:
+    'Finds a few example test files in the project directory for observation and learning, and returns their content',
+  schema: z.object({
+    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
+    searchRoot: z.string().optional().describe('current root directory to start search from'),
+    extensions: z.array(z.string()).optional().describe('test file extensions to look for')
+  }),
+  func: async ({
+    searchRoot,
+    extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts', '.test.js', '.spec.js', '.test.jsx', '.spec.jsx']
+  }: {
+    searchRoot?: string;
+    extensions?: string[];
+  }) => {
+    try {
+      const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
+      const results: FileResult[] = [];
+
+      // Function to check if a file is a test file for our source
+      const isMatchingTestFile = (fileName: string) => {
+        return extensions.some(ext => fileName.endsWith(ext));
+      };
+
+      // Find matching test files recursively
+      const findTestFiles = (dir: string) => {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+          const filePath = path.join(dir, file);
+          const stat = fs.statSync(filePath);
+
+          if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
+            findTestFiles(filePath); // Recurse into subdirectories
+          } else if (isMatchingTestFile(file)) {
+            results.push({
+              path: filePath,
+              isDirectory: false,
+              metadata: {
+                size: stat.size,
+                created: stat.birthtime,
+                modified: stat.mtime,
+                accessed: stat.atime
+              }
+            });
+          }
+        }
+      };
+
+      findTestFiles(rootDir);
+
+      // Return up to 5 example test files with their content
+      const exampleFiles = results.slice(0, 5).map(f => {
+        let content = '';
+        try {
+          content = fs.readFileSync(f.path, 'utf-8');
+        } catch (err) {
+          content = '[Error reading file]';
+        }
+        return {
+          path: f.path,
+          size: f.metadata.size,
+          created: f.metadata.created,
+          modified: f.metadata.modified,
+          content
+        };
+      });
+
+      return {
+        success: true,
+        exampleTestFiles: exampleFiles,
+        messageValue: {
+          success: true,
+          message: `Found ${exampleFiles.length} example test files`,
+          exampleTestFiles: exampleFiles
+        }
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        messageValue: {
+          success: false,
+          error: error.message
+        }
+      };
+    }
+  }
+});
