@@ -1,7 +1,14 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See
-[commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+
+## [0.1.69-alpha.5](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.4...v0.1.69-alpha.5) (2025-07-12)
+
+
+### Bug Fixes
+
+* updated state annoation object ([3f7e229](https://github.com/khanzzirfan/TestAI-Agent.git/commit/3f7e2298919197f9951b4eccd4a8f9fb8b949f87))
+* updated state annoation object ([ff64131](https://github.com/khanzzirfan/TestAI-Agent.git/commit/ff641310bfd65f1ec7726a2eca01af3b9a8dd14f))
 
 ## [0.1.69-alpha.4](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.3...v0.1.69-alpha.4) (2025-07-12)
 
