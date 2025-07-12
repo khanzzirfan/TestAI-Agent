@@ -69,7 +69,8 @@ export const MainGraphRun = async ({
       "You can use the 'find_example_test_file_and_its_content' tool to search for example test files in the project directory. " +
       'The example test files will be used for observation and learning. ' +
       'The example test files will be used to improve the existing tests or create new tests.',
-    responseFormat: exampleTestFileAndItsContentFormat
+    responseFormat: exampleTestFileAndItsContentFormat,
+    stateSchema: GraphState
   });
 
   // find package manager file
@@ -80,7 +81,8 @@ export const MainGraphRun = async ({
     prompt:
       'You are a package manager file search expert. Please specify the package manager file you would like to find. ' +
       "You can use the 'find_package_manager_file' tool to search for a package manager file. " +
-      "The package manager is 'package.json' "
+      "The package manager is 'package.json' ",
+    stateSchema: GraphState
   });
 
   const createFileAgent = createReactAgent({
@@ -88,14 +90,16 @@ export const MainGraphRun = async ({
     tools: [createFileTool],
     name: 'create_file_expert',
     responseFormat: createFileResponseFormat,
-    prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.'
+    prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.',
+    stateSchema: GraphState
   });
 
   const readFileAgent = createReactAgent({
     llm: llm,
     tools: [readFileTool],
     name: 'read_file_expert',
-    prompt: 'You are a file reading expert. Please specify the name of the file you would like to read.'
+    prompt: 'You are a file reading expert. Please specify the name of the file you would like to read.',
+    stateSchema: GraphState
   });
 
   const writeFileAgent = createReactAgent({
@@ -103,14 +107,16 @@ export const MainGraphRun = async ({
     tools: [writeFileTool],
     name: 'write_file_expert',
     responseFormat: writeFileResponseFormat,
-    prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.'
+    prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.',
+    stateSchema: GraphState
   });
 
   const nodeExecutorAgent = createReactAgent({
     llm: llm,
     tools: [NodeExecutorTool],
     name: 'node_expert',
-    prompt: 'You are a nodejs execution expert. Please use the "node_exec" tool to run the nodejs script.'
+    prompt: 'You are a nodejs execution expert. Please use the "node_exec" tool to run the nodejs script.',
+    stateSchema: GraphState
   });
 
   const npmTestAgent = createReactAgent({
@@ -118,7 +124,8 @@ export const MainGraphRun = async ({
     tools: [npmTestTool],
     name: 'npm_test_expert',
     prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests from root directory path.',
-    responseFormat: testResultFormat
+    responseFormat: testResultFormat,
+    stateSchema: GraphState
   });
 
   const yarnTestAgent = createReactAgent({
@@ -126,7 +133,8 @@ export const MainGraphRun = async ({
     tools: [yarnTestTool],
     name: 'yarn_test_expert',
     prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.',
-    responseFormat: testResultFormat
+    responseFormat: testResultFormat,
+    stateSchema: GraphState
   });
 
   // @ts-ignore
@@ -134,15 +142,15 @@ export const MainGraphRun = async ({
   // @ts-ignore
   const workflow = createSupervisor({
     agents: [
-      findFilesAgent
-      // findExampleTestFileAgent,
-      // findPackageManagerFileAgent,
-      // createFileAgent,
-      // readFileAgent,
-      // writeFileAgent,
-      // npmTestAgent,
-      // yarnTestAgent,
-      // nodeExecutorAgent
+      findFilesAgent,
+      findExampleTestFileAgent,
+      findPackageManagerFileAgent,
+      createFileAgent,
+      readFileAgent,
+      writeFileAgent,
+      npmTestAgent,
+      yarnTestAgent,
+      nodeExecutorAgent
     ],
     llm: llm,
     prompt:

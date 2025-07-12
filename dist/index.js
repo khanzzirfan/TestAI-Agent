@@ -35255,7 +35255,8 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
             "You can use the 'find_example_test_file_and_its_content' tool to search for example test files in the project directory. " +
             'The example test files will be used for observation and learning. ' +
             'The example test files will be used to improve the existing tests or create new tests.',
-        responseFormat: structured_format_1.exampleTestFileAndItsContentFormat
+        responseFormat: structured_format_1.exampleTestFileAndItsContentFormat,
+        stateSchema: state_1.GraphState
     });
     // find package manager file
     const findPackageManagerFileAgent = (0, prebuilt_1.createReactAgent)({
@@ -35264,62 +35265,69 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         name: 'find_package_manager_file_expert',
         prompt: 'You are a package manager file search expert. Please specify the package manager file you would like to find. ' +
             "You can use the 'find_package_manager_file' tool to search for a package manager file. " +
-            "The package manager is 'package.json' "
+            "The package manager is 'package.json' ",
+        stateSchema: state_1.GraphState
     });
     const createFileAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.createFileTool],
         name: 'create_file_expert',
         responseFormat: structured_format_1.createFileResponseFormat,
-        prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.'
+        prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.',
+        stateSchema: state_1.GraphState
     });
     const readFileAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.readFileTool],
         name: 'read_file_expert',
-        prompt: 'You are a file reading expert. Please specify the name of the file you would like to read.'
+        prompt: 'You are a file reading expert. Please specify the name of the file you would like to read.',
+        stateSchema: state_1.GraphState
     });
     const writeFileAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.writeFileTool],
         name: 'write_file_expert',
         responseFormat: structured_format_1.writeFileResponseFormat,
-        prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.'
+        prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.',
+        stateSchema: state_1.GraphState
     });
     const nodeExecutorAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.NodeExecutorTool],
         name: 'node_expert',
-        prompt: 'You are a nodejs execution expert. Please use the "node_exec" tool to run the nodejs script.'
+        prompt: 'You are a nodejs execution expert. Please use the "node_exec" tool to run the nodejs script.',
+        stateSchema: state_1.GraphState
     });
     const npmTestAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.npmTestTool],
         name: 'npm_test_expert',
         prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests from root directory path.',
-        responseFormat: structured_format_1.testResultFormat
+        responseFormat: structured_format_1.testResultFormat,
+        stateSchema: state_1.GraphState
     });
     const yarnTestAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.yarnTestTool],
         name: 'yarn_test_expert',
         prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.',
-        responseFormat: structured_format_1.testResultFormat
+        responseFormat: structured_format_1.testResultFormat,
+        stateSchema: state_1.GraphState
     });
     // @ts-ignore
     const { createSupervisor } = await loadSupervisor();
     // @ts-ignore
     const workflow = createSupervisor({
         agents: [
-            findFilesAgent
-            // findExampleTestFileAgent,
-            // findPackageManagerFileAgent,
-            // createFileAgent,
-            // readFileAgent,
-            // writeFileAgent,
-            // npmTestAgent,
-            // yarnTestAgent,
-            // nodeExecutorAgent
+            findFilesAgent,
+            findExampleTestFileAgent,
+            findPackageManagerFileAgent,
+            createFileAgent,
+            readFileAgent,
+            writeFileAgent,
+            npmTestAgent,
+            yarnTestAgent,
+            nodeExecutorAgent
         ],
         llm: llm_1.llm,
         prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
