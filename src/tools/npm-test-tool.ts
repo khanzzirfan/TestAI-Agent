@@ -64,7 +64,8 @@ export const NodeExecutorTool = new DynamicStructuredTool({
 
 export const npmTestTool = new DynamicStructuredTool({
   name: 'npm_test',
-  description: 'Executes npm test commands with support for various options including coverage and watch mode',
+  description:
+    'Executes npm test commands from root directory with support for various options including coverage and watch mode',
   schema: z.object({
     command: z.string().describe('npm command to execute'),
     options: z
@@ -75,6 +76,7 @@ export const npmTestTool = new DynamicStructuredTool({
           .describe(
             'path to the directory where the command will be executed. i.e where the package.json file is located'
           ),
+        testFilePath: z.string().optional().describe('Path to the single test file to run and collect coverage'),
         coverage: z.boolean().optional().describe('Run tests with coverage'),
         json: z.boolean().optional().describe('Output test results as JSON'),
         watch: z.boolean().optional().describe('Run tests in watch mode'),
@@ -91,15 +93,23 @@ export const npmTestTool = new DynamicStructuredTool({
       if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
       // suffix json
       fullCommand += ` -- --json`;
-      if (options.coverage) fullCommand += ' --coverage';
+      if (options.coverage && !fullCommand.includes('--coverage') && options.testFilePath) {
+        fullCommand += ' --coverage';
+        // run coverage with test file name --collectCoverageFrom=testFileName
+        fullCommand += ` --collectCoverageFrom="${options.testFilePath || ''}"`;
+      }
       // if (options.json) fullCommand += " --json";
       if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`;
       if (options.updateSnapshots) fullCommand += ' -u';
 
       // append silent flag to suppress npm notices
       // fullCommand += " --silent 2>/dev/null";
-      const { stdout, stderr } = await nodeExecutor(fullCommand);
-
+      let { stdout, stderr } = await nodeExecutor(fullCommand);
+      // check the length of stdout and trim it to max 10000 characters
+      if (stdout.length > 10000) {
+        console.warn('stdout is too long, trimming to 10000 characters');
+        stdout = stdout.substring(0, 5000);
+      }
       return {
         testResults: { success: true, output: JSON.stringify(stdout) },
         hasError: false,
@@ -136,7 +146,8 @@ export const yarnTestTool = new DynamicStructuredTool({
         json: z.boolean().optional().describe('Output test results as JSON'),
         watch: z.boolean().optional().describe('Run tests in watch mode'),
         testRegex: z.string().optional().describe('Regular expression to match test files'),
-        updateSnapshots: z.boolean().optional().describe('Update test snapshots')
+        updateSnapshots: z.boolean().optional().describe('Update test snapshots'),
+        testFilePath: z.string().optional().describe('Path to the single test file to run and collect coverage')
       })
       .optional()
   }),
@@ -148,12 +159,21 @@ export const yarnTestTool = new DynamicStructuredTool({
       if (options.directory_path) fullCommand += ` --cwd ${options.directory_path}`;
       // suffix json
       fullCommand += ` --json`;
-      if (options.coverage) fullCommand += ' --coverage';
+      if (options.coverage && options.testFilePath) {
+        fullCommand += ' --coverage';
+        // run coverage with test file name --collectCoverageFrom=testFileName
+        fullCommand += ` --collectCoverageFrom="${options.testFilePath}"`;
+      }
       if (options.watch) fullCommand += ' --watch';
       if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`;
       if (options.updateSnapshots) fullCommand += ' -u';
 
-      const { stdout, stderr } = await nodeExecutor(fullCommand);
+      let { stdout, stderr } = await nodeExecutor(fullCommand);
+      // check the length of stdout and trim it to max 10000 characters
+      if (stdout.length > 10000) {
+        console.warn('stdout is too long, trimming to 10000 characters');
+        stdout = stdout.substring(0, 5000);
+      }
 
       return {
         testResults: { success: true, output: JSON.stringify(stdout) },

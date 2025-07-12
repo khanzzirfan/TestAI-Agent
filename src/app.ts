@@ -107,7 +107,7 @@ export const MainGraphRun = async ({
     llm: llm,
     tools: [npmTestTool],
     name: 'npm_test_expert',
-    prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests.',
+    prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests from root directory path.',
     responseFormat: testResultFormat
   });
 
