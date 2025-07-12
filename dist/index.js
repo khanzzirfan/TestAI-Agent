@@ -35354,14 +35354,14 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
   Generate and execute tests for ${filename}.
 
   Guidelines:
-  1. Learn from example test files found in the project directory for observation and learning.
-  2. Verify the source file exists
-  3. Check for existing test file for a given source file
-  4. Improve existing tests or create new tests  for the source file
-  5. Save test file
-  6. Run tests with coverage in silent mode
-  7. Analyze test results and ignore warnings
-  8. Fix any failures by ignoring warnings and re-run tests until all tests pass
+  1. Verify the source file exists
+  2. Check for existing test file for a given source file
+  3. Improve existing tests or create new tests  for the source file
+  4. Save test file
+  5. Run tests with coverage in silent mode
+  6. Analyze test results and ignore warnings
+  7. Fix any failures by ignoring warnings and re-run tests until all tests pass
+  8. Learn from example test files found in the project directory for observation to fix failure test cases.
   9. Provide final summary of the test results and coverage details in markdown format
 
   `;
@@ -36502,6 +36502,8 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
     description: 'Executes npm test commands from root directory with support for various options including coverage and watch mode',
     schema: zod_1.z.object({
         command: zod_1.z.string().describe('npm command to execute'),
+        silent: zod_1.z.boolean().describe('Run command in silent mode'),
+        json: zod_1.z.boolean().describe('Output test results as JSON'),
         options: zod_1.z
             .object({
             directory_path: zod_1.z
@@ -36510,14 +36512,13 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
                 .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
             testFilePath: zod_1.z.string().optional().describe('Path to the single test file to run and collect coverage'),
             coverage: zod_1.z.boolean().optional().describe('Run tests with coverage'),
-            json: zod_1.z.boolean().optional().describe('Output test results as JSON'),
             watch: zod_1.z.boolean().optional().describe('Run tests in watch mode'),
             testRegex: zod_1.z.string().optional().describe('Regular expression to match test files'),
             updateSnapshots: zod_1.z.boolean().optional().describe('Update test snapshots')
         })
             .optional()
     }),
-    func: async ({ command, options = {} }, runManager, config) => {
+    func: async ({ command, silent = true, options = {} }, runManager, config) => {
         try {
             const testCommandCheck = command.includes('test');
             let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -36526,6 +36527,8 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
                 fullCommand += ` --prefix ${options.directory_path}`;
             // suffix json
             fullCommand += ` -- --json`;
+            if (silent)
+                fullCommand += ' --silent';
             if (options.coverage && !fullCommand.includes('--coverage') && options.testFilePath) {
                 fullCommand += ' --coverage';
                 // run coverage with test file name --collectCoverageFrom=testFileName
@@ -36584,6 +36587,8 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
     description: 'Executes yarn test commands with support for various options including coverage and watch mode',
     schema: zod_1.z.object({
         command: zod_1.z.string().describe('yarn command to execute'),
+        silent: zod_1.z.boolean().describe('Run command in silent mode'),
+        json: zod_1.z.boolean().describe('Output test results as JSON'),
         options: zod_1.z
             .object({
             directory_path: zod_1.z
@@ -36599,7 +36604,7 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
         })
             .optional()
     }),
-    func: async ({ command, options = {} }, runManager, config) => {
+    func: async ({ command, silent = true, options = {} }, runManager, config) => {
         try {
             const testCommandCheck = command.includes('test');
             let fullCommand = !command.startsWith('yarn') ? `yarn ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -36608,6 +36613,8 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
                 fullCommand += ` --cwd ${options.directory_path}`;
             // suffix json
             fullCommand += ` --json`;
+            if (silent)
+                fullCommand += ' --silent';
             if (options.coverage && options.testFilePath) {
                 fullCommand += ' --coverage';
                 // run coverage with test file name --collectCoverageFrom=testFileName

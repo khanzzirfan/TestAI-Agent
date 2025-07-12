@@ -181,14 +181,14 @@ export const MainGraphRun = async ({
   Generate and execute tests for ${filename}.
 
   Guidelines:
-  1. Learn from example test files found in the project directory for observation and learning.
-  2. Verify the source file exists
-  3. Check for existing test file for a given source file
-  4. Improve existing tests or create new tests  for the source file
-  5. Save test file
-  6. Run tests with coverage in silent mode
-  7. Analyze test results and ignore warnings
-  8. Fix any failures by ignoring warnings and re-run tests until all tests pass
+  1. Verify the source file exists
+  2. Check for existing test file for a given source file
+  3. Improve existing tests or create new tests  for the source file
+  4. Save test file
+  5. Run tests with coverage in silent mode
+  6. Analyze test results and ignore warnings
+  7. Fix any failures by ignoring warnings and re-run tests until all tests pass
+  8. Learn from example test files found in the project directory for observation to fix failure test cases.
   9. Provide final summary of the test results and coverage details in markdown format
 
   `;
