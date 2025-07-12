@@ -35689,8 +35689,14 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
                     testFilePath: fullPath,
                     testFileContent: fileContent,
                     testFileFound: true,
-                    success: false,
-                    error: 'File already exists and overwrite is not enabled'
+                    messageValue: {
+                        success: false,
+                        error: 'File already exists and overwrite is not enabled',
+                        testFileName: fileName,
+                        testFilePath: fullPath,
+                        testFileContent: fileContent,
+                        testFileFound: true
+                    }
                 };
             }
             const content = template ?? '// Generated file\n\n';
@@ -35700,9 +35706,15 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
                 testFilePath: fullPath,
                 testFileContent: content,
                 testFileFound: true,
-                success: true,
-                path: fullPath,
-                message: `File created successfully at ${fullPath}`
+                messageValue: {
+                    success: true,
+                    path: fullPath,
+                    message: `File created successfully at ${fullPath}`,
+                    testFileName: fileName,
+                    testFilePath: fullPath,
+                    testFileContent: content,
+                    testFileFound: true
+                }
             };
         }
         catch (error) {
@@ -35744,13 +35756,13 @@ exports.writeFileTool = new tools_1.DynamicStructuredTool({
                 fs_1.default.writeFileSync(fullPath, content, 'utf-8');
             }
             return {
-                output: fullPath
+                messageValue: fullPath
             };
         }
         catch (error) {
             return {
                 success: false,
-                output: error.message
+                messageValue: error.message
             };
         }
     }
@@ -35773,19 +35785,21 @@ exports.listFilesTool = new tools_1.DynamicStructuredTool({
             if (!includeDetails) {
                 return {
                     success: true,
-                    files: files.map(f => f.path)
+                    messageValue: {
+                        files: files.map(f => f.path)
+                    }
                 };
             }
             const fileDirPath = path_1.default.dirname(absolutePath);
             return {
                 success: true,
-                output: files
+                messageValue: files
             };
         }
         catch (error) {
             return {
                 success: false,
-                output: error.message
+                messageValue: error.message
             };
         }
     }
@@ -35815,14 +35829,18 @@ exports.readFileTool = new tools_1.DynamicStructuredTool({
                 };
             }
             return {
-                success: true,
-                ...result
+                messageValue: {
+                    success: true,
+                    ...result
+                }
             };
         }
         catch (error) {
             return {
-                success: false,
-                error: error.message
+                messageValue: {
+                    success: false,
+                    error: error.message
+                }
             };
         }
     }
@@ -35944,15 +35962,23 @@ exports.findTestFileTool = new tools_1.DynamicStructuredTool({
                 testFilePath: testFile ? testFile.path : null,
                 testFileName: testFile ? path_1.default.basename(testFile.path) : null,
                 testFileFound,
-                success: testFileFound,
-                message: testFileFound ? 'Test file found' : 'Test file not found'
+                messageValue: {
+                    success: testFileFound,
+                    message: testFileFound ? 'Test file found' : 'Test file not found',
+                    testFileContent: testFile ? testFile.content : null,
+                    testFilePath: testFile ? testFile.path : null,
+                    testFileName: testFile ? path_1.default.basename(testFile.path) : null,
+                    testFileFound
+                }
             };
         }
         catch (error) {
             return {
                 testFileContent: null,
-                success: false,
-                error: error.message
+                messageValue: {
+                    success: false,
+                    error: error.message
+                }
             };
         }
     }
@@ -35970,14 +35996,18 @@ exports.jsonDiffTool = new tools_1.DynamicStructuredTool({
             const differences = (0, differencewith_1.default)(Object.entries(object1), Object.entries(object2), isEqual_1.default);
             const missingKeys = (0, difference_1.default)((0, keys_1.default)(object1), (0, keys_1.default)(object2));
             return {
-                differences,
-                missingKeys
+                messageValue: {
+                    differences,
+                    missingKeys
+                }
             };
         }
         catch (error) {
             return {
-                success: false,
-                error: error.message
+                messageValue: {
+                    success: false,
+                    error: error.message
+                }
             };
         }
     }
@@ -36000,16 +36030,22 @@ exports.findPackageManagerFileTool = new tools_1.DynamicStructuredTool({
                 return {
                     packageManager: checkYarnLock ? 'yarn' : 'npm',
                     packageManagerContent: JSON.parse(content),
-                    success: true,
-                    message: 'Found package.json'
+                    messageValue: {
+                        success: true,
+                        message: 'Found package.json',
+                        packageManager: checkYarnLock ? 'yarn' : 'npm',
+                        packageManagerContent: JSON.parse(content)
+                    }
                 };
             }
             else {
                 return {
                     packageManager: 'unknown',
                     packageManagerContent: null,
-                    success: false,
-                    message: 'No package manager file found'
+                    messageValue: {
+                        success: false,
+                        message: 'No package manager file found'
+                    }
                 };
             }
         }
@@ -36017,8 +36053,10 @@ exports.findPackageManagerFileTool = new tools_1.DynamicStructuredTool({
             return {
                 packageManager: 'unknown',
                 packageManagerContent: null,
-                success: false,
-                error: error.message
+                messageValue: {
+                    success: false,
+                    error: error.message
+                }
             };
         }
     }
@@ -36083,13 +36121,20 @@ exports.findExampleTestFileAndItsContent = new tools_1.DynamicStructuredTool({
             return {
                 success: true,
                 exampleTestFiles: exampleFiles,
-                message: `Found ${exampleFiles.length} example test files`
+                messageValue: {
+                    success: true,
+                    message: `Found ${exampleFiles.length} example test files`,
+                    exampleTestFiles: exampleFiles
+                }
             };
         }
         catch (error) {
             return {
                 success: false,
-                error: error.message
+                messageValue: {
+                    success: false,
+                    error: error.message
+                }
             };
         }
     }
@@ -36192,17 +36237,20 @@ exports.NodeExecutorTool = new tools_1.DynamicStructuredTool({
                 stdout = stdout.substring(0, 5000);
             }
             return {
-                success: true,
+                executionResults: { success: true, output: stdout },
                 hasError: false,
-                output: stdout
+                messageValue: stdout
             };
         }
         catch (error) {
             return {
                 hasError: true,
-                success: false,
-                error: error.message,
-                output: error.stdout || ''
+                executionResults: {
+                    success: false,
+                    error: error.message,
+                    output: error.stdout || ''
+                },
+                messageValue: error.message
             };
         }
     }
@@ -36255,17 +36303,20 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
                 stdout = stdout.substring(0, 5000);
             }
             return {
-                success: true,
-                output: JSON.stringify(stdout),
-                hasError: false
+                testResults: { success: true, output: JSON.stringify(stdout) },
+                hasError: false,
+                messageValue: stdout
             };
         }
         catch (error) {
             return {
                 hasError: true,
-                success: false,
-                error: error.message,
-                output: error.stdout || ''
+                testResults: {
+                    success: false,
+                    error: error.message,
+                    output: error.stdout || ''
+                },
+                messageValue: error.message
             };
         }
     }
@@ -36317,17 +36368,20 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
                 stdout = stdout.substring(0, 5000);
             }
             return {
-                success: true,
-                output: stdout,
-                hasError: false
+                testResults: { success: true, output: JSON.stringify(stdout) },
+                hasError: false,
+                messageValue: stdout
             };
         }
         catch (error) {
             return {
                 hasError: true,
-                success: false,
-                error: error.message,
-                output: error.stdout || ''
+                testResults: {
+                    success: false,
+                    error: error.message,
+                    output: error.stdout || ''
+                },
+                messageValue: error.message
             };
         }
     }
@@ -36369,9 +36423,12 @@ exports.InstallTools = [
             catch (error) {
                 return {
                     hasError: true,
-                    success: false,
-                    error: error.message,
-                    output: error.stdout || ''
+                    installResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messageValue: error.message
                 };
             }
         }
@@ -36404,17 +36461,20 @@ exports.InstallTools = [
                     fullCommand += ' --legacy-peer-deps';
                 const { stdout, stderr } = await nodeExecutor(fullCommand);
                 return {
-                    success: true,
-                    output: stdout,
-                    hasError: false
+                    installResults: { success: true, output: stdout },
+                    hasError: false,
+                    messageValue: stdout
                 };
             }
             catch (error) {
                 return {
                     hasError: true,
-                    success: false,
-                    error: error.message,
-                    output: error.stdout || ''
+                    installResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messageValue: error.message
                 };
             }
         }
@@ -36447,17 +36507,20 @@ exports.InstallTools = [
                     fullCommand += ' --legacy-peer-deps';
                 const { stdout, stderr } = await nodeExecutor(fullCommand);
                 return {
-                    success: true,
-                    output: stdout,
-                    hasError: false
+                    installResults: { success: true, output: stdout },
+                    hasError: false,
+                    messageValue: stdout
                 };
             }
             catch (error) {
                 return {
                     hasError: true,
-                    success: false,
-                    error: error.message,
-                    output: error.stdout || ''
+                    installResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messageValue: error.message
                 };
             }
         }
