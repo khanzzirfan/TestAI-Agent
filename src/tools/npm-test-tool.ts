@@ -56,16 +56,19 @@ export const NodeExecutorTool = new DynamicStructuredTool({
       }
 
       return {
-        success: true,
+        executionResults: { success: true, output: stdout },
         hasError: false,
-        output: stdout
+        messageValue: stdout
       };
     } catch (error: unknown | any) {
       return {
         hasError: true,
-        success: false,
-        error: error.message,
-        output: error.stdout || ''
+        executionResults: {
+          success: false,
+          error: error.message,
+          output: error.stdout || ''
+        },
+        messageValue: error.message
       };
     }
   }
@@ -120,16 +123,19 @@ export const npmTestTool = new DynamicStructuredTool({
         stdout = stdout.substring(0, 5000);
       }
       return {
-        success: true,
-        output: JSON.stringify(stdout),
-        hasError: false
+        testResults: { success: true, output: JSON.stringify(stdout) },
+        hasError: false,
+        messageValue: stdout
       };
     } catch (error: unknown | any) {
       return {
         hasError: true,
-        success: false,
-        error: error.message,
-        output: error.stdout || ''
+        testResults: {
+          success: false,
+          error: error.message,
+          output: error.stdout || ''
+        },
+        messageValue: error.message
       };
     }
   }
@@ -182,16 +188,19 @@ export const yarnTestTool = new DynamicStructuredTool({
       }
 
       return {
-        success: true,
-        output: stdout,
-        hasError: false
+        testResults: { success: true, output: JSON.stringify(stdout) },
+        hasError: false,
+        messageValue: stdout
       };
     } catch (error: unknown | any) {
       return {
         hasError: true,
-        success: false,
-        error: error.message,
-        output: error.stdout || ''
+        testResults: {
+          success: false,
+          error: error.message,
+          output: error.stdout || ''
+        },
+        messageValue: error.message
       };
     }
   }
@@ -234,9 +243,12 @@ export const InstallTools = [
       } catch (error: unknown | any) {
         return {
           hasError: true,
-          success: false,
-          error: error.message,
-          output: error.stdout || ''
+          installResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messageValue: error.message
         };
       }
     }
@@ -271,16 +283,19 @@ export const InstallTools = [
         const { stdout, stderr } = await nodeExecutor(fullCommand);
 
         return {
-          success: true,
-          output: stdout,
-          hasError: false
+          installResults: { success: true, output: stdout },
+          hasError: false,
+          messageValue: stdout
         };
       } catch (error: unknown | any) {
         return {
           hasError: true,
-          success: false,
-          error: error.message,
-          output: error.stdout || ''
+          installResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messageValue: error.message
         };
       }
     }
@@ -315,16 +330,19 @@ export const InstallTools = [
         const { stdout, stderr } = await nodeExecutor(fullCommand);
 
         return {
-          success: true,
-          output: stdout,
-          hasError: false
+          installResults: { success: true, output: stdout },
+          hasError: false,
+          messageValue: stdout
         };
       } catch (error: unknown | any) {
         return {
           hasError: true,
-          success: false,
-          error: error.message,
-          output: error.stdout || ''
+          installResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messageValue: error.message
         };
       }
     }
