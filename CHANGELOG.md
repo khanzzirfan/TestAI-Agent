@@ -2,13 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-## [0.1.69-alpha.3](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.2...v0.1.69-alpha.3) (2025-07-12)
+## [0.1.69-alpha.4](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.3...v0.1.69-alpha.4) (2025-07-12)
 
+## [0.1.69-alpha.3](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.2...v0.1.69-alpha.3) (2025-07-12)
 
 ### Bug Fixes
 
-* update state schema ([c06f3b3](https://github.com/khanzzirfan/TestAI-Agent.git/commit/c06f3b34db3ecec59ae4ae74e66c48231fe007ea))
-* updated tags ([9129b8e](https://github.com/khanzzirfan/TestAI-Agent.git/commit/9129b8e269a1c788e334389749d2f581c5a13e3d))
+- update state schema
+  ([c06f3b3](https://github.com/khanzzirfan/TestAI-Agent.git/commit/c06f3b34db3ecec59ae4ae74e66c48231fe007ea))
+- updated tags
+  ([9129b8e](https://github.com/khanzzirfan/TestAI-Agent.git/commit/9129b8e269a1c788e334389749d2f581c5a13e3d))
 
 ## [0.1.69-alpha.2](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.1...v0.1.69-alpha.2) (2025-07-12)
 
