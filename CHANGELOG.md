@@ -1,6 +1,7 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+All notable changes to this project will be documented in this file. See
+[commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
 ## [0.1.69-alpha.4](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.3...v0.1.69-alpha.4) (2025-07-12)
 

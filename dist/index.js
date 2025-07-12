@@ -35547,13 +35547,13 @@ exports.GraphState = langgraph_1.Annotation.Root({
     fileName: (0, langgraph_1.Annotation)({
         reducer: (x, y) => y ?? x ?? ''
     }),
-    testFileName: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? ''
-    }),
     fileContent: (0, langgraph_1.Annotation)({
         reducer: (x, y) => y ?? x ?? ''
     }),
     filePath: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    testFileName: (0, langgraph_1.Annotation)({
         reducer: (x, y) => y ?? x ?? ''
     }),
     testFileContent: (0, langgraph_1.Annotation)({
@@ -35624,8 +35624,8 @@ exports.findFilesAndTestFilesResponseFormat = exports.writeFileResponseFormat = 
 const zod_1 = __nccwpck_require__(50924);
 exports.testResultFormat = zod_1.z.object({
     status: zod_1.z.enum(['passed', 'failed', 'skipped']),
-    errorMessage: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
-    stackTrace: zod_1.z.string().max(100, 'Must be at most 100 characters').optional()
+    errorMessage: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable(),
+    stackTrace: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable()
 });
 exports.exampleTestFileAndItsContentFormat = zod_1.z.object({
     summary: zod_1.z
@@ -35634,34 +35634,34 @@ exports.exampleTestFileAndItsContentFormat = zod_1.z.object({
         .describe('A brief summary of what the test file covers'),
     keySnippets: zod_1.z
         .array(zod_1.z.string().max(1000))
-        .optional()
+        .nullable()
         .describe('Key imports, test wrappers, mock style, key code snippets or assertions that are useful for learning and observability')
 });
 exports.createFileResponseFormat = zod_1.z.object({
     success: zod_1.z.boolean(),
-    error: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
-    fileName: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
-    filePath: zod_1.z.string().max(200, 'Must be at most 200 characters').optional(),
-    fileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').optional(),
-    fileFound: zod_1.z.boolean().optional()
+    error: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable(),
+    fileName: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable(),
+    filePath: zod_1.z.string().max(200, 'Must be at most 200 characters').nullable(),
+    fileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').nullable(),
+    fileFound: zod_1.z.boolean().nullable()
 });
 exports.writeFileResponseFormat = zod_1.z.object({
     success: zod_1.z.boolean(),
-    error: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
-    fileName: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
-    filePath: zod_1.z.string().max(200, 'Must be at most 200 characters').optional(),
-    fileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').optional(),
-    fileFound: zod_1.z.boolean().optional()
+    error: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable(),
+    fileName: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable(),
+    filePath: zod_1.z.string().max(200, 'Must be at most 200 characters').nullable(),
+    fileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').nullable(),
+    fileFound: zod_1.z.boolean().nullable()
 });
 exports.findFilesAndTestFilesResponseFormat = zod_1.z.object({
-    fileName: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
-    filePath: zod_1.z.string().max(200, 'Must be at most 200 characters').optional(),
-    fileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').optional(),
-    fileFound: zod_1.z.boolean().optional(),
-    testFileName: zod_1.z.string().max(100, 'Must be at most 100 characters').optional(),
-    testFilePath: zod_1.z.string().max(200, 'Must be at most 200 characters').optional(),
-    testFileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').optional(),
-    testFileFound: zod_1.z.boolean().optional()
+    fileName: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable(),
+    filePath: zod_1.z.string().max(200, 'Must be at most 200 characters').nullable(),
+    fileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').nullable(),
+    fileFound: zod_1.z.boolean().nullable(),
+    testFileName: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable(),
+    testFilePath: zod_1.z.string().max(200, 'Must be at most 200 characters').nullable(),
+    testFileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').nullable(),
+    testFileFound: zod_1.z.boolean().nullable()
 });
 
 
@@ -35678,7 +35678,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.findExampleTestFileAndItsContent = exports.findPackageManagerFileTool = exports.jsonDiffTool = exports.findTestFileTool = exports.findFileTool = exports.readFileTool = exports.listFilesTool = exports.writeFileTool = exports.createFileTool = void 0;
 const zod_1 = __nccwpck_require__(50924);
+const messages_1 = __nccwpck_require__(62776);
 const tools_1 = __nccwpck_require__(3477);
+const langgraph_1 = __nccwpck_require__(39405);
 const fs_1 = __importDefault(__nccwpck_require__(79896));
 const path_1 = __importDefault(__nccwpck_require__(16928));
 const differencewith_1 = __importDefault(__nccwpck_require__(88746));
@@ -35777,7 +35779,7 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
         template: zod_1.z.string().optional().describe('template name to use'),
         overwrite: zod_1.z.boolean().optional().describe('overwrite if file exists')
     }),
-    func: async ({ path: dirPath, fileName, template, overwrite = false }) => {
+    func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager, config) => {
         try {
             const normalizedPath = path_1.default.normalize(dirPath);
             const fullPath = path_1.default.join(normalizedPath, fileName);
@@ -35788,46 +35790,53 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
             if (fs_1.default.existsSync(fullPath) && !overwrite) {
                 // read file content
                 const fileContent = fs_1.default.readFileSync(fullPath, 'utf-8');
-                return {
-                    testFileName: fileName,
-                    testFilePath: fullPath,
-                    testFileContent: fileContent,
-                    testFileFound: true,
-                    messageValue: {
-                        success: false,
-                        error: 'File already exists and overwrite is not enabled',
+                return new langgraph_1.Command({
+                    // update state keys
+                    update: {
                         testFileName: fileName,
                         testFilePath: fullPath,
                         testFileContent: fileContent,
-                        testFileFound: true
+                        testFileFound: true,
+                        messages: [
+                            new messages_1.ToolMessage({
+                                content: `File already exists at ${fullPath}. Use 'overwrite' option to replace it.`,
+                                tool_call_id: config.toolCall.id
+                            })
+                        ]
                     }
-                };
+                });
             }
             const content = template ?? '// Generated file\n\n';
             fs_1.default.writeFileSync(fullPath, content, 'utf-8');
-            return {
-                testFileName: fileName,
-                testFilePath: fullPath,
-                testFileContent: content,
-                testFileFound: true,
-                messageValue: {
-                    success: true,
-                    path: fullPath,
-                    message: `File created successfully at ${fullPath}`,
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
                     testFileName: fileName,
                     testFilePath: fullPath,
                     testFileContent: content,
-                    testFileFound: true
+                    testFileFound: true,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `File created successfully at ${fullPath}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
                 }
-            };
+            });
         }
         catch (error) {
-            return {
-                file_operation: {
-                    success: false,
-                    error: error.message
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    hasError: true,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error creating file: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
                 }
-            };
+            });
         }
     }
 });
@@ -35843,7 +35852,7 @@ exports.writeFileTool = new tools_1.DynamicStructuredTool({
         createBackup: zod_1.z.boolean().optional().describe('create backup of existing file'),
         appendContent: zod_1.z.boolean().optional().describe('append instead of overwrite')
     }),
-    func: async ({ path: dirPath, fileName, content, createBackup = false, appendContent = false }, runManager) => {
+    func: async ({ path: dirPath, fileName, content, createBackup = false, appendContent = false }, runManager, config) => {
         try {
             const fullPath = path_1.default.join(dirPath, fileName);
             validateFilePath(fullPath);
@@ -35859,15 +35868,35 @@ exports.writeFileTool = new tools_1.DynamicStructuredTool({
             else {
                 fs_1.default.writeFileSync(fullPath, content, 'utf-8');
             }
-            return {
-                messageValue: fullPath
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    testFileName: fileName,
+                    testFilePath: fullPath,
+                    testFileContent: content,
+                    testFileFound: true,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `File written successfully at ${fullPath}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
         catch (error) {
-            return {
-                success: false,
-                messageValue: error.message
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    hasError: true,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error writing file: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
     }
 });
@@ -35882,29 +35911,57 @@ exports.listFilesTool = new tools_1.DynamicStructuredTool({
         exclude: zod_1.z.array(zod_1.z.string()).optional().describe('directories to exclude'),
         includeDetails: zod_1.z.boolean().optional().describe('include file details')
     }),
-    func: async ({ path: dirPath, pattern, exclude, includeDetails = false }, runManager) => {
+    func: async ({ path: dirPath, pattern, exclude, includeDetails = false }, runManager, config) => {
         try {
             const absolutePath = validateFilePath(dirPath);
             const files = listFilesRecursively(absolutePath, exclude || ['node_modules', 'public', 'dist', 'coverage', '.git'], pattern);
             if (!includeDetails) {
-                return {
-                    success: true,
-                    messageValue: {
-                        files: files.map(f => f.path)
+                return new langgraph_1.Command({
+                    // update state keys
+                    update: {
+                        success: true,
+                        messageValue: {
+                            files: files.map(f => f.path)
+                        },
+                        messages: [
+                            new messages_1.ToolMessage({
+                                content: `Listed ${files.length} files in ${absolutePath}`,
+                                tool_call_id: config.toolCall.id
+                            })
+                        ]
                     }
-                };
+                });
             }
             const fileDirPath = path_1.default.dirname(absolutePath);
-            return {
-                success: true,
-                messageValue: files
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    success: true,
+                    messageValue: files,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Listed ${files.length} files in ${fileDirPath}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
         catch (error) {
-            return {
-                success: false,
-                messageValue: error.message
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    success: false,
+                    messageValue: error.message,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error listing files: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ],
+                    hasError: true
+                }
+            });
         }
     }
 });
@@ -35918,7 +35975,7 @@ exports.readFileTool = new tools_1.DynamicStructuredTool({
         encoding: zod_1.z.string().optional().describe('file encoding'),
         includeMetadata: zod_1.z.boolean().optional().describe('include file metadata')
     }),
-    func: async ({ path: filePath, encoding = 'utf-8', includeMetadata = false }, runManager) => {
+    func: async ({ path: filePath, encoding = 'utf-8', includeMetadata = false }, runManager, config) => {
         try {
             const absolutePath = validateFilePath(filePath);
             const content = fs_1.default.readFileSync(absolutePath, { encoding: encoding });
@@ -35932,20 +35989,36 @@ exports.readFileTool = new tools_1.DynamicStructuredTool({
                     accessed: stats.atime
                 };
             }
-            return {
-                messageValue: {
-                    success: true,
-                    ...result
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    testFileContent: result.content,
+                    testFilePath: absolutePath,
+                    testFileName: path_1.default.basename(absolutePath),
+                    testFileFound: true,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `File read successfully from ${absolutePath}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
                 }
-            };
+            });
         }
         catch (error) {
-            return {
-                messageValue: {
-                    success: false,
-                    error: error.message
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    error: error.message,
+                    hasError: true,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error reading file: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
                 }
-            };
+            });
         }
     }
 });
@@ -35959,7 +36032,7 @@ exports.findFileTool = new tools_1.DynamicStructuredTool({
         excludeDirs: zod_1.z.array(zod_1.z.string()).optional().describe('directories to exclude from search'),
         encoding: zod_1.z.string().optional().describe('encoding to use when reading file content')
     }),
-    func: async ({ path: filePath, excludeDirs = DEFAULT_EXCLUDE_DIRS, encoding = 'utf8' }, runManager) => {
+    func: async ({ path: filePath, excludeDirs = DEFAULT_EXCLUDE_DIRS, encoding = 'utf8' }, runManager, config) => {
         try {
             const searchRoot = process.cwd();
             const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
@@ -35990,20 +36063,34 @@ exports.findFileTool = new tools_1.DynamicStructuredTool({
                     files: results,
                     message: 'Files found'
                 };
-            return {
-                fileName: result.files?.map(f => f.fileName).join('\n'),
-                fileContent: result.files?.map(f => f.content).join('\n'),
-                filePath: result.files?.map(f => f.path).join('\n'),
-                messageValue: result
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    fileName: result.files?.map(f => f.fileName).join('\n'),
+                    fileContent: result.files?.map(f => f.content).join('\n'),
+                    filePath: result.files?.map(f => f.path).join('\n'),
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: result.message,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
         catch (error) {
-            return {
-                messageValue: {
-                    exists: false,
-                    error: error.message
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    hasError: true,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error finding file: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
                 }
-            };
+            });
         }
     }
 });
@@ -36016,7 +36103,7 @@ exports.findTestFileTool = new tools_1.DynamicStructuredTool({
         extensions: zod_1.z.array(zod_1.z.string()).optional().describe('test file extensions to look for'),
         searchRoot: zod_1.z.string().optional().describe('current root directory to start search from')
     }),
-    func: async ({ sourcePath, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts'] }, runManager) => {
+    func: async ({ sourcePath, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts', '.test.js', '.spec.js', '.test.jsx', '.spec.jsx'] }, runManager, config) => {
         try {
             // Get the file name without extension to search for test files
             const searchRoot = process.cwd();
@@ -36061,29 +36148,38 @@ exports.findTestFileTool = new tools_1.DynamicStructuredTool({
             };
             const testFile = findTestFile(rootDir);
             const testFileFound = !!testFile;
-            return {
-                testFileContent: testFile ? testFile.content : null,
-                testFilePath: testFile ? testFile.path : null,
-                testFileName: testFile ? path_1.default.basename(testFile.path) : null,
-                testFileFound,
-                messageValue: {
-                    success: testFileFound,
-                    message: testFileFound ? 'Test file found' : 'Test file not found',
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
                     testFileContent: testFile ? testFile.content : null,
                     testFilePath: testFile ? testFile.path : null,
                     testFileName: testFile ? path_1.default.basename(testFile.path) : null,
-                    testFileFound
+                    testFileFound,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: testFileFound
+                                ? `Successfully found test file at ${testFile.path}`
+                                : 'No matching test file found',
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
                 }
-            };
+            });
         }
         catch (error) {
-            return {
-                testFileContent: null,
-                messageValue: {
-                    success: false,
-                    error: error.message
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    testFileContent: null,
+                    testFileFound: false,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error finding test file: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
                 }
-            };
+            });
         }
     }
 });
@@ -36123,7 +36219,7 @@ exports.findPackageManagerFileTool = new tools_1.DynamicStructuredTool({
         reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
         searchRoot: zod_1.z.string().optional().describe('current root directory to start search from')
     }),
-    func: async ({ searchRoot }) => {
+    func: async ({ searchRoot }, runManager, config) => {
         try {
             const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
             const packageJsonPath = path_1.default.join(rootDir, 'package.json');
@@ -36131,37 +36227,50 @@ exports.findPackageManagerFileTool = new tools_1.DynamicStructuredTool({
             const checkYarnLock = fs_1.default.existsSync(yarnLockPath);
             if (fs_1.default.existsSync(packageJsonPath)) {
                 const content = fs_1.default.readFileSync(packageJsonPath, 'utf-8');
-                return {
-                    packageManager: checkYarnLock ? 'yarn' : 'npm',
-                    packageManagerContent: JSON.parse(content),
-                    messageValue: {
-                        success: true,
-                        message: 'Found package.json',
+                return new langgraph_1.Command({
+                    // update state keys
+                    update: {
                         packageManager: checkYarnLock ? 'yarn' : 'npm',
-                        packageManagerContent: JSON.parse(content)
+                        packageManagerContent: JSON.parse(content),
+                        messages: [
+                            new messages_1.ToolMessage({
+                                content: `Found package manager file at ${packageJsonPath}`,
+                                tool_call_id: config.toolCall.id
+                            })
+                        ]
                     }
-                };
+                });
             }
             else {
-                return {
-                    packageManager: 'unknown',
-                    packageManagerContent: null,
-                    messageValue: {
-                        success: false,
-                        message: 'No package manager file found'
+                return new langgraph_1.Command({
+                    // update state keys
+                    update: {
+                        packageManager: 'unknown',
+                        packageManagerContent: null,
+                        messages: [
+                            new messages_1.ToolMessage({
+                                content: 'No package manager file found in the project directory',
+                                tool_call_id: config.toolCall.id
+                            })
+                        ]
                     }
-                };
+                });
             }
         }
         catch (error) {
-            return {
-                packageManager: 'unknown',
-                packageManagerContent: null,
-                messageValue: {
-                    success: false,
-                    error: error.message
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    packageManager: 'unknown',
+                    packageManagerContent: null,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error finding package manager file: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
                 }
-            };
+            });
         }
     }
 });
@@ -36173,7 +36282,7 @@ exports.findExampleTestFileAndItsContent = new tools_1.DynamicStructuredTool({
         searchRoot: zod_1.z.string().optional().describe('current root directory to start search from'),
         extensions: zod_1.z.array(zod_1.z.string()).optional().describe('test file extensions to look for')
     }),
-    func: async ({ searchRoot, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts', '.test.js', '.spec.js', '.test.jsx', '.spec.jsx'] }) => {
+    func: async ({ searchRoot, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts', '.test.js', '.spec.js', '.test.jsx', '.spec.jsx'] }, runManager, config) => {
         try {
             const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
             const results = [];
@@ -36222,24 +36331,35 @@ exports.findExampleTestFileAndItsContent = new tools_1.DynamicStructuredTool({
                     content
                 };
             });
-            return {
-                success: true,
-                exampleTestFiles: exampleFiles,
-                messageValue: {
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
                     success: true,
-                    message: `Found ${exampleFiles.length} example test files`,
-                    exampleTestFiles: exampleFiles
+                    exampleTestFiles: exampleFiles,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Found ${exampleFiles.length} example test files`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
                 }
-            };
+            });
         }
         catch (error) {
-            return {
-                success: false,
-                messageValue: {
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
                     success: false,
-                    error: error.message
+                    error: error.message,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error finding example test files: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ],
+                    hasError: true
                 }
-            };
+            });
         }
     }
 });
@@ -36283,7 +36403,9 @@ __exportStar(__nccwpck_require__(32546), exports);
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.InstallTools = exports.yarnTestTool = exports.npmTestTool = exports.NodeExecutorTool = void 0;
 const zod_1 = __nccwpck_require__(50924);
+const messages_1 = __nccwpck_require__(62776);
 const tools_1 = __nccwpck_require__(3477);
+const langgraph_1 = __nccwpck_require__(39405);
 const util_1 = __nccwpck_require__(39023);
 const child_process_1 = __nccwpck_require__(35317);
 const nodeExecutor = (0, util_1.promisify)(child_process_1.exec);
@@ -36309,7 +36431,7 @@ exports.NodeExecutorTool = new tools_1.DynamicStructuredTool({
         })
             .optional()
     }),
-    func: async ({ command, options = {} }, runManager) => {
+    func: async ({ command, options = {} }, runManager, config) => {
         try {
             let fullCommand = command;
             // Add options to the command
@@ -36340,22 +36462,38 @@ exports.NodeExecutorTool = new tools_1.DynamicStructuredTool({
                 console.warn('stdout is too long, trimming to 10000 characters');
                 stdout = stdout.substring(0, 5000);
             }
-            return {
-                executionResults: { success: true, output: stdout },
-                hasError: false,
-                messageValue: stdout
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    testResults: { success: true, output: JSON.stringify(stdout) },
+                    hasError: false,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: 'Command executed successfully',
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
         catch (error) {
-            return {
-                hasError: true,
-                executionResults: {
-                    success: false,
-                    error: error.message,
-                    output: error.stdout || ''
-                },
-                messageValue: error.message
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    hasError: true,
+                    testResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error executing command: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
     }
 });
@@ -36379,7 +36517,7 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
         })
             .optional()
     }),
-    func: async ({ command, options = {} }) => {
+    func: async ({ command, options = {} }, runManager, config) => {
         try {
             const testCommandCheck = command.includes('test');
             let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -36406,22 +36544,38 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
                 console.warn('stdout is too long, trimming to 10000 characters');
                 stdout = stdout.substring(0, 5000);
             }
-            return {
-                testResults: { success: true, output: JSON.stringify(stdout) },
-                hasError: false,
-                messageValue: stdout
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    testResults: { success: true, output: JSON.stringify(stdout) },
+                    hasError: false,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: 'Test command executed successfully',
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
         catch (error) {
-            return {
-                hasError: true,
-                testResults: {
-                    success: false,
-                    error: error.message,
-                    output: error.stdout || ''
-                },
-                messageValue: error.message
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    hasError: true,
+                    testResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error executing test command: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
     }
 });
@@ -36445,7 +36599,7 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
         })
             .optional()
     }),
-    func: async ({ command, options = {} }) => {
+    func: async ({ command, options = {} }, runManager, config) => {
         try {
             const testCommandCheck = command.includes('test');
             let fullCommand = !command.startsWith('yarn') ? `yarn ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -36471,22 +36625,38 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
                 console.warn('stdout is too long, trimming to 10000 characters');
                 stdout = stdout.substring(0, 5000);
             }
-            return {
-                testResults: { success: true, output: JSON.stringify(stdout) },
-                hasError: false,
-                messageValue: stdout
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    testResults: { success: true, output: JSON.stringify(stdout) },
+                    hasError: false,
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: 'Yarn test command executed successfully',
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
         catch (error) {
-            return {
-                hasError: true,
-                testResults: {
-                    success: false,
-                    error: error.message,
-                    output: error.stdout || ''
-                },
-                messageValue: error.message
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    hasError: true,
+                    testResults: {
+                        success: false,
+                        error: error.message,
+                        output: error.stdout || ''
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Error executing yarn test command: ${error.message}`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
     }
 });
@@ -36642,7 +36812,9 @@ exports.InstallTools = [
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.testResultAnalyzerTools = void 0;
 const zod_1 = __nccwpck_require__(50924);
+const messages_1 = __nccwpck_require__(62776);
 const tools_1 = __nccwpck_require__(3477);
+const langgraph_1 = __nccwpck_require__(39405);
 // New tool: Json Test Result Analyzer
 exports.testResultAnalyzerTools = new tools_1.DynamicStructuredTool({
     name: 'json_test_result_analyzer',
@@ -36694,49 +36866,33 @@ exports.testResultAnalyzerTools = new tools_1.DynamicStructuredTool({
         })
             .describe('parsed JSON test results')
     }),
-    func: async ({ result }, runManager) => {
+    func: async ({ result }, runManager, config) => {
         try {
             const testResults = result;
             const totalTests = testResults.numTotalTests;
             const totalPassed = testResults.numPassedTests;
             const totalFailed = testResults.numFailedTests;
             const totalSkipped = testResults.numPendingTests;
-            return {
-                testSummary: {
-                    totalTests,
-                    totalPassed,
-                    totalFailed,
-                    totalSkipped,
-                    failureReasons: testResults.failureReasons || [],
-                    coverage: {
-                        lines: {
-                            total: testResults.coverage.lines.total,
-                            covered: testResults.coverage.lines.covered,
-                            skipped: testResults.coverage.lines.skipped,
-                            pct: testResults.coverage.lines.pct
-                        },
-                        statements: {
-                            total: testResults.coverage.statements.total,
-                            covered: testResults.coverage.statements.covered,
-                            skipped: testResults.coverage.statements.skipped,
-                            pct: testResults.coverage.statements.pct
-                        },
-                        functions: {
-                            total: testResults.coverage.functions.total,
-                            covered: testResults.coverage.functions.covered,
-                            skipped: testResults.coverage.functions.skipped,
-                            pct: testResults.coverage.functions.pct
-                        },
-                        branches: {
-                            total: testResults.coverage.branches.total,
-                            covered: testResults.coverage.branches.covered,
-                            skipped: testResults.coverage.branches.skipped,
-                            pct: testResults.coverage.branches.pct
-                        }
-                    }
-                },
-                output: `Total tests: ${totalTests}, Passed: ${totalPassed}, Failed: ${totalFailed}, Skipped: ${totalSkipped}`
-            };
+            return new langgraph_1.Command({
+                // update state keys
+                update: {
+                    testResults: testResults,
+                    testSummary: {
+                        totalTests,
+                        totalPassed,
+                        totalFailed,
+                        totalSkipped,
+                        failureReasons: testResults.failureReasons || [],
+                        coverage: testResults.coverage || {}
+                    },
+                    messages: [
+                        new messages_1.ToolMessage({
+                            content: `Test results analyzed: ${totalPassed} passed, ${totalFailed} failed, ${totalSkipped} skipped.`,
+                            tool_call_id: config.toolCall.id
+                        })
+                    ]
+                }
+            });
         }
         catch (error) {
             return {
