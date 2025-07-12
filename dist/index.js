@@ -35771,15 +35771,14 @@ const validateFilePath = filePath => {
 };
 exports.createFileTool = new tools_1.DynamicStructuredTool({
     name: 'create_file',
-    description: 'Creates a new file with optional template content and validation',
+    description: 'Creates a new file with completed content',
     schema: zod_1.z.object({
         reason: zod_1.z.string().describe('What is the reason that choose to call this tool from the context?'),
         path: zod_1.z.string().describe('path to the file'),
         fileName: zod_1.z.string().describe('name of the file'),
-        template: zod_1.z.string().optional().describe('template name to use'),
         overwrite: zod_1.z.boolean().optional().describe('overwrite if file exists')
     }),
-    func: async ({ path: dirPath, fileName, template, overwrite = false }, runManager, config) => {
+    func: async ({ path: dirPath, fileName, overwrite = false }, runManager, config) => {
         try {
             const normalizedPath = path_1.default.normalize(dirPath);
             const fullPath = path_1.default.join(normalizedPath, fileName);
@@ -35806,7 +35805,7 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
                     }
                 });
             }
-            const content = template ?? '// Generated file\n\n';
+            const content = '// Generated file\n\n';
             fs_1.default.writeFileSync(fullPath, content, 'utf-8');
             return new langgraph_1.Command({
                 // update state keys
