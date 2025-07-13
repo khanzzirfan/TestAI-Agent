@@ -144,9 +144,10 @@ export const createFileTool = new DynamicStructuredTool({
       .string()
       .describe('absolute path to the directory where the file should be created (must be a full path, not relative)'),
     fileName: z.string().describe('name of the file'),
+    content: z.string().describe('content to write in the file'),
     overwrite: z.boolean().optional().describe('overwrite if file exists')
   }),
-  func: async ({ path: dirPath, fileName, overwrite = false }, runManager: any, config: any) => {
+  func: async ({ path: dirPath, fileName, content, overwrite = false }, runManager: any, config: any) => {
     try {
       const normalizedPath = path.normalize(dirPath);
       const fullPath = path.join(normalizedPath, fileName);
@@ -176,8 +177,8 @@ export const createFileTool = new DynamicStructuredTool({
         });
       }
 
-      const content = '// Generated file\n\n';
-      fs.writeFileSync(fullPath, content, 'utf-8');
+      const newContent = content || '// Generated file\n\n';
+      fs.writeFileSync(fullPath, newContent, 'utf-8');
 
       return new Command({
         // update state keys

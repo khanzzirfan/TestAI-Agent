@@ -35713,9 +35713,10 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
             .string()
             .describe('absolute path to the directory where the file should be created (must be a full path, not relative)'),
         fileName: zod_1.z.string().describe('name of the file'),
+        content: zod_1.z.string().describe('content to write in the file'),
         overwrite: zod_1.z.boolean().optional().describe('overwrite if file exists')
     }),
-    func: async ({ path: dirPath, fileName, overwrite = false }, runManager, config) => {
+    func: async ({ path: dirPath, fileName, content, overwrite = false }, runManager, config) => {
         try {
             const normalizedPath = path_1.default.normalize(dirPath);
             const fullPath = path_1.default.join(normalizedPath, fileName);
@@ -35742,8 +35743,8 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
                     }
                 });
             }
-            const content = '// Generated file\n\n';
-            fs_1.default.writeFileSync(fullPath, content, 'utf-8');
+            const newContent = content || '// Generated file\n\n';
+            fs_1.default.writeFileSync(fullPath, newContent, 'utf-8');
             return new langgraph_1.Command({
                 // update state keys
                 update: {
