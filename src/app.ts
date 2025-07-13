@@ -86,6 +86,7 @@ export const MainGraphRun = async ({
   const createFileAgent = createReactAgent({
     llm: llm,
     tools: [createFileTool],
+    name: 'create_file_expert',
     prompt: `
           You are a file creation expert.
           The source file path is: {state.filePath}
