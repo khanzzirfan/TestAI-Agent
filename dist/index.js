@@ -35271,6 +35271,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
     const createFileAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.createFileTool],
+        name: 'create_file_expert',
         prompt: `
           You are a file creation expert.
           The source file path is: {state.filePath}
