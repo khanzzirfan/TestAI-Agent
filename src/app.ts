@@ -192,14 +192,14 @@ export const MainGraphRun = async ({
   `;
 
   const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;
-
+  const uniqueGuid = Math.random().toString(36).substring(2, 15);
   // Use the Runnable
   const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
   const finalState = await app.invoke(
     {
       messages: [new HumanMessage(finalPrompt)]
     },
-    { recursionLimit: recursionLimit || 200, configurable: { thread_id: 1001 } }
+    { recursionLimit: recursionLimit || 200, configurable: { thread_id: uniqueGuid } }
   );
 
   const resultOfGraph = finalState.messages[finalState.messages.length - 1].content as string;

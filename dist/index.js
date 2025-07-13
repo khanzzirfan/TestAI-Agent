@@ -35364,11 +35364,12 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
 
   `;
     const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;
+    const uniqueGuid = Math.random().toString(36).substring(2, 15);
     // Use the Runnable
     const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
     const finalState = await app.invoke({
         messages: [new messages_1.HumanMessage(finalPrompt)]
-    }, { recursionLimit: recursionLimit || 200, configurable: { thread_id: 1001 } });
+    }, { recursionLimit: recursionLimit || 200, configurable: { thread_id: uniqueGuid } });
     const resultOfGraph = finalState.messages[finalState.messages.length - 1].content;
     console.log('result of graph for a threadId:', currentDate);
     // console.log(resultOfGraph.messages.map((m) => m.content).join("\n"));
@@ -35708,7 +35709,9 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
     description: 'Creates a new file with completed content',
     schema: zod_1.z.object({
         reason: zod_1.z.string().describe('What is the reason that choose to call this tool from the context?'),
-        path: zod_1.z.string().describe('path to the file'),
+        path: zod_1.z
+            .string()
+            .describe('absolute path to the directory where the file should be created (must be a full path, not relative)'),
         fileName: zod_1.z.string().describe('name of the file'),
         overwrite: zod_1.z.boolean().optional().describe('overwrite if file exists')
     }),
