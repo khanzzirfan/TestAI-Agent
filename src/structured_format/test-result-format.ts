@@ -4,7 +4,14 @@ import { z } from 'zod';
 export const testResultFormat = z.object({
   status: z.enum(['passed', 'failed', 'skipped']),
   errorMessage: z.string().max(100, 'Must be at most 100 characters').nullable(),
-  stackTrace: z.string().max(100, 'Must be at most 100 characters').nullable()
+  stackTrace: z.string().max(100, 'Must be at most 100 characters').nullable(),
+  coverage: z
+    .object({
+      total: z.number().describe('Total number of lines covered by tests'),
+      covered: z.number().describe('Number of lines covered by tests'),
+      percentage: z.number().describe('Percentage of lines covered by tests')
+    })
+    .nullable()
 });
 
 export const exampleTestFileAndItsContentFormat = z.object({

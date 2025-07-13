@@ -36,7 +36,7 @@
     "package": "npx ncc build src/index.ts -o dist --no-cache  --source-map --license licenses.txt",
     "package:watch": "npm run package -- --watch",
     "test": "npx jest",
-    "test:only": "jest graph-supervisor --no-coverage",
+    "test:only": "jest graph-supervisor-npm-agent --no-coverage",
     "all": "npm run format:write && npm run lint && npm run test && npm run coverage && npm run package",
     "start:dev": "npx ts-node src/testapp/test-agent-v2.ts",
     "release": "commit-and-tag-version --prerelease alpha",

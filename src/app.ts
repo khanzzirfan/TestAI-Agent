@@ -18,8 +18,6 @@ import { llm } from './llm';
 import {
   testResultFormat,
   exampleTestFileAndItsContentFormat,
-  createFileResponseFormat,
-  writeFileResponseFormat,
   findFilesAndTestFilesResponseFormat
 } from './structured_format';
 import { GraphState } from './utils/state';
@@ -88,11 +86,12 @@ export const MainGraphRun = async ({
   const createFileAgent = createReactAgent({
     llm: llm,
     tools: [createFileTool],
-    name: 'create_file_expert',
-    prompt: `You are a file creation expert. Please specify the name of the file you would like to create.
-        The file should be created in the same directory as the source file.
-        Do NOT use placeholders or random paths.
-    `,
+    prompt: `
+          You are a file creation expert.
+          The source file path is: {state.filePath}
+          When creating a file, use these state values to determine the correct absolute path.
+          Do NOT use placeholders or random paths.
+            `.trim(),
     stateSchema: GraphState
   });
 
@@ -183,15 +182,12 @@ export const MainGraphRun = async ({
 
   Guidelines:
   1. Verify the source file exists
-  2. Check for existing test file for a given source file
-  3. Improve existing tests or create new tests  for the source file
-  4. Save test file
-  5. Run tests with coverage in silent mode
-  6. Analyze test results and ignore warnings
-  7. Fix any failures by ignoring warnings and re-run tests until all tests pass
-  8. Learn from example test files found in the project directory for observation to fix failure test cases.
-  9. Provide final summary of the test results and coverage details in markdown format
-
+  2. Verify the test file exists
+  3. If the test file does not exist, create a new test file relative to the source file and write the test content.
+  4. If the test file exists, improve existing tests or create new tests for the source file.
+  5. Run the tests with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
+  6. Fix any failures by ignoring warnings and re-run tests until all tests pass. Continue to improve the tests until they are comprehensive.
+  7. Provide final summary of the test results and coverage details in markdown format.
   `;
 
   const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;

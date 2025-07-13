@@ -35271,8 +35271,12 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
     const createFileAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.createFileTool],
-        name: 'create_file_expert',
-        prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.',
+        prompt: `
+          You are a file creation expert.
+          The source file path is: {state.filePath}
+          When creating a file, use these state values to determine the correct absolute path.
+          Do NOT use placeholders or random paths.
+            `.trim(),
         stateSchema: state_1.GraphState
     });
     const readFileAgent = (0, prebuilt_1.createReactAgent)({
@@ -35353,15 +35357,12 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
 
   Guidelines:
   1. Verify the source file exists
-  2. Check for existing test file for a given source file
-  3. Improve existing tests or create new tests  for the source file
-  4. Save test file
-  5. Run tests with coverage in silent mode
-  6. Analyze test results and ignore warnings
-  7. Fix any failures by ignoring warnings and re-run tests until all tests pass
-  8. Learn from example test files found in the project directory for observation to fix failure test cases.
-  9. Provide final summary of the test results and coverage details in markdown format
-
+  2. Verify the test file exists
+  3. If the test file does not exist, create a new test file relative to the source file and write the test content.
+  4. If the test file exists, improve existing tests or create new tests for the source file.
+  5. Run the tests with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
+  6. Fix any failures by ignoring warnings and re-run tests until all tests pass. Continue to improve the tests until they are comprehensive.
+  7. Provide final summary of the test results and coverage details in markdown format.
   `;
     const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;
     const uniqueGuid = Math.random().toString(36).substring(2, 15);
@@ -35560,7 +35561,14 @@ const zod_1 = __nccwpck_require__(50924);
 exports.testResultFormat = zod_1.z.object({
     status: zod_1.z.enum(['passed', 'failed', 'skipped']),
     errorMessage: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable(),
-    stackTrace: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable()
+    stackTrace: zod_1.z.string().max(100, 'Must be at most 100 characters').nullable(),
+    coverage: zod_1.z
+        .object({
+        total: zod_1.z.number().describe('Total number of lines covered by tests'),
+        covered: zod_1.z.number().describe('Number of lines covered by tests'),
+        percentage: zod_1.z.number().describe('Percentage of lines covered by tests')
+    })
+        .nullable()
 });
 exports.exampleTestFileAndItsContentFormat = zod_1.z.object({
     summary: zod_1.z
@@ -35711,7 +35719,7 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
         reason: zod_1.z.string().describe('What is the reason that choose to call this tool from the context?'),
         path: zod_1.z
             .string()
-            .describe('absolute path to the directory where the file should be created (must be a full path, not relative)'),
+            .describe('absolute path to the directory where the file should be created. Do NOT use placeholders or random paths.'),
         fileName: zod_1.z.string().describe('name of the file'),
         content: zod_1.z.string().describe('content to write in the file'),
         overwrite: zod_1.z.boolean().optional().describe('overwrite if file exists')
