@@ -1,6 +1,6 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { llm } from '../llm';
-import { State, Update } from '../state';
+import { State, Update } from '../utils/state';
 
 export const finalNotesAgent = async (state: State): Promise<Update> => {
   const template = `

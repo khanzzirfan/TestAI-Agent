@@ -11,7 +11,7 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 
 import { llm } from '../llm';
 import { findFilesAndTestFilesResponseFormat } from '../structured_format';
-import { GraphState } from '../state';
+import { GraphState } from '../utils/state';
 
 dotenv.config();
 

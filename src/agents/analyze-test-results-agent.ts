@@ -1,7 +1,7 @@
 import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { AIMessage } from '@langchain/core/messages';
 import { llm } from '../llm';
-import { State, Update } from '../state';
+import { State, Update } from '../utils/state';
 
 export const analyzeTestResults = async (state: State): Promise<Update> => {
   const template = `

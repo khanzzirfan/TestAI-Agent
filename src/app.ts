@@ -22,7 +22,7 @@ import {
   writeFileResponseFormat,
   findFilesAndTestFilesResponseFormat
 } from './structured_format';
-import { GraphState } from './state';
+import { GraphState } from './utils/state';
 // @ts-ignore
 // const createSupervisor = require('@langchain/langgraph-supervisor').createSupervisor;
 
@@ -89,7 +89,6 @@ export const MainGraphRun = async ({
     llm: llm,
     tools: [createFileTool],
     name: 'create_file_expert',
-    responseFormat: createFileResponseFormat,
     prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.',
     stateSchema: GraphState
   });
@@ -106,7 +105,6 @@ export const MainGraphRun = async ({
     llm: llm,
     tools: [writeFileTool],
     name: 'write_file_expert',
-    responseFormat: writeFileResponseFormat,
     prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.',
     stateSchema: GraphState
   });

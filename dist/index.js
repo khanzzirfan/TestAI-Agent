@@ -35225,7 +35225,7 @@ const prebuilt_1 = __nccwpck_require__(95286);
 const tools_1 = __nccwpck_require__(72003);
 const llm_1 = __nccwpck_require__(26627);
 const structured_format_1 = __nccwpck_require__(18267);
-const state_1 = __nccwpck_require__(2462);
+const state_1 = __nccwpck_require__(96236);
 // @ts-ignore
 // const createSupervisor = require('@langchain/langgraph-supervisor').createSupervisor;
 async function loadSupervisor() {
@@ -35272,7 +35272,6 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         llm: llm_1.llm,
         tools: [tools_1.createFileTool],
         name: 'create_file_expert',
-        responseFormat: structured_format_1.createFileResponseFormat,
         prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.',
         stateSchema: state_1.GraphState
     });
@@ -35287,7 +35286,6 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         llm: llm_1.llm,
         tools: [tools_1.writeFileTool],
         name: 'write_file_expert',
-        responseFormat: structured_format_1.writeFileResponseFormat,
         prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.',
         stateSchema: state_1.GraphState
     });
@@ -35520,70 +35518,6 @@ async function run() {
             core.setFailed(error.message);
     }
 }
-
-
-/***/ }),
-
-/***/ 2462:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.GraphState = void 0;
-const langgraph_1 = __nccwpck_require__(39405);
-// Define the graph state with additional properties
-exports.GraphState = langgraph_1.Annotation.Root({
-    messages: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => x.concat(y)
-    }),
-    iteration: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? 0,
-        default: () => 0
-    }),
-    hasError: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y
-    }),
-    fileName: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? ''
-    }),
-    fileContent: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? ''
-    }),
-    filePath: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? ''
-    }),
-    testFileName: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? ''
-    }),
-    testFileContent: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? ''
-    }),
-    testFilePath: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? ''
-    }),
-    testFileFound: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y
-    }),
-    testResults: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y
-    }),
-    testSummary: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y
-    }),
-    finalComments: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? '',
-        default: () => ''
-    }),
-    packageManager: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? 'npm',
-        default: () => 'npm'
-    }),
-    packageManagerContent: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => y ?? x ?? {},
-        default: () => ({})
-    })
-});
 
 
 /***/ }),
@@ -37072,6 +37006,70 @@ const getCityBeaches = (0, tools_1.tool)(({ city }) => {
     })
 });
 exports.getCityBeaches = getCityBeaches;
+
+
+/***/ }),
+
+/***/ 96236:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GraphState = void 0;
+const langgraph_1 = __nccwpck_require__(39405);
+// Define the graph state with additional properties
+exports.GraphState = langgraph_1.Annotation.Root({
+    messages: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => x.concat(y)
+    }),
+    iteration: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? 0,
+        default: () => 0
+    }),
+    hasError: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y
+    }),
+    fileName: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    fileContent: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    filePath: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    testFileName: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    testFileContent: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    testFilePath: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? ''
+    }),
+    testFileFound: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y
+    }),
+    testResults: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y
+    }),
+    testSummary: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y
+    }),
+    finalComments: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? '',
+        default: () => ''
+    }),
+    packageManager: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? 'npm',
+        default: () => 'npm'
+    }),
+    packageManagerContent: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? {},
+        default: () => ({})
+    })
+});
 
 
 /***/ }),
