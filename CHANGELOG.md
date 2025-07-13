@@ -1,7 +1,13 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See
-[commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+
+## [0.1.69-alpha.17](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.16...v0.1.69-alpha.17) (2025-07-13)
+
+
+### Bug Fixes
+
+* updated graph agent and tools and studio setup ([090e197](https://github.com/khanzzirfan/TestAI-Agent.git/commit/090e1979a702ef13fd593b7b4ed48b242a77cdb0))
 
 ## [0.1.69-alpha.16](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.15...v0.1.69-alpha.16) (2025-07-13)
 
