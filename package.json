@@ -2,7 +2,7 @@
   "name": "testifyai-agent",
   "packageManager": "yarn@1.22.22",
   "description": "GitHub Actions for TestifyAI. This action is used to generate codegaurd to TestifyAI tests.",
-  "version": "0.1.69-alpha.14",
+  "version": "0.1.69-alpha.15",
   "author": "khanzzirfan",
   "private": true,
   "homepage": "https://github.com/khanzzirfan/TestAI-Agent.git",
