@@ -89,7 +89,10 @@ export const MainGraphRun = async ({
     llm: llm,
     tools: [createFileTool],
     name: 'create_file_expert',
-    prompt: 'You are a file creation expert. Please specify the name of the file you would like to create.',
+    prompt: `You are a file creation expert. Please specify the name of the file you would like to create.
+        The file should be created in the same directory as the source file.
+        Do NOT use placeholders or random paths.
+    `,
     stateSchema: GraphState
   });
 

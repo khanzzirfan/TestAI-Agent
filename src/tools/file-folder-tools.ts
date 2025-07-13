@@ -142,7 +142,9 @@ export const createFileTool = new DynamicStructuredTool({
     reason: z.string().describe('What is the reason that choose to call this tool from the context?'),
     path: z
       .string()
-      .describe('absolute path to the directory where the file should be created (must be a full path, not relative)'),
+      .describe(
+        'absolute path to the directory where the file should be created. Do NOT use placeholders or random paths.'
+      ),
     fileName: z.string().describe('name of the file'),
     content: z.string().describe('content to write in the file'),
     overwrite: z.boolean().optional().describe('overwrite if file exists')
