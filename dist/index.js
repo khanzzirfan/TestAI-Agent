@@ -35340,6 +35340,8 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
             'For creating files, use create_file. ' +
             'For reading files, use read_file. ' +
             'For writing files, use write_file. ' +
+            'For updating files, use write_file. ' +
+            'For modifying files, use write_file. ' +
             'For running tests, use npm_test.' +
             'For running nodejs scripts, use node_exec.',
         supervisorName: 'code_assistant_supervisor',
@@ -35357,13 +35359,15 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
   Generate and execute tests for ${filename}.
 
   Guidelines:
-  1. Verify the source file exists
-  2. Verify the test file exists
-  3. If the test file does not exist, create a new test file relative to the source file and write the test content.
-  4. If the test file exists, improve existing tests or create new tests for the source file.
-  5. Run the tests with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
-  6. Fix any failures by ignoring warnings and re-run tests until all tests pass. Continue to improve the tests until they are comprehensive.
-  7. Provide final summary of the test results and coverage details in markdown format.
+  1. Find example test files in the project directory for learning and observation.
+  2. Verify the given source file exists
+  3. Verify the corresponding test file exists for the source file.
+  4. If the test file does not exist, create a new test file and write the test content.
+  5. If the test file exists, improve existing tests or create new tests for the source file.
+  6. Run the tests with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
+  7. Fix any failures by ignoring warnings. If component missing statements or imports, add them to the test file and update the file using correct tool call.
+  8. Run the tests again to ensure they pass and coverage is collected. 
+  9. Provide final summary of the test results and coverage details in markdown format.
   `;
     const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;
     const uniqueGuid = Math.random().toString(36).substring(2, 15);
@@ -35720,7 +35724,7 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
         reason: zod_1.z.string().describe('What is the reason that choose to call this tool from the context?'),
         path: zod_1.z
             .string()
-            .describe('absolute path to the directory where the file should be created. Do NOT use placeholders or random paths.'),
+            .describe('path to the directory where the file should be created (must be a full path, not relative)'),
         fileName: zod_1.z.string().describe('name of the file'),
         content: zod_1.z.string().describe('content to write in the file'),
         overwrite: zod_1.z.boolean().optional().describe('overwrite if file exists')
@@ -35763,7 +35767,7 @@ exports.createFileTool = new tools_1.DynamicStructuredTool({
                     testFileFound: true,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: `File created successfully at ${fullPath}`,
+                            content: `File created successfully at ${dirPath}. File name: ${fileName}`,
                             tool_call_id: config.toolCall.id
                         })
                     ]

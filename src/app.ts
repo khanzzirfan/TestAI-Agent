@@ -162,6 +162,8 @@ export const MainGraphRun = async ({
       'For creating files, use create_file. ' +
       'For reading files, use read_file. ' +
       'For writing files, use write_file. ' +
+      'For updating files, use write_file. ' +
+      'For modifying files, use write_file. ' +
       'For running tests, use npm_test.' +
       'For running nodejs scripts, use node_exec.',
     supervisorName: 'code_assistant_supervisor',
@@ -182,13 +184,15 @@ export const MainGraphRun = async ({
   Generate and execute tests for ${filename}.
 
   Guidelines:
-  1. Verify the source file exists
-  2. Verify the test file exists
-  3. If the test file does not exist, create a new test file relative to the source file and write the test content.
-  4. If the test file exists, improve existing tests or create new tests for the source file.
-  5. Run the tests with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
-  6. Fix any failures by ignoring warnings and re-run tests until all tests pass. Continue to improve the tests until they are comprehensive.
-  7. Provide final summary of the test results and coverage details in markdown format.
+  1. Find example test files in the project directory for learning and observation.
+  2. Verify the given source file exists
+  3. Verify the corresponding test file exists for the source file.
+  4. If the test file does not exist, create a new test file and write the test content.
+  5. If the test file exists, improve existing tests or create new tests for the source file.
+  6. Run the tests with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
+  7. Fix any failures by ignoring warnings. If component missing statements or imports, add them to the test file and update the file using correct tool call.
+  8. Run the tests again to ensure they pass and coverage is collected. 
+  9. Provide final summary of the test results and coverage details in markdown format.
   `;
 
   const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;
