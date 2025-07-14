@@ -128,7 +128,7 @@ export const npmTestTool = new DynamicStructuredTool({
       if (options.coverage && !fullCommand.includes('--coverage') && options.testFilePath) {
         fullCommand += ' --coverage';
         // run coverage with test file name --collectCoverageFrom=testFileName
-        fullCommand += ` --collectCoverageFrom="${options.testFilePath || ''}"`;
+        fullCommand += ` --collectCoverageFrom=**/${options.testFilePath}*`;
       }
       // if (options.json) fullCommand += " --json";
       if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`;
