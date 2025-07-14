@@ -36109,7 +36109,12 @@ exports.findTestFileTool = new tools_1.DynamicStructuredTool({
                     testFileFound,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: testFileFound ? ` Found test file: ${testFile.path}. ` : 'No matching test file found',
+                            content: testFileFound
+                                ? ` Found test file: ${testFile.path}. \n
+              Content: ${testFile.content} \n
+              Use 'write_file' tool to create or update the test file if needed. Proceed with the next steps to run tests using the 'npm_test' or 'yarn_test' tool.
+              `
+                                : 'No matching test file found',
                             tool_call_id: config.toolCall.id
                         })
                     ]
