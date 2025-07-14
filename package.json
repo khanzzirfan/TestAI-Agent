@@ -43,7 +43,7 @@
     "cleanup": "rm -rf dist",
     "git-release": "bash ./script/git-release.sh",
     "rel": "npm run cleanup && npm run bundle && npm run git-release && npm run release && npm run push-tags-current",
-    "push-tags-current": "git push --follow-tags origin $(git rev-parse --abbrev-ref HEAD)"
+    "push-tags-current": "git push --follow-tags"
   },
   "license": "MIT",
   "jest": {
