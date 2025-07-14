@@ -2,12 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-## [0.1.69-alpha.35](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.34...v0.1.69-alpha.35) (2025-07-14)
+## [0.1.69-alpha.36](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.35...v0.1.69-alpha.36) (2025-07-14)
 
+## [0.1.69-alpha.35](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.34...v0.1.69-alpha.35) (2025-07-14)
 
 ### Bug Fixes
 
-* updated npm test path ([71ac081](https://github.com/khanzzirfan/TestAI-Agent.git/commit/71ac0814e92fa3666e07dff9be917e265a4579b9))
+- updated npm test path
+  ([71ac081](https://github.com/khanzzirfan/TestAI-Agent.git/commit/71ac0814e92fa3666e07dff9be917e265a4579b9))
 
 ## [0.1.69-alpha.34](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.33...v0.1.69-alpha.34) (2025-07-14)
 
