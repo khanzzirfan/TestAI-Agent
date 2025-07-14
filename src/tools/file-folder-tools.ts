@@ -759,8 +759,8 @@ export const findExampleTestFileAndItsContent = new DynamicStructuredTool({
 
       findTestFiles(rootDir);
 
-      // Return up to 5 example test files with their content
-      const exampleFiles = results.slice(0, 5).map(f => {
+      // Return up to 15 example test files with their content
+      const exampleFiles = results.slice(0, 15).map(f => {
         let content = '';
         try {
           content = fs.readFileSync(f.path, 'utf-8');
@@ -779,7 +779,9 @@ export const findExampleTestFileAndItsContent = new DynamicStructuredTool({
           exampleTestFiles: exampleFiles,
           messages: [
             new ToolMessage({
-              content: `Found ${exampleFiles.length} example test files. add to state`,
+              content: `Found ${exampleFiles.length} example test files. add to state
+              Use these files for observation and learning. File paths: ${exampleFiles.map(f => f.path).join(', ')}\n\n
+              Content:\n${exampleFiles.map(f => f.content).join('\n\n')}. \n Specially, use these files to understand how tests are structured and written in this project.`,
               tool_call_id: config.toolCall.id
             })
           ]
