@@ -12,7 +12,12 @@ import {
   npmTestTool,
   yarnTestTool,
   findPackageManagerFileTool,
-  findExampleTestFileAndItsContent
+  findExampleTestFileAndItsContent,
+  // Transfer tools
+  transferToNpmTestTool,
+  transferToWriteFileTool,
+  transferToReadFileTool,
+  transferToCreateFileTool
 } from './tools';
 import { llm } from './llm';
 import {
@@ -84,7 +89,7 @@ export const MainGraphRun = async ({
 
   const createFileAgent = createReactAgent({
     llm: llm,
-    tools: [createFileTool],
+    tools: [createFileTool, transferToNpmTestTool],
     name: 'create_file_expert',
     prompt: `
           You are a file creation expert.
@@ -92,23 +97,28 @@ export const MainGraphRun = async ({
           The example test content is {state.exampleTestFiles}
           When creating a file, use these state values to determine the correct absolute path.
           Do NOT use placeholders or random paths.
+          If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
             `.trim(),
     stateSchema: GraphState
   });
 
   const readFileAgent = createReactAgent({
     llm: llm,
-    tools: [readFileTool],
+    tools: [readFileTool, transferToNpmTestTool],
     name: 'read_file_expert',
-    prompt: 'You are a file reading expert. Please specify the name of the file you would like to read.',
+    prompt: `You are a file reading expert. Please specify the name of the file you would like to read.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
+    `,
     stateSchema: GraphState
   });
 
   const writeFileAgent = createReactAgent({
     llm: llm,
-    tools: [writeFileTool],
+    tools: [writeFileTool, transferToNpmTestTool],
     name: 'write_file_expert',
-    prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.',
+    prompt: `You are a file writing expert. Please specify the name of the file you would like to write to.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
+    `,
     stateSchema: GraphState
   });
 
@@ -122,10 +132,11 @@ export const MainGraphRun = async ({
 
   const npmTestAgent = createReactAgent({
     llm: llm,
-    tools: [npmTestTool],
+    tools: [npmTestTool, transferToWriteFileTool, transferToReadFileTool, transferToCreateFileTool],
     name: 'npm_test_expert',
     prompt: `You are a test runner expert. Your task is to execute all relevant tests in the project using the "npm_test" tool from the root directory.
     Use the provided testRegex to accurately match and select test files.
+    If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
     `,
     responseFormat: testResultFormat,
     stateSchema: GraphState
@@ -133,9 +144,11 @@ export const MainGraphRun = async ({
 
   const yarnTestAgent = createReactAgent({
     llm: llm,
-    tools: [yarnTestTool],
+    tools: [yarnTestTool, transferToWriteFileTool, transferToReadFileTool, transferToCreateFileTool],
     name: 'yarn_test_expert',
-    prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.',
+    prompt: `You are a test runner expert. Please use the "yarn_test" tool to run the tests.
+    If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
+    `,
     responseFormat: testResultFormat,
     stateSchema: GraphState
   });

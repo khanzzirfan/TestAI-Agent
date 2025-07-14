@@ -35269,7 +35269,7 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
     });
     const createFileAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
-        tools: [tools_1.createFileTool],
+        tools: [tools_1.createFileTool, tools_1.transferToNpmTestTool],
         name: 'create_file_expert',
         prompt: `
           You are a file creation expert.
@@ -35277,21 +35277,26 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
           The example test content is {state.exampleTestFiles}
           When creating a file, use these state values to determine the correct absolute path.
           Do NOT use placeholders or random paths.
+          If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
             `.trim(),
         stateSchema: state_1.GraphState
     });
     const readFileAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
-        tools: [tools_1.readFileTool],
+        tools: [tools_1.readFileTool, tools_1.transferToNpmTestTool],
         name: 'read_file_expert',
-        prompt: 'You are a file reading expert. Please specify the name of the file you would like to read.',
+        prompt: `You are a file reading expert. Please specify the name of the file you would like to read.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
+    `,
         stateSchema: state_1.GraphState
     });
     const writeFileAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
-        tools: [tools_1.writeFileTool],
+        tools: [tools_1.writeFileTool, tools_1.transferToNpmTestTool],
         name: 'write_file_expert',
-        prompt: 'You are a file writing expert. Please specify the name of the file you would like to write to.',
+        prompt: `You are a file writing expert. Please specify the name of the file you would like to write to.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
+    `,
         stateSchema: state_1.GraphState
     });
     const nodeExecutorAgent = (0, prebuilt_1.createReactAgent)({
@@ -35303,19 +35308,22 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
     });
     const npmTestAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
-        tools: [tools_1.npmTestTool],
+        tools: [tools_1.npmTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
         name: 'npm_test_expert',
         prompt: `You are a test runner expert. Your task is to execute all relevant tests in the project using the "npm_test" tool from the root directory.
     Use the provided testRegex to accurately match and select test files.
+    If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
     `,
         responseFormat: structured_format_1.testResultFormat,
         stateSchema: state_1.GraphState
     });
     const yarnTestAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
-        tools: [tools_1.yarnTestTool],
+        tools: [tools_1.yarnTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
         name: 'yarn_test_expert',
-        prompt: 'You are a test runner expert. Please use the "yarn_test" tool to run the tests.',
+        prompt: `You are a test runner expert. Please use the "yarn_test" tool to run the tests.
+    If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
+    `,
         responseFormat: structured_format_1.testResultFormat,
         stateSchema: state_1.GraphState
     });
@@ -36318,6 +36326,76 @@ exports.findExampleTestFileAndItsContent = new tools_1.DynamicStructuredTool({
 
 /***/ }),
 
+/***/ 87926:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.transferToCreateFileTool = exports.transferToReadFileTool = exports.transferToWriteFileTool = exports.transferToNpmInstallTool = exports.transferToNpmTestTool = void 0;
+const zod_1 = __nccwpck_require__(50924);
+const tools_1 = __nccwpck_require__(3477);
+// Transfer tools
+// Define a tool to signal intent to hand off to a different agent
+// Note: this is not using Command(goto) syntax for navigating to different agents:
+// `workflow()` below handles the handoffs explicitly
+exports.transferToNpmTestTool = (0, tools_1.tool)(async () => {
+    return 'Successfully transferred to npm test tool';
+}, {
+    name: 'transferToNpmTestTool',
+    description: 'Ask npm test tool for help.',
+    schema: zod_1.z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+});
+exports.transferToNpmInstallTool = (0, tools_1.tool)(async () => {
+    return 'Successfully transferred to npm install tool';
+}, {
+    name: 'transferToNpmInstallTool',
+    description: 'Ask npm install tool for help.',
+    schema: zod_1.z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+});
+// transfer to write_file tool
+exports.transferToWriteFileTool = (0, tools_1.tool)(async () => {
+    return 'Successfully transferred to write file tool';
+}, {
+    name: 'transferToWriteFileTool',
+    description: 'Ask write file tool for help.',
+    schema: zod_1.z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+});
+// transfer to read_file tool
+exports.transferToReadFileTool = (0, tools_1.tool)(async () => {
+    return 'Successfully transferred to read file tool';
+}, {
+    name: 'transferToReadFileTool',
+    description: 'Ask read file tool for help.',
+    schema: zod_1.z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+});
+// transfer to create_file tool
+exports.transferToCreateFileTool = (0, tools_1.tool)(async () => {
+    return 'Successfully transferred to create file tool';
+}, {
+    name: 'transferToCreateFileTool',
+    description: 'Ask create file tool for help.',
+    schema: zod_1.z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+});
+
+
+/***/ }),
+
 /***/ 72003:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -36342,6 +36420,7 @@ __exportStar(__nccwpck_require__(48716), exports);
 __exportStar(__nccwpck_require__(28834), exports);
 __exportStar(__nccwpck_require__(37543), exports);
 __exportStar(__nccwpck_require__(32546), exports);
+__exportStar(__nccwpck_require__(87926), exports);
 
 
 /***/ }),

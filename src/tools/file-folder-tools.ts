@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ToolMessage } from '@langchain/core/messages';
-import { DynamicStructuredTool } from '@langchain/core/tools';
+import { DynamicStructuredTool, tool } from '@langchain/core/tools';
 import { Command } from '@langchain/langgraph';
 import fs from 'fs';
 import path from 'path';
