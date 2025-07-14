@@ -35957,7 +35957,9 @@ exports.readFileTool = new tools_1.DynamicStructuredTool({
                     testFileFound: true,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: `File read successfully from ${absolutePath}`,
+                            content: `File read successfully from ${absolutePath}. \n
+              Content:\n${result.content}\n\n
+              `,
                             tool_call_id: config.toolCall.id
                         })
                     ]
@@ -36031,7 +36033,10 @@ exports.findFileTool = new tools_1.DynamicStructuredTool({
                     messages: [
                         new messages_1.ToolMessage({
                             content: `Found ${result.files?.length || 0} file(s) matching "${fileName}" in "${rootDir}":\n` +
-                                (result.files?.length ? result.files.map(f => `${f.fileName} at ${f.path}`).join('\n') : ''),
+                                (result.files?.length ? result.files.map(f => `${f.fileName} at ${f.path}`).join('\n') : '') +
+                                `\n Content:\n` +
+                                (result.files?.length ? result.files.map(f => f.content).join('\n') : '') +
+                                `\n\n`,
                             tool_call_id: config.toolCall.id
                         })
                     ]
