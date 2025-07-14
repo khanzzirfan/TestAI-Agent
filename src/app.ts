@@ -185,11 +185,11 @@ export const MainGraphRun = async ({
 
   Guidelines:
   1. Find example test files in the project directory for learning and observation.
-  2. Verify the given source file exists
+  2. Verify the given source file exists.
   3. Verify the corresponding test file exists for the source file.
   4. If the test file does not exist, create a new test file and write the test content.
   5. If the test file exists, improve existing tests or create new tests for the source file.
-  6. Run the tests with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
+  6. Run the test for source file with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
   7. Fix any failures by ignoring warnings. If component missing statements or imports, add them to the test file and update the file using correct tool call.
   8. Run the tests again to ensure they pass and coverage is collected. 
   9. Provide final summary of the test results and coverage details in markdown format.

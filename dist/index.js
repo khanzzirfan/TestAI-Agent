@@ -35364,7 +35364,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
   3. Verify the corresponding test file exists for the source file.
   4. If the test file does not exist, create a new test file and write the test content.
   5. If the test file exists, improve existing tests or create new tests for the source file.
-  6. Run the tests with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
+  6. Run the test for source file with coverage enabled in silent mode and json output. Test Coverage should be collected for the source file only.
   7. Fix any failures by ignoring warnings. If component missing statements or imports, add them to the test file and update the file using correct tool call.
   8. Run the tests again to ensure they pass and coverage is collected. 
   9. Provide final summary of the test results and coverage details in markdown format.
@@ -36287,7 +36287,8 @@ exports.findExampleTestFileAndItsContent = new tools_1.DynamicStructuredTool({
                     exampleTestFiles: exampleFiles,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: `Found ${exampleFiles.length} example test files`,
+                            content: `Found ${exampleFiles.length} example test files. example file content:\n` +
+                                exampleFiles.map(f => `- ${f.path} \n${f.content}`).join('\n'),
                             tool_call_id: config.toolCall.id
                         })
                     ]

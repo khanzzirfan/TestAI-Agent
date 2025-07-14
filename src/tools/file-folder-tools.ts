@@ -772,7 +772,9 @@ export const findExampleTestFileAndItsContent = new DynamicStructuredTool({
           exampleTestFiles: exampleFiles,
           messages: [
             new ToolMessage({
-              content: `Found ${exampleFiles.length} example test files`,
+              content:
+                `Found ${exampleFiles.length} example test files. example file content:\n` +
+                exampleFiles.map(f => `- ${f.path} \n${f.content}`).join('\n'),
               tool_call_id: config.toolCall.id
             })
           ]
