@@ -256,7 +256,8 @@ export const writeFileTool = new DynamicStructuredTool({
           testFileFound: true,
           messages: [
             new ToolMessage({
-              content: `File written successfully at ${fullPath}`,
+              content: `File written successfully at ${fullPath}. File name: ${fileName}. 
+              Proceed with the next steps to run tests using the 'npm_test' or 'yarn_test' tool.`,
               tool_call_id: config.toolCall.id
             })
           ]

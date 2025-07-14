@@ -121,7 +121,7 @@ export const npmTestTool = new DynamicStructuredTool({
       const testCommandCheck = command.includes('test');
       let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
       // Add options to the command
-      if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
+      // if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
       // suffix json
       fullCommand += ` -- --json`;
       if (silent) fullCommand += ' --silent';
@@ -168,7 +168,8 @@ export const npmTestTool = new DynamicStructuredTool({
           },
           messages: [
             new ToolMessage({
-              content: `Error executing test command: ${error.message}`,
+              content: `Error executing test command: ${error.message}. Check if the test file exists and is valid.
+              use write_file tool to create or update the test file.`,
               tool_call_id: config.toolCall.id
             })
           ]

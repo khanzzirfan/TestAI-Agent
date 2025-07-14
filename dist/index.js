@@ -35828,7 +35828,8 @@ exports.writeFileTool = new tools_1.DynamicStructuredTool({
                     testFileFound: true,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: `File written successfully at ${fullPath}`,
+                            content: `File written successfully at ${fullPath}. File name: ${fileName}. 
+              Proceed with the next steps to run tests using the 'npm_test' or 'yarn_test' tool.`,
                             tool_call_id: config.toolCall.id
                         })
                     ]
@@ -36469,8 +36470,7 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
             const testCommandCheck = command.includes('test');
             let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
             // Add options to the command
-            if (options.directory_path)
-                fullCommand += ` --prefix ${options.directory_path}`;
+            // if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
             // suffix json
             fullCommand += ` -- --json`;
             if (silent)
@@ -36519,7 +36519,8 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
                     },
                     messages: [
                         new messages_1.ToolMessage({
-                            content: `Error executing test command: ${error.message}`,
+                            content: `Error executing test command: ${error.message}. Check if the test file exists and is valid.
+              use write_file tool to create or update the test file.`,
                             tool_call_id: config.toolCall.id
                         })
                     ]
