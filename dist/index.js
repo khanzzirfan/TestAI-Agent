@@ -36450,61 +36450,64 @@ exports.NodeExecutorTool = new tools_1.DynamicStructuredTool({
 });
 exports.npmTestTool = new tools_1.DynamicStructuredTool({
     name: 'npm_test',
-    description: 'Executes npm test commands from root directory with support for various options including coverage and watch mode',
+    description: 'Executes npm test commands from root directory with support for various options including coverage, json mode, silent mode, testPath and snapshot updates.',
     schema: zod_1.z.object({
-        command: zod_1.z.string().describe('npm command to execute'),
-        silent: zod_1.z.boolean().describe('Run command in silent mode'),
-        json: zod_1.z.boolean().describe('Output test results as JSON'),
-        testRegex: zod_1.z.string().describe('Regular expression to match test files'),
+        command: zod_1.z.string().describe('npm command to execute, e.g. test, test <file>, etc.'),
+        silent: zod_1.z.boolean().default(true).describe('Run command in silent mode'),
+        json: zod_1.z.boolean().default(true).describe('Output test results as JSON'),
+        findRelatedTests: zod_1.z.string().describe('Run tests related to a specific file'),
         options: zod_1.z
             .object({
-            directory_path: zod_1.z
-                .string()
-                .optional()
-                .describe('path to the directory where the command will be executed. i.e where the package.json file is located'),
-            testFilePath: zod_1.z.string().optional().describe('Path to the single test file to run and collect coverage'),
-            coverage: zod_1.z.boolean().optional().describe('Run tests with coverage'),
-            watch: zod_1.z.boolean().optional().describe('Run tests in watch mode'),
+            directory_path: zod_1.z.string().optional().describe('Path where package.json is located (cwd override)'),
+            testFilePath: zod_1.z.string().optional().describe('Path to a single test file to run and collect coverage from'),
+            coverage: zod_1.z.boolean().optional().describe('Enable code coverage'),
+            watch: zod_1.z.boolean().optional().describe('Enable watch mode'),
             updateSnapshots: zod_1.z.boolean().optional().describe('Update test snapshots')
         })
             .optional()
     }),
-    func: async ({ command, silent = true, testRegex, options = {} }, runManager, config) => {
+    func: async ({ command, silent = true, json = true, findRelatedTests, options = {} }, runManager, config) => {
         try {
-            const testCommandCheck = command.includes('test');
-            let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
-            // Add options to the command
-            // if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
-            // suffix json
-            fullCommand += ` -- --json`;
-            if (silent)
-                fullCommand += ' --silent';
-            if (options.coverage && !fullCommand.includes('--coverage') && options.testFilePath) {
-                fullCommand += ' --coverage';
-                // run coverage with test file name --collectCoverageFrom=testFileName
-                fullCommand += ` --collectCoverageFrom=**/${options.testFilePath}*`;
+            const { directory_path, testFilePath, coverage, watch, updateSnapshots } = options;
+            // Ensure command starts with `npm`
+            let baseCommand = command.trim();
+            if (!baseCommand.startsWith('npm')) {
+                baseCommand = `npm test ${baseCommand}`;
             }
-            // if (options.json) fullCommand += " --json";
-            if (testRegex)
-                fullCommand += ` --testRegex="${testRegex}"`;
-            if (options.updateSnapshots)
-                fullCommand += ' -u';
-            // append silent flag to suppress npm notices
-            // fullCommand += " --silent 2>/dev/null";
-            let { stdout, stderr } = await nodeExecutor(fullCommand);
-            // check the length of stdout and trim it to max 10000 characters
-            if (stdout.length > 10000) {
-                console.warn('stdout is too long, trimming to 10000 characters');
-                stdout = stdout.substring(0, 5000);
+            // Prepare arguments
+            const args = [];
+            if (findRelatedTests) {
+                args.push('--findRelatedTests', findRelatedTests);
+            }
+            if (json)
+                args.push('--json');
+            if (silent)
+                args.push('--silent');
+            if (coverage && testFilePath) {
+                args.push('--coverage', `--collectCoverageFrom=**/${testFilePath}*`);
+            }
+            if (watch)
+                args.push('--watch');
+            if (updateSnapshots)
+                args.push('-u');
+            // Combine full command
+            let fullCommand = `${baseCommand} -- ${args.join(' ')}`;
+            // Execute command (in directory if provided)
+            const execOptions = directory_path ? { cwd: directory_path } : undefined;
+            let { stdout = '', stderr = '' } = await nodeExecutor(fullCommand, execOptions);
+            // Truncate output if needed
+            const MAX_OUTPUT_LENGTH = 5000;
+            if (stdout.length > MAX_OUTPUT_LENGTH) {
+                console.warn('stdout is too long, trimming to 5000 characters');
+                stdout = stdout.substring(0, MAX_OUTPUT_LENGTH);
             }
             return new langgraph_1.Command({
-                // update state keys
                 update: {
                     testResults: { success: true, output: JSON.stringify(stdout) },
                     hasError: false,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: 'Test command executed successfully',
+                            content: 'Test command executed successfully. Analyze the output for results.',
                             tool_call_id: config.toolCall.id
                         })
                     ]
@@ -36513,7 +36516,6 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
         }
         catch (error) {
             return new langgraph_1.Command({
-                // update state keys
                 update: {
                     hasError: true,
                     testResults: {
@@ -36523,8 +36525,7 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
                     },
                     messages: [
                         new messages_1.ToolMessage({
-                            content: `Error executing test command: ${error.message}. Check if the test file exists and is valid.
-              use write_file tool to create or update the test file.`,
+                            content: `Error executing test command: ${error.message}. Check if the test file exists and is valid. Use the write_file tool to create or update the test file.`,
                             tool_call_id: config.toolCall.id
                         })
                     ]
