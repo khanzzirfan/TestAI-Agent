@@ -579,7 +579,9 @@ export const findTestFileTool = new DynamicStructuredTool({
           testFileFound,
           messages: [
             new ToolMessage({
-              content: testFileFound ? ` Found test file: ${testFile.path}` : 'No matching test file found',
+              content: testFileFound ? ` Found test file: ${testFile.path}. 
+              
+              ` : 'No matching test file found',
               tool_call_id: config.toolCall.id
             })
           ]

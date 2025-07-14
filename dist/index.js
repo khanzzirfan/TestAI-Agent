@@ -35243,8 +35243,7 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
         tools: [tools_1.findFileTool, tools_1.findTestFileTool],
         name: 'find_files_expert',
         prompt: "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for.",
-        stateSchema: state_1.GraphState,
-        responseFormat: structured_format_1.findFilesAndTestFilesResponseFormat
+        stateSchema: state_1.GraphState
     });
     // find example test files
     const findExampleTestFileAgent = (0, prebuilt_1.createReactAgent)({
@@ -36110,7 +36109,7 @@ exports.findTestFileTool = new tools_1.DynamicStructuredTool({
                     testFileFound,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: testFileFound ? ` Found test file: ${testFile.path}` : 'No matching test file found',
+                            content: testFileFound ? ` Found test file: ${testFile.path}. ` : 'No matching test file found',
                             tool_call_id: config.toolCall.id
                         })
                     ]

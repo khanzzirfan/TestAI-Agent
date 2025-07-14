@@ -53,8 +53,7 @@ export const MainGraphRun = async ({
     name: 'find_files_expert',
     prompt:
       "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for.",
-    stateSchema: GraphState,
-    responseFormat: findFilesAndTestFilesResponseFormat
+    stateSchema: GraphState
   });
 
   // find example test files
