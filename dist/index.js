@@ -35325,7 +35325,6 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         agents: [
             findFilesAgent,
             findExampleTestFileAgent,
-            findPackageManagerFileAgent,
             createFileAgent,
             readFileAgent,
             writeFileAgent,
@@ -35337,7 +35336,6 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
             'For finding files, use find_files. ' +
             'For finding example test files, use find_example_test_file_and_its_content. ' +
-            'For finding package manager files and script commands, use find_package_manager_file. ' +
             'For creating files, use create_file. ' +
             'For reading files, use read_file. ' +
             'For writing files, use write_file. ' +
@@ -37034,7 +37032,7 @@ const langgraph_1 = __nccwpck_require__(39405);
 // Define the graph state with additional properties
 exports.GraphState = langgraph_1.Annotation.Root({
     messages: (0, langgraph_1.Annotation)({
-        reducer: (x, y) => x.concat(y)
+        reducer: langgraph_1.messagesStateReducer
     }),
     iteration: (0, langgraph_1.Annotation)({
         reducer: (x, y) => y ?? x ?? 0,

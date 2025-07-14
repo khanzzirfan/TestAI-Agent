@@ -1,10 +1,10 @@
 import { BaseMessage } from '@langchain/core/messages';
-import { Annotation } from '@langchain/langgraph';
+import { Messages, Annotation, messagesStateReducer } from '@langchain/langgraph';
 
 // Define the graph state with additional properties
 export const GraphState = Annotation.Root({
-  messages: Annotation<BaseMessage[]>({
-    reducer: (x, y) => x.concat(y)
+  messages: Annotation<BaseMessage[], Messages>({
+    reducer: messagesStateReducer
   }),
   iteration: Annotation<number>({
     reducer: (x, y) => y ?? x ?? 0,
