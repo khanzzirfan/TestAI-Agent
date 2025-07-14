@@ -35232,7 +35232,7 @@ async function loadSupervisor() {
     const supervisor = await __nccwpck_require__.e(/* import() */ 933).then(__nccwpck_require__.bind(__nccwpck_require__, 28933));
     return supervisor;
 }
-const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDefaultPrompt }) => {
+const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, useDefaultPrompt }) => {
     // Initialize memory to persist state between graph runs
     const checkpointer = new langgraph_1.MemorySaver();
     const inMemoryStore = new langgraph_1.InMemoryStore();

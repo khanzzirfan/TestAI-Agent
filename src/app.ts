@@ -31,7 +31,7 @@ async function loadSupervisor() {
 
 export const MainGraphRun = async ({
   fileName,
-  recursionLimit,
+  recursionLimit = 25,
   additionalPrompt,
   useDefaultPrompt
 }: {
