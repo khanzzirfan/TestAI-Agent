@@ -476,7 +476,9 @@ export const findFileTool = new DynamicStructuredTool({
           filePath: result.files?.map(f => f.path).join('\n'),
           messages: [
             new ToolMessage({
-              content: result.message,
+              content:
+                `Found ${result.files?.length || 0} file(s) matching "${fileName}" in "${rootDir}":\n` +
+                (result.files?.length ? result.files.map(f => `${f.fileName} at ${f.path}`).join('\n') : ''),
               tool_call_id: config.toolCall.id
             })
           ]
@@ -578,9 +580,7 @@ export const findTestFileTool = new DynamicStructuredTool({
           testFileFound,
           messages: [
             new ToolMessage({
-              content: testFileFound
-                ? `Successfully found test file at ${testFile.path}`
-                : 'No matching test file found',
+              content: testFileFound ? ` Found test file: ${testFile.path}` : 'No matching test file found',
               tool_call_id: config.toolCall.id
             })
           ]
