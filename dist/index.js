@@ -35306,7 +35306,9 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         llm: llm_1.llm,
         tools: [tools_1.npmTestTool],
         name: 'npm_test_expert',
-        prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests from root directory path.',
+        prompt: `You are a test runner expert. Your task is to execute all relevant tests in the project using the "npm_test" tool from the root directory.
+    Use the provided testRegex to accurately match and select test files.
+    `,
         responseFormat: structured_format_1.testResultFormat,
         stateSchema: state_1.GraphState
     });
@@ -36448,6 +36450,7 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
         command: zod_1.z.string().describe('npm command to execute'),
         silent: zod_1.z.boolean().describe('Run command in silent mode'),
         json: zod_1.z.boolean().describe('Output test results as JSON'),
+        testRegex: zod_1.z.string().describe('Regular expression to match test files'),
         options: zod_1.z
             .object({
             directory_path: zod_1.z
@@ -36457,12 +36460,11 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
             testFilePath: zod_1.z.string().optional().describe('Path to the single test file to run and collect coverage'),
             coverage: zod_1.z.boolean().optional().describe('Run tests with coverage'),
             watch: zod_1.z.boolean().optional().describe('Run tests in watch mode'),
-            testRegex: zod_1.z.string().optional().describe('Regular expression to match test files'),
             updateSnapshots: zod_1.z.boolean().optional().describe('Update test snapshots')
         })
             .optional()
     }),
-    func: async ({ command, silent = true, options = {} }, runManager, config) => {
+    func: async ({ command, silent = true, testRegex, options = {} }, runManager, config) => {
         try {
             const testCommandCheck = command.includes('test');
             let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -36479,8 +36481,8 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
                 fullCommand += ` --collectCoverageFrom=**/${options.testFilePath}*`;
             }
             // if (options.json) fullCommand += " --json";
-            if (options.testRegex)
-                fullCommand += ` --testRegex="${options.testRegex}"`;
+            if (testRegex)
+                fullCommand += ` --testRegex="${testRegex}"`;
             if (options.updateSnapshots)
                 fullCommand += ' -u';
             // append silent flag to suppress npm notices
@@ -36533,6 +36535,7 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
         command: zod_1.z.string().describe('yarn command to execute'),
         silent: zod_1.z.boolean().describe('Run command in silent mode'),
         json: zod_1.z.boolean().describe('Output test results as JSON'),
+        testRegex: zod_1.z.string().describe('Regular expression to match test files'),
         options: zod_1.z
             .object({
             directory_path: zod_1.z
@@ -36542,13 +36545,12 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
             coverage: zod_1.z.boolean().optional().describe('Run tests with coverage'),
             json: zod_1.z.boolean().optional().describe('Output test results as JSON'),
             watch: zod_1.z.boolean().optional().describe('Run tests in watch mode'),
-            testRegex: zod_1.z.string().optional().describe('Regular expression to match test files'),
             updateSnapshots: zod_1.z.boolean().optional().describe('Update test snapshots'),
             testFilePath: zod_1.z.string().optional().describe('Path to the single test file to run and collect coverage')
         })
             .optional()
     }),
-    func: async ({ command, silent = true, options = {} }, runManager, config) => {
+    func: async ({ command, silent = true, testRegex, options = {} }, runManager, config) => {
         try {
             const testCommandCheck = command.includes('test');
             let fullCommand = !command.startsWith('yarn') ? `yarn ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -36566,8 +36568,8 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
             }
             if (options.watch)
                 fullCommand += ' --watch';
-            if (options.testRegex)
-                fullCommand += ` --testRegex="${options.testRegex}"`;
+            if (testRegex)
+                fullCommand += ` --testRegex="${testRegex}"`;
             if (options.updateSnapshots)
                 fullCommand += ' -u';
             let { stdout, stderr } = await nodeExecutor(fullCommand);

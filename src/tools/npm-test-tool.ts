@@ -100,6 +100,7 @@ export const npmTestTool = new DynamicStructuredTool({
     command: z.string().describe('npm command to execute'),
     silent: z.boolean().describe('Run command in silent mode'),
     json: z.boolean().describe('Output test results as JSON'),
+    testRegex: z.string().describe('Regular expression to match test files'),
     options: z
       .object({
         directory_path: z
@@ -111,12 +112,11 @@ export const npmTestTool = new DynamicStructuredTool({
         testFilePath: z.string().optional().describe('Path to the single test file to run and collect coverage'),
         coverage: z.boolean().optional().describe('Run tests with coverage'),
         watch: z.boolean().optional().describe('Run tests in watch mode'),
-        testRegex: z.string().optional().describe('Regular expression to match test files'),
         updateSnapshots: z.boolean().optional().describe('Update test snapshots')
       })
       .optional()
   }),
-  func: async ({ command, silent = true, options = {} }, runManager: any, config: any) => {
+  func: async ({ command, silent = true, testRegex, options = {} }, runManager: any, config: any) => {
     try {
       const testCommandCheck = command.includes('test');
       let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -130,8 +130,9 @@ export const npmTestTool = new DynamicStructuredTool({
         // run coverage with test file name --collectCoverageFrom=testFileName
         fullCommand += ` --collectCoverageFrom=**/${options.testFilePath}*`;
       }
+
       // if (options.json) fullCommand += " --json";
-      if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`;
+      if (testRegex) fullCommand += ` --testRegex="${testRegex}"`;
       if (options.updateSnapshots) fullCommand += ' -u';
 
       // append silent flag to suppress npm notices
@@ -184,6 +185,7 @@ export const yarnTestTool = new DynamicStructuredTool({
     command: z.string().describe('yarn command to execute'),
     silent: z.boolean().describe('Run command in silent mode'),
     json: z.boolean().describe('Output test results as JSON'),
+    testRegex: z.string().describe('Regular expression to match test files'),
     options: z
       .object({
         directory_path: z
@@ -195,13 +197,12 @@ export const yarnTestTool = new DynamicStructuredTool({
         coverage: z.boolean().optional().describe('Run tests with coverage'),
         json: z.boolean().optional().describe('Output test results as JSON'),
         watch: z.boolean().optional().describe('Run tests in watch mode'),
-        testRegex: z.string().optional().describe('Regular expression to match test files'),
         updateSnapshots: z.boolean().optional().describe('Update test snapshots'),
         testFilePath: z.string().optional().describe('Path to the single test file to run and collect coverage')
       })
       .optional()
   }),
-  func: async ({ command, silent = true, options = {} }, runManager: any, config: any) => {
+  func: async ({ command, silent = true, testRegex, options = {} }, runManager: any, config: any) => {
     try {
       const testCommandCheck = command.includes('test');
       let fullCommand = !command.startsWith('yarn') ? `yarn ${testCommandCheck ? '' : 'test'} ${command}` : command;
@@ -216,7 +217,7 @@ export const yarnTestTool = new DynamicStructuredTool({
         fullCommand += ` --collectCoverageFrom="${options.testFilePath}"`;
       }
       if (options.watch) fullCommand += ' --watch';
-      if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`;
+      if (testRegex) fullCommand += ` --testRegex="${testRegex}"`;
       if (options.updateSnapshots) fullCommand += ' -u';
 
       let { stdout, stderr } = await nodeExecutor(fullCommand);

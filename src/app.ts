@@ -125,7 +125,9 @@ export const MainGraphRun = async ({
     llm: llm,
     tools: [npmTestTool],
     name: 'npm_test_expert',
-    prompt: 'You are a test runner expert. Please use the "npm_test" tool to run the tests from root directory path.',
+    prompt: `You are a test runner expert. Your task is to execute all relevant tests in the project using the "npm_test" tool from the root directory.
+    Use the provided testRegex to accurately match and select test files.
+    `,
     responseFormat: testResultFormat,
     stateSchema: GraphState
   });
