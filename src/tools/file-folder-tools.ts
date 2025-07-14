@@ -758,9 +758,6 @@ export const findExampleTestFileAndItsContent = new DynamicStructuredTool({
         }
         return {
           path: f.path,
-          size: f.metadata.size,
-          created: f.metadata.created,
-          modified: f.metadata.modified,
           content
         };
       });
@@ -768,13 +765,10 @@ export const findExampleTestFileAndItsContent = new DynamicStructuredTool({
       return new Command({
         // update state keys
         update: {
-          success: true,
           exampleTestFiles: exampleFiles,
           messages: [
             new ToolMessage({
-              content:
-                `Found ${exampleFiles.length} example test files. example file content:\n` +
-                exampleFiles.map(f => `- ${f.path} \n${f.content}`).join('\n'),
+              content: `Found ${exampleFiles.length} example test files. add to state`,
               tool_call_id: config.toolCall.id
             })
           ]

@@ -35275,6 +35275,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
         prompt: `
           You are a file creation expert.
           The source file path is: {state.filePath}
+          The example test content is {state.exampleTestFiles}
           When creating a file, use these state values to determine the correct absolute path.
           Do NOT use placeholders or random paths.
             `.trim(),
@@ -35360,7 +35361,7 @@ const MainGraphRun = async ({ fileName, recursionLimit, additionalPrompt, useDef
 
   Guidelines:
   1. Find example test files in the project directory for learning and observation.
-  2. Verify the given source file exists
+  2. Verify the given source file exists.
   3. Verify the corresponding test file exists for the source file.
   4. If the test file does not exist, create a new test file and write the test content.
   5. If the test file exists, improve existing tests or create new tests for the source file.
@@ -36274,21 +36275,16 @@ exports.findExampleTestFileAndItsContent = new tools_1.DynamicStructuredTool({
                 }
                 return {
                     path: f.path,
-                    size: f.metadata.size,
-                    created: f.metadata.created,
-                    modified: f.metadata.modified,
                     content
                 };
             });
             return new langgraph_1.Command({
                 // update state keys
                 update: {
-                    success: true,
                     exampleTestFiles: exampleFiles,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: `Found ${exampleFiles.length} example test files. example file content:\n` +
-                                exampleFiles.map(f => `- ${f.path} \n${f.content}`).join('\n'),
+                            content: `Found ${exampleFiles.length} example test files. add to state`,
                             tool_call_id: config.toolCall.id
                         })
                     ]
@@ -37085,6 +37081,10 @@ exports.GraphState = langgraph_1.Annotation.Root({
     packageManagerContent: (0, langgraph_1.Annotation)({
         reducer: (x, y) => y ?? x ?? {},
         default: () => ({})
+    }),
+    exampleTestFiles: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? [],
+        default: () => []
     })
 });
 

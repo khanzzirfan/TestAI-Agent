@@ -16,7 +16,6 @@ export const GraphState = Annotation.Root({
   fileName: Annotation<string>({
     reducer: (x, y) => y ?? x ?? ''
   }),
-
   fileContent: Annotation<string>({
     reducer: (x, y) => y ?? x ?? ''
   }),
@@ -52,6 +51,10 @@ export const GraphState = Annotation.Root({
   packageManagerContent: Annotation<any>({
     reducer: (x, y) => y ?? x ?? {},
     default: () => ({})
+  }),
+  exampleTestFiles: Annotation<any[]>({
+    reducer: (x, y) => y ?? x ?? [],
+    default: () => []
   })
 });
 

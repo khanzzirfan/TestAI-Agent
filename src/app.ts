@@ -90,6 +90,7 @@ export const MainGraphRun = async ({
     prompt: `
           You are a file creation expert.
           The source file path is: {state.filePath}
+          The example test content is {state.exampleTestFiles}
           When creating a file, use these state values to determine the correct absolute path.
           Do NOT use placeholders or random paths.
             `.trim(),
