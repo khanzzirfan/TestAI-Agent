@@ -1,13 +1,14 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+All notable changes to this project will be documented in this file. See
+[commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
 ## [0.1.69-alpha.56](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.55...v0.1.69-alpha.56) (2025-07-15)
 
-
 ### Bug Fixes
 
-* updated find tools specifications ([2080d1c](https://github.com/khanzzirfan/TestAI-Agent.git/commit/2080d1c313dbf398deda7b81dfc21af6a5c8ba6d))
+- updated find tools specifications
+  ([2080d1c](https://github.com/khanzzirfan/TestAI-Agent.git/commit/2080d1c313dbf398deda7b81dfc21af6a5c8ba6d))
 
 ## [0.1.69-alpha.55](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.54...v0.1.69-alpha.55) (2025-07-14)
 

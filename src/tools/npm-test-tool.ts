@@ -5,7 +5,30 @@ import { Command } from '@langchain/langgraph';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 
-const nodeExecutor = promisify(exec);
+// nodeExecutor: return status, stdout (filtered), and error message
+const nodeExecutor = async (cmd: string, options: any = {}) => {
+  try {
+    const { stdout } = await promisify(exec)(cmd, { ...options, maxBuffer: 1024 * 1024 * 10 });
+    // Filter out lines containing 'warning' (case-insensitive)
+    const filteredStdout = stdout
+      .toString()
+      .split('\n')
+      .filter((line: string) => !/warning/i.test(line))
+      .join('\n');
+    return { success: true, stdout: filteredStdout };
+  } catch (error: any) {
+    // Filter out warnings from error.stdout if present
+    let filteredStdout = '';
+    if (error.stdout) {
+      filteredStdout = error.stdout
+        .toString()
+        .split('\n')
+        .filter((line: string) => !/warning/i.test(line))
+        .join('\n');
+    }
+    return { success: false, error: error.message, stdout: filteredStdout };
+  }
+};
 
 export const NodeExecutorTool = new DynamicStructuredTool({
   name: 'npm_exec',
@@ -32,35 +55,28 @@ export const NodeExecutorTool = new DynamicStructuredTool({
       .optional()
   }),
   func: async ({ command, options = {} }, runManager: any, config: any) => {
-    try {
-      let fullCommand = command;
-      // Add options to the command
-      if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
-      if (options.force) fullCommand += ' --force';
-      if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
-      if (options.coverage) {
-        fullCommand += ' --coverage';
-        // run coverage with test file name --collectCoverageFrom=testFileName
-        if (options.testFilePath) {
-          fullCommand += ` --collectCoverageFrom="${options.testFilePath}"`;
-        }
+    let fullCommand = command;
+    // Add options to the command
+    if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
+    if (options.force) fullCommand += ' --force';
+    if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
+    if (options.coverage) {
+      fullCommand += ' --coverage';
+      // run coverage with test file name --collectCoverageFrom=testFileName
+      if (options.testFilePath) {
+        fullCommand += ` --collectCoverageFrom=\"${options.testFilePath}\"`;
       }
-      if (options.json) fullCommand += ' --json';
-      if (options.watch) fullCommand += ' --watch';
-      if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`;
-      if (options.updateSnapshots) fullCommand += ' -u';
+    }
+    if (options.json) fullCommand += ' --json';
+    if (options.watch) fullCommand += ' --watch';
+    if (options.testRegex) fullCommand += ` --testRegex=\"${options.testRegex}\"`;
+    if (options.updateSnapshots) fullCommand += ' -u';
 
-      let { stdout, stderr } = await nodeExecutor(fullCommand);
-      // check the length of stdout and trim it to max 10000 characters
-      if (stdout.length > 10000) {
-        console.warn('stdout is too long, trimming to 10000 characters');
-        stdout = stdout.substring(0, 5000);
-      }
-
+    const result = await nodeExecutor(fullCommand);
+    if (result.success) {
       return new Command({
-        // update state keys
         update: {
-          testResults: { success: true, output: JSON.stringify(stdout) },
+          testResults: { success: true, output: result.stdout },
           hasError: false,
           messages: [
             new ToolMessage({
@@ -70,19 +86,18 @@ export const NodeExecutorTool = new DynamicStructuredTool({
           ]
         }
       });
-    } catch (error: unknown | any) {
+    } else {
       return new Command({
-        // update state keys
         update: {
           hasError: true,
           testResults: {
             success: false,
-            error: error.message,
-            output: error.stdout || ''
+            error: result.error,
+            output: result.stdout
           },
           messages: [
             new ToolMessage({
-              content: `Error executing command: ${error.message}`,
+              content: `Error executing command: ${result.error}`,
               tool_call_id: config.toolCall.id
             })
           ]
@@ -146,22 +161,17 @@ export const npmTestTool = new DynamicStructuredTool({
 
       // Execute command (in directory if provided)
       const execOptions = directory_path ? { cwd: directory_path } : undefined;
-      let { stdout = '', stderr = '' } = await nodeExecutor(fullCommand, execOptions);
-
-      // Truncate output if needed
-      const MAX_OUTPUT_LENGTH = 5000;
-      if (stdout.length > MAX_OUTPUT_LENGTH) {
-        console.warn('stdout is too long, trimming to 5000 characters');
-        stdout = (stdout as string).substring(0, MAX_OUTPUT_LENGTH);
-      }
+      let result = await nodeExecutor(fullCommand, execOptions);
 
       return new Command({
         update: {
-          testResults: { success: true, output: JSON.stringify(stdout) },
-          hasError: false,
+          testResults: { success: result.success },
+          hasError: !result.success,
           messages: [
             new ToolMessage({
-              content: 'Test command executed successfully. Analyze the output for results.',
+              content: result.success
+                ? 'Test command executed successfully. Analyze the output for results.'
+                : `Error executing test command: ${result.error}. Check if the test file exists and is valid. Use the write_file tool to create or update the test file.`,
               tool_call_id: config.toolCall.id
             })
           ]
@@ -230,21 +240,17 @@ export const yarnTestTool = new DynamicStructuredTool({
       if (testRegex) fullCommand += ` --testRegex="${testRegex}"`;
       if (options.updateSnapshots) fullCommand += ' -u';
 
-      let { stdout, stderr } = await nodeExecutor(fullCommand);
-      // check the length of stdout and trim it to max 10000 characters
-      if (stdout.length > 10000) {
-        console.warn('stdout is too long, trimming to 10000 characters');
-        stdout = stdout.substring(0, 5000);
-      }
-
+      let result = await nodeExecutor(fullCommand);
       return new Command({
         // update state keys
         update: {
-          testResults: { success: true, output: JSON.stringify(stdout) },
-          hasError: false,
+          testResults: { success: result.success },
+          hasError: !result.success,
           messages: [
             new ToolMessage({
-              content: 'Yarn test command executed successfully',
+              content: result.success
+                ? 'Yarn test command executed successfully'
+                : `Error executing yarn test command: ${result.error}`,
               tool_call_id: config.toolCall.id
             })
           ]
@@ -299,12 +305,12 @@ export const InstallTools = [
         if (options.force) fullCommand += ' --force';
         if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
 
-        const { stdout, stderr } = await nodeExecutor(fullCommand);
+        const result = await nodeExecutor(fullCommand);
 
         return {
-          installResults: { success: true, output: stdout },
-          hasError: false,
-          messageValue: stdout
+          installResults: { success: result.success, output: result.stdout },
+          hasError: !result.success,
+          messageValue: result.success ? 'Install command executed successfully' : result.error
         };
       } catch (error: unknown | any) {
         return {
@@ -346,12 +352,12 @@ export const InstallTools = [
         if (options.force) fullCommand += ' --force';
         if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
 
-        const { stdout, stderr } = await nodeExecutor(fullCommand);
+        const result = await nodeExecutor(fullCommand);
 
         return {
-          installResults: { success: true, output: stdout },
-          hasError: false,
-          messageValue: stdout
+          installResults: { success: result.success, output: result.stdout },
+          hasError: !result.success,
+          messageValue: result.success ? 'Install command executed successfully' : result.error
         };
       } catch (error: unknown | any) {
         return {
@@ -393,12 +399,12 @@ export const InstallTools = [
         if (options.force) fullCommand += ' --force';
         if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
 
-        const { stdout, stderr } = await nodeExecutor(fullCommand);
+        const result = await nodeExecutor(fullCommand);
 
         return {
-          installResults: { success: true, output: stdout },
-          hasError: false,
-          messageValue: stdout
+          installResults: { success: result.success, output: result.stdout },
+          hasError: !result.success,
+          messageValue: result.success ? 'Install command executed successfully' : result.error
         };
       } catch (error: unknown | any) {
         return {
