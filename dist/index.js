@@ -35260,11 +35260,12 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
     // find package manager file
     const findPackageManagerFileAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
-        tools: [tools_1.findPackageManagerFileTool],
+        tools: [tools_1.findPackageManagerFileTool, tools_1.transferToNpmTestTool],
         name: 'find_package_manager_file_expert',
         prompt: 'You are a package manager file search expert. Please specify the package manager file you would like to find. ' +
             "You can use the 'find_package_manager_file' tool to search for a package manager file. " +
-            "The package manager is 'package.json' ",
+            "The package manager is 'package.json' " +
+            "if you need to transfer to another tool, use the 'transferToNpmTestTool' tool.",
         stateSchema: state_1.GraphState
     });
     const createFileAgent = (0, prebuilt_1.createReactAgent)({
@@ -35299,13 +35300,6 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
     `,
         stateSchema: state_1.GraphState
     });
-    const nodeExecutorAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.NodeExecutorTool],
-        name: 'node_expert',
-        prompt: 'You are a nodejs execution expert. Please use the "node_exec" tool to run the nodejs script.',
-        stateSchema: state_1.GraphState
-    });
     const npmTestAgent = (0, prebuilt_1.createReactAgent)({
         llm: llm_1.llm,
         tools: [tools_1.npmTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
@@ -35338,8 +35332,7 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
             readFileAgent,
             writeFileAgent,
             npmTestAgent,
-            yarnTestAgent,
-            nodeExecutorAgent
+            yarnTestAgent
         ],
         llm: llm_1.llm,
         prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
@@ -35350,8 +35343,7 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
             'For writing files, use write_file. ' +
             'For updating files, use write_file. ' +
             'For modifying files, use write_file. ' +
-            'For running tests, use npm_test.' +
-            'For running nodejs scripts, use node_exec.',
+            'For running tests, use npm_test.',
         supervisorName: 'code_assistant_supervisor',
         outputMode: 'full_history',
         stateSchema: state_1.GraphState
@@ -35645,32 +35637,36 @@ const keys_1 = __importDefault(__nccwpck_require__(26741));
 const difference_1 = __importDefault(__nccwpck_require__(57294));
 // Configuration constants
 const DEFAULT_EXCLUDE_DIRS = ['node_modules', 'dist', 'coverage', '.git', 'build'];
-const findFileRecursively = (searchPath, targetFile, excludeDirs = ['node_modules', 'public', 'dist', 'coverage', '.git']) => {
+// Simplified findFileRecursively for only file name, path, content, and path pattern support
+const findFileRecursively = (searchPath, targetPattern, excludeDirs = ['node_modules', 'public', 'dist', 'coverage', '.git']) => {
     let results = [];
+    const isPathPattern = targetPattern.includes(path_1.default.sep);
     const search = (currentDir) => {
+        if (results.length >= 2)
+            return;
         try {
             const files = fs_1.default.readdirSync(currentDir);
             for (const file of files) {
+                if (results.length >= 2)
+                    break;
                 const filePath = path_1.default.join(currentDir, file);
                 const stat = fs_1.default.statSync(filePath);
                 if (stat.isDirectory()) {
                     if (!excludeDirs.includes(file)) {
-                        // Recurse into subdirectories that aren't excluded
                         search(filePath);
                     }
                 }
-                else if (file === targetFile || filePath.endsWith(targetFile)) {
-                    // Match either exact filename or path ending with the target
-                    results.push({
-                        path: filePath,
-                        isDirectory: false,
-                        metadata: {
-                            size: stat.size,
-                            created: stat.birthtime,
-                            modified: stat.mtime,
-                            accessed: stat.atime
+                else {
+                    if ((isPathPattern && filePath.endsWith(targetPattern)) ||
+                        (!isPathPattern && (file === targetPattern || filePath.endsWith(targetPattern)))) {
+                        try {
+                            const content = fs_1.default.readFileSync(filePath, 'utf8');
+                            results.push({ fileName: file, path: filePath, content });
                         }
-                    });
+                        catch (err) {
+                            results.push({ fileName: file, path: filePath, content: '[Error reading file]' });
+                        }
+                    }
                 }
             }
         }
@@ -35679,10 +35675,11 @@ const findFileRecursively = (searchPath, targetFile, excludeDirs = ['node_module
         }
     };
     search(searchPath);
-    return results;
+    return results.slice(0, 2);
 };
 const listFilesRecursively = (dir, excludeDirs = ['node_modules', 'public', 'dist', 'coverage', '.git'], filePattern = null) => {
     let results = [];
+    const isPathPattern = filePattern ? filePattern.includes(path_1.default.sep) : false;
     const listFiles = (currentDir) => {
         try {
             const files = fs_1.default.readdirSync(currentDir);
@@ -35695,15 +35692,21 @@ const listFilesRecursively = (dir, excludeDirs = ['node_modules', 'public', 'dis
                     }
                 }
                 else {
-                    if (!filePattern || new RegExp(filePattern).test(file)) {
+                    if (!filePattern ||
+                        (isPathPattern && filePath.endsWith(filePattern)) ||
+                        (!isPathPattern && new RegExp(filePattern).test(file))) {
                         results.push({
                             path: filePath,
                             size: stat.size,
                             modified: stat.mtime,
                             created: stat.birthtime
                         });
+                        if (results.length >= 2)
+                            return; // Limit to 2 results
                     }
                 }
+                if (results.length >= 2)
+                    return;
             });
         }
         catch (error) {
@@ -35711,7 +35714,7 @@ const listFilesRecursively = (dir, excludeDirs = ['node_modules', 'public', 'dis
         }
     };
     listFiles(dir);
-    return results;
+    return results.slice(0, 2);
 };
 const validateFilePath = filePath => {
     if (!filePath)
@@ -35983,6 +35986,7 @@ exports.readFileTool = new tools_1.DynamicStructuredTool({
         }
     }
 });
+// Enhanced find file tool
 exports.findFileTool = new tools_1.DynamicStructuredTool({
     name: 'find_file',
     description: 'Recursively searches for a file and returns its content',
@@ -35993,50 +35997,22 @@ exports.findFileTool = new tools_1.DynamicStructuredTool({
         excludeDirs: zod_1.z.array(zod_1.z.string()).optional().describe('directories to exclude from search'),
         encoding: zod_1.z.string().optional().describe('encoding to use when reading file content')
     }),
-    func: async ({ path: filePath, excludeDirs = DEFAULT_EXCLUDE_DIRS, encoding = 'utf8' }, runManager, config) => {
+    func: async ({ path: filePath, excludeDirs = DEFAULT_EXCLUDE_DIRS }, runManager, config) => {
         try {
             const searchRoot = process.cwd();
             const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
-            const fileName = path_1.default.basename(filePath);
-            // Find all matching files and get their content
-            const results = findFileRecursively(rootDir, fileName, excludeDirs).map(location => {
-                try {
-                    return {
-                        fileName: path_1.default.basename(location.path),
-                        path: location.path,
-                        content: fs_1.default.readFileSync(location.path, encoding)
-                    };
-                }
-                catch (err) {
-                    return {
-                        path: location.path,
-                        content: null
-                    };
-                }
-            });
-            const result = results.length === 0
-                ? {
-                    exists: false,
-                    message: 'File not found'
-                }
-                : {
-                    exists: true,
-                    files: results,
-                    message: 'Files found'
-                };
+            const results = findFileRecursively(rootDir, filePath, excludeDirs);
             return new langgraph_1.Command({
-                // update state keys
                 update: {
-                    fileName: result.files?.map(f => f.fileName).join('\n'),
-                    fileContent: result.files?.map(f => f.content).join('\n'),
-                    filePath: result.files?.map(f => f.path).join('\n'),
+                    fileName: results.length > 0 ? results.map(res => `${res.fileName}, \n`).join(', ') : '',
+                    filePath: results.length > 0 ? results.map(res => `${res.path}, \n`).join(', ') : '',
+                    fileContent: results.length > 0 ? results.map(res => `${res.content}, \n`).join('\n') : '',
                     messages: [
                         new messages_1.ToolMessage({
-                            content: `Found ${result.files?.length || 0} file(s) matching "${fileName}" in "${rootDir}":\n` +
-                                (result.files?.length ? result.files.map(f => `${f.fileName} at ${f.path}`).join('\n') : '') +
-                                `\n Content:\n` +
-                                (result.files?.length ? result.files.map(f => f.content).join('\n') : '') +
-                                `\n\n`,
+                            content: results.length > 0
+                                ? `Found ${results.length} file(s):\n` +
+                                    results.map(f => `${f.fileName} at ${f.path} with content ${f.content}`).join('\n')
+                                : 'No matching file found',
                             tool_call_id: config.toolCall.id
                         })
                     ]
@@ -36045,7 +36021,6 @@ exports.findFileTool = new tools_1.DynamicStructuredTool({
         }
         catch (error) {
             return new langgraph_1.Command({
-                // update state keys
                 update: {
                     hasError: true,
                     messages: [
@@ -36059,6 +36034,41 @@ exports.findFileTool = new tools_1.DynamicStructuredTool({
         }
     }
 });
+// Move findTestFiles to top-level so it is defined before use
+const findTestFiles = (dir, sourcePattern, extensions) => {
+    let results = [];
+    const isPathPattern = sourcePattern && sourcePattern.includes(path_1.default.sep);
+    const sourceFileName = path_1.default.basename(sourcePattern, path_1.default.extname(sourcePattern));
+    const isMatchingTestFile = (fileName) => {
+        return extensions.some(ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`));
+    };
+    const search = (currentDir) => {
+        if (results.length >= 2)
+            return;
+        const files = fs_1.default.readdirSync(currentDir);
+        for (const file of files) {
+            if (results.length >= 2)
+                break;
+            const filePath = path_1.default.join(currentDir, file);
+            const stat = fs_1.default.statSync(filePath);
+            if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
+                search(filePath);
+            }
+            else if ((isPathPattern && filePath.endsWith(sourcePattern)) || (!isPathPattern && isMatchingTestFile(file))) {
+                try {
+                    const content = fs_1.default.readFileSync(filePath, 'utf8');
+                    results.push({ fileName: file, path: filePath, content });
+                }
+                catch (err) {
+                    results.push({ fileName: file, path: filePath, content: '[Error reading file]' });
+                }
+            }
+        }
+    };
+    search(dir);
+    return results.slice(0, 2);
+};
+// Enhanced test file finding tool
 exports.findTestFileTool = new tools_1.DynamicStructuredTool({
     name: 'find_test_file',
     description: 'Recursively finds and reads corresponding test file content',
@@ -36070,63 +36080,24 @@ exports.findTestFileTool = new tools_1.DynamicStructuredTool({
     }),
     func: async ({ sourcePath, extensions = ['.test.tsx', '.spec.tsx', '.test.ts', '.spec.ts', '.test.js', '.spec.js', '.test.jsx', '.spec.jsx'] }, runManager, config) => {
         try {
-            // Get the file name without extension to search for test files
             const searchRoot = process.cwd();
-            const sourceFileName = path_1.default.basename(sourcePath, path_1.default.extname(sourcePath));
             const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
-            // Function to check if a file is a test file for our source
-            const isMatchingTestFile = (fileName) => {
-                return extensions.some(ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`));
-            };
-            // Find matching test file recursively
-            const findTestFile = (dir) => {
-                let result = null;
-                const search = (currentDir) => {
-                    if (result)
-                        return; // Stop if we found a match
-                    const files = fs_1.default.readdirSync(currentDir);
-                    for (const file of files) {
-                        if (result)
-                            break; // Stop if we found a match
-                        const filePath = path_1.default.join(currentDir, file);
-                        const stat = fs_1.default.statSync(filePath);
-                        if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
-                            search(filePath); // Recurse into subdirectories
-                        }
-                        else if (isMatchingTestFile(file)) {
-                            try {
-                                const content = fs_1.default.readFileSync(filePath, 'utf8');
-                                result = {
-                                    path: filePath,
-                                    content: content
-                                };
-                                break;
-                            }
-                            catch (err) {
-                                console.warn(`Could not read file: ${filePath}`);
-                            }
-                        }
-                    }
-                };
-                search(dir);
-                return result;
-            };
-            const testFile = findTestFile(rootDir);
-            const testFileFound = !!testFile;
+            const results = findTestFiles(rootDir, sourcePath, extensions);
             return new langgraph_1.Command({
-                // update state keys
                 update: {
-                    testFileContent: testFile ? testFile.content : null,
-                    testFilePath: testFile ? testFile.path : null,
-                    testFileName: testFile ? path_1.default.basename(testFile.path) : null,
-                    testFileFound,
+                    testFileContent: results.length > 0
+                        ? results.map(res => `filename: ${res.fileName}: \n ${res.content} \n\n`).join('\n\n')
+                        : '',
+                    testFilePath: results.length > 0 ? results.map(res => `${res.path}\n\n`).join('\n\n') : [],
+                    testFileName: results.length > 0 ? results.map(res => `${res.fileName}\n\n`).join('\n\n') : [],
+                    testFileFound: results.length > 0,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: testFileFound
-                                ? ` Found test file: ${testFile.path}. \n
-              Content: ${testFile.content} \n
-              Use 'write_file' tool to create or update the test file if needed. Proceed with the next steps to run tests using the 'npm_test' or 'yarn_test' tool.
-              `
+                            content: results.length > 0
+                                ? `Found ${results.length} test file(s):\n` +
+                                    results
+                                        .map((f) => `${f.fileName} at ${f.path} content ${f.content}`)
+                                        .join('\n')
                                 : 'No matching test file found',
                             tool_call_id: config.toolCall.id
                         })
@@ -36136,10 +36107,10 @@ exports.findTestFileTool = new tools_1.DynamicStructuredTool({
         }
         catch (error) {
             return new langgraph_1.Command({
-                // update state keys
                 update: {
                     testFileContent: null,
                     testFileFound: false,
+                    hasError: true,
                     messages: [
                         new messages_1.ToolMessage({
                             content: `Error finding test file: ${error.message}`,

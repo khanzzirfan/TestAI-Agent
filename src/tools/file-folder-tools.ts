@@ -552,7 +552,6 @@ export const findTestFileTool = new DynamicStructuredTool({
           testFilePath: results.length > 0 ? results.map(res => `${res.path}\n\n`).join('\n\n') : [],
           testFileName: results.length > 0 ? results.map(res => `${res.fileName}\n\n`).join('\n\n') : [],
           testFileFound: results.length > 0,
-          hasError: results.length === 0,
           messages: [
             new ToolMessage({
               content:

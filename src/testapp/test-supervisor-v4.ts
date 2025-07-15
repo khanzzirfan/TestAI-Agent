@@ -14,6 +14,7 @@ import { findFilesAndTestFilesResponseFormat } from '../structured_format';
 import { GraphState } from '../utils/state';
 import { promisify } from 'util';
 import { exec } from 'child_process';
+import path from 'path';
 
 dotenv.config();
 
@@ -24,73 +25,77 @@ async function loadSupervisor() {
   return supervisor;
 }
 
+// Enhanced find file tool
 export const findFileTool = new DynamicStructuredTool({
   name: 'find_file',
   description: 'Recursively searches for a file and returns its content',
   schema: z.object({
     reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
-    fileName: z.string().describe('file name to search for'),
+    path: z.string().describe('path or name of the file to find'),
     searchRoot: z.string().optional().describe('current root directory to start search from'),
     excludeDirs: z.array(z.string()).optional().describe('directories to exclude from search'),
     encoding: z.string().optional().describe('encoding to use when reading file content')
   }),
   func: async (
     {
-      fileName: fileNamePath,
-      excludeDirs = [],
-      encoding = 'utf8'
+      path: filePath,
+      excludeDirs = []
     }: {
-      fileName: string;
+      path: string;
       excludeDirs?: string[];
-      encoding?: string;
     },
     runManager: any,
     config: any
   ) => {
     try {
-      const mockDummyResult = {
-        exists: true,
-        files: [
-          {
-            fileName: 'sumOfNumbers.js',
-            content: `function sum(a, b) {
+      console.log(`Searching for file: ${filePath} in root: ${excludeDirs.join(', ')}`);
+      const results = [
+        {
+          fileName: 'sumOfNumbers.js',
+          content: `function sum(a, b) {
                         return a + b;
                       }`,
-            path: '/mnt/c/code/project/src/sumOfNumbers.js'
-          }
-          // {
-          //   fileName: 'multipleNumbers.js',
-          //   content: `
-          //             function multiply(a, b) {
-          //               return a * b;
-          //             }`,
-          //   path: '/mnt/c/code/project/src/multipleNumbers.js'
-          // }
-        ],
-        message: 'Files found'
-      };
+          path: '/mnt/c/code/project/src/sumOfNumbers.js'
+        },
+        {
+          fileName: 'multipleNumbers.js',
+          content: `
+                      function multiply(a, b) {
+                        return a * b;
+                      }`,
+          path: '/mnt/c/code/project/src/multipleNumbers.js'
+        }
+      ];
 
       return new Command({
-        // update state keys
         update: {
-          fileName: mockDummyResult.files?.map(f => f.fileName).join('\n'),
-          fileContent: mockDummyResult.files?.map(f => f.content).join('\n'),
-          filePath: mockDummyResult.files?.map(f => f.path).join('\n'),
+          fileName: results.length > 0 ? results.map(res => `${res.fileName}, \n`).join(', ') : '',
+          filePath: results.length > 0 ? results.map(res => `${res.path}, \n`).join(', ') : '',
+          fileContent: results.length > 0 ? results.map(res => `${res.content}, \n`).join('\n') : '',
           messages: [
             new ToolMessage({
-              content: `Files found: ${mockDummyResult.files?.map(f => f.path).join(', ')}.`,
+              content:
+                results.length > 0
+                  ? `Found ${results.length} file(s):\n` +
+                    results.map(f => `${f.fileName} at ${f.path} with content ${f.content}`).join('\n')
+                  : 'No matching file found',
               tool_call_id: config.toolCall.id
             })
           ]
         }
       });
     } catch (error: any) {
-      return {
-        messageValue: {
-          exists: false,
-          error: error.message
+      return new Command({
+        update: {
+          hasError: true,
+          messages: [
+            new ToolMessage({
+              content: `Error finding file: ${error.message}`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
         }
-      };
+      });
     }
   }
 });
@@ -215,48 +220,57 @@ export const testResultFormat = z.object({
 export const npmTestTool = new DynamicStructuredTool({
   name: 'npm_test',
   description:
-    'Executes npm test commands from root directory with support for various options including coverage and watch mode',
+    'Executes npm test commands from root directory with support for various options including coverage, json mode, silent mode, testPath and snapshot updates.',
   schema: z.object({
-    command: z.string().describe('npm command to execute'),
-    silent: z.boolean().describe('Run command in silent mode'),
-    json: z.boolean().describe('Output test results as JSON'),
+    command: z.string().describe('npm command to execute, e.g. test, test <file>, etc.'),
+    silent: z.boolean().default(true).describe('Run command in silent mode'),
+    json: z.boolean().default(true).describe('Output test results as JSON'),
+    findRelatedTests: z.string().describe('Run tests related to a specific file'),
     options: z
       .object({
-        directory_path: z
-          .string()
-          .optional()
-          .describe(
-            'path to the directory where the command will be executed. i.e where the package.json file is located'
-          ),
-        testFilePath: z.string().optional().describe('Path to the single test file to run and collect coverage'),
-        coverage: z.boolean().optional().describe('Run tests with coverage'),
-        watch: z.boolean().optional().describe('Run tests in watch mode'),
-        testRegex: z.string().optional().describe('Regular expression to match test files'),
+        directory_path: z.string().optional().describe('Path where package.json is located (cwd override)'),
+        testFilePath: z.string().optional().describe('Path to a single test file to run and collect coverage from'),
+        coverage: z.boolean().optional().describe('Enable code coverage'),
+        watch: z.boolean().optional().describe('Enable watch mode'),
         updateSnapshots: z.boolean().optional().describe('Update test snapshots')
       })
       .optional()
   }),
-  func: async ({ command, silent = true, options = {} }, runManager: any, config: any) => {
+  func: async (
+    { command, silent = true, json = true, findRelatedTests, options = {} },
+    runManager: any,
+    config: any
+  ) => {
     try {
-      const testCommandCheck = command.includes('test');
-      let fullCommand = !command.startsWith('npm') ? `npm ${testCommandCheck ? '' : 'test'} ${command}` : command;
-      // Add options to the command
-      if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
-      // suffix json
-      fullCommand += ` -- --json`;
-      if (silent) fullCommand += ' --silent';
-      if (options.coverage && !fullCommand.includes('--coverage') && options.testFilePath) {
-        fullCommand += ' --coverage';
-        // run coverage with test file name --collectCoverageFrom=testFileName
-        fullCommand += ` --collectCoverageFrom="${options.testFilePath || ''}"`;
-      }
-      // if (options.json) fullCommand += " --json";
-      if (options.testRegex) fullCommand += ` --testRegex="${options.testRegex}"`;
-      if (options.updateSnapshots) fullCommand += ' -u';
+      const { directory_path, testFilePath, coverage, watch, updateSnapshots } = options;
 
-      // // append silent flag to suppress npm notices
-      // // fullCommand += " --silent 2>/dev/null";
-      // let { stdout, stderr } = await nodeExecutor(fullCommand);
+      // Ensure command starts with `npm`
+      let baseCommand = command.trim();
+      if (!baseCommand.startsWith('npm')) {
+        baseCommand = `npm test ${baseCommand}`;
+      }
+
+      // Prepare arguments
+      const args: string[] = [];
+
+      if (findRelatedTests) {
+        args.push('--findRelatedTests', findRelatedTests);
+      }
+
+      if (json) args.push('--json');
+      if (silent) args.push('--silent');
+      if (coverage && testFilePath) {
+        args.push('--coverage', `--collectCoverageFrom=**/${testFilePath}*`);
+      }
+
+      if (watch) args.push('--watch');
+      if (updateSnapshots) args.push('-u');
+
+      // Combine full command
+      let fullCommand = `${baseCommand} -- ${args.join(' ')}`;
+
+      // Execute command (in directory if provided)
+      const execOptions = directory_path ? { cwd: directory_path } : undefined;
 
       // Mock the command execution and return a dummy result
       const mockFileName = 'sumOfNumbers.js';
