@@ -162,10 +162,15 @@ export const npmTestTool = new DynamicStructuredTool({
       // Execute command (in directory if provided)
       const execOptions = directory_path ? { cwd: directory_path } : undefined;
       let result = await nodeExecutor(fullCommand, execOptions);
-
+      let stdout = result.stdout || '';
+      // check the length of stdout and trim it to max 10000 characters
+      if (stdout.length > 5000) {
+        console.warn('stdout is too long, trimming to 10000 characters');
+        stdout = stdout.substring(0, 5000);
+      }
       return new Command({
         update: {
-          testResults: { success: result.success },
+          testResults: { success: result.success, output: stdout },
           hasError: !result.success,
           messages: [
             new ToolMessage({
@@ -241,10 +246,17 @@ export const yarnTestTool = new DynamicStructuredTool({
       if (options.updateSnapshots) fullCommand += ' -u';
 
       let result = await nodeExecutor(fullCommand);
+      let stdout = result.stdout || '';
+      // check the length of stdout and trim it to max 10000 characters
+      if (stdout.length > 5000) {
+        console.warn('stdout is too long, trimming to 10000 characters');
+        stdout = stdout.substring(0, 5000);
+      }
+
       return new Command({
         // update state keys
         update: {
-          testResults: { success: result.success },
+          testResults: { success: result.success, output: stdout },
           hasError: !result.success,
           messages: [
             new ToolMessage({

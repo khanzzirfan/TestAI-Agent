@@ -36569,9 +36569,15 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
             // Execute command (in directory if provided)
             const execOptions = directory_path ? { cwd: directory_path } : undefined;
             let result = await nodeExecutor(fullCommand, execOptions);
+            let stdout = result.stdout || '';
+            // check the length of stdout and trim it to max 10000 characters
+            if (stdout.length > 5000) {
+                console.warn('stdout is too long, trimming to 10000 characters');
+                stdout = stdout.substring(0, 5000);
+            }
             return new langgraph_1.Command({
                 update: {
-                    testResults: { success: result.success },
+                    testResults: { success: result.success, output: stdout },
                     hasError: !result.success,
                     messages: [
                         new messages_1.ToolMessage({
@@ -36649,10 +36655,16 @@ exports.yarnTestTool = new tools_1.DynamicStructuredTool({
             if (options.updateSnapshots)
                 fullCommand += ' -u';
             let result = await nodeExecutor(fullCommand);
+            let stdout = result.stdout || '';
+            // check the length of stdout and trim it to max 10000 characters
+            if (stdout.length > 5000) {
+                console.warn('stdout is too long, trimming to 10000 characters');
+                stdout = stdout.substring(0, 5000);
+            }
             return new langgraph_1.Command({
                 // update state keys
                 update: {
-                    testResults: { success: result.success },
+                    testResults: { success: result.success, output: stdout },
                     hasError: !result.success,
                     messages: [
                         new messages_1.ToolMessage({
