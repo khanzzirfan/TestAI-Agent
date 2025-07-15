@@ -78,12 +78,13 @@ export const MainGraphRun = async ({
   // find package manager file
   const findPackageManagerFileAgent = createReactAgent({
     llm: llm,
-    tools: [findPackageManagerFileTool],
+    tools: [findPackageManagerFileTool, transferToNpmTestTool],
     name: 'find_package_manager_file_expert',
     prompt:
       'You are a package manager file search expert. Please specify the package manager file you would like to find. ' +
       "You can use the 'find_package_manager_file' tool to search for a package manager file. " +
-      "The package manager is 'package.json' ",
+      "The package manager is 'package.json' " +
+      "if you need to transfer to another tool, use the 'transferToNpmTestTool' tool.",
     stateSchema: GraphState
   });
 
@@ -122,14 +123,6 @@ export const MainGraphRun = async ({
     stateSchema: GraphState
   });
 
-  const nodeExecutorAgent = createReactAgent({
-    llm: llm,
-    tools: [NodeExecutorTool],
-    name: 'node_expert',
-    prompt: 'You are a nodejs execution expert. Please use the "node_exec" tool to run the nodejs script.',
-    stateSchema: GraphState
-  });
-
   const npmTestAgent = createReactAgent({
     llm: llm,
     tools: [npmTestTool, transferToWriteFileTool, transferToReadFileTool, transferToCreateFileTool],
@@ -164,8 +157,7 @@ export const MainGraphRun = async ({
       readFileAgent,
       writeFileAgent,
       npmTestAgent,
-      yarnTestAgent,
-      nodeExecutorAgent
+      yarnTestAgent
     ],
     llm: llm,
     prompt:
@@ -177,8 +169,7 @@ export const MainGraphRun = async ({
       'For writing files, use write_file. ' +
       'For updating files, use write_file. ' +
       'For modifying files, use write_file. ' +
-      'For running tests, use npm_test.' +
-      'For running nodejs scripts, use node_exec.',
+      'For running tests, use npm_test.',
     supervisorName: 'code_assistant_supervisor',
     outputMode: 'full_history',
     stateSchema: GraphState

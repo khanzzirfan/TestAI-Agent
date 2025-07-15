@@ -26,47 +26,46 @@ interface FileResult {
   metadata: FileMetadata;
 }
 
+// Simplified findFileRecursively for only file name, path, content, and path pattern support
 const findFileRecursively = (
   searchPath: string,
-  targetFile: string,
+  targetPattern: string,
   excludeDirs: string[] = ['node_modules', 'public', 'dist', 'coverage', '.git']
-): FileResult[] => {
-  let results: FileResult[] = [];
-
+): { fileName: string; path: string; content: string }[] => {
+  let results: { fileName: string; path: string; content: string }[] = [];
+  const isPathPattern = targetPattern.includes(path.sep);
   const search = (currentDir: string) => {
+    if (results.length >= 2) return;
     try {
       const files = fs.readdirSync(currentDir);
-
       for (const file of files) {
+        if (results.length >= 2) break;
         const filePath = path.join(currentDir, file);
         const stat = fs.statSync(filePath);
-
         if (stat.isDirectory()) {
           if (!excludeDirs.includes(file)) {
-            // Recurse into subdirectories that aren't excluded
             search(filePath);
           }
-        } else if (file === targetFile || filePath.endsWith(targetFile)) {
-          // Match either exact filename or path ending with the target
-          results.push({
-            path: filePath,
-            isDirectory: false,
-            metadata: {
-              size: stat.size,
-              created: stat.birthtime,
-              modified: stat.mtime,
-              accessed: stat.atime
+        } else {
+          if (
+            (isPathPattern && filePath.endsWith(targetPattern)) ||
+            (!isPathPattern && (file === targetPattern || filePath.endsWith(targetPattern)))
+          ) {
+            try {
+              const content = fs.readFileSync(filePath, 'utf8');
+              results.push({ fileName: file, path: filePath, content });
+            } catch (err) {
+              results.push({ fileName: file, path: filePath, content: '[Error reading file]' });
             }
-          });
+          }
         }
       }
     } catch (error) {
       console.error(`Error searching directory ${currentDir}:`, error);
     }
   };
-
   search(searchPath);
-  return results;
+  return results.slice(0, 2);
 };
 
 interface FileInfo {
@@ -82,7 +81,7 @@ const listFilesRecursively = (
   filePattern: string | null = null
 ): FileInfo[] => {
   let results: FileInfo[] = [];
-
+  const isPathPattern = filePattern ? filePattern.includes(path.sep) : false;
   const listFiles = (currentDir: string) => {
     try {
       const files = fs.readdirSync(currentDir);
@@ -96,15 +95,21 @@ const listFilesRecursively = (
             listFiles(filePath);
           }
         } else {
-          if (!filePattern || new RegExp(filePattern).test(file)) {
+          if (
+            !filePattern ||
+            (isPathPattern && filePath.endsWith(filePattern)) ||
+            (!isPathPattern && new RegExp(filePattern as string).test(file))
+          ) {
             results.push({
               path: filePath,
               size: stat.size,
               modified: stat.mtime,
               created: stat.birthtime
             });
+            if (results.length >= 2) return; // Limit to 2 results
           }
         }
+        if (results.length >= 2) return;
       });
     } catch (error) {
       console.error(`Error reading directory ${currentDir}:`, error);
@@ -112,7 +117,7 @@ const listFilesRecursively = (
   };
 
   listFiles(dir);
-  return results;
+  return results.slice(0, 2);
 };
 
 // Improved file validation
@@ -413,6 +418,7 @@ export const readFileTool = new DynamicStructuredTool({
   }
 });
 
+// Enhanced find file tool
 export const findFileTool = new DynamicStructuredTool({
   name: 'find_file',
   description: 'Recursively searches for a file and returns its content',
@@ -426,12 +432,10 @@ export const findFileTool = new DynamicStructuredTool({
   func: async (
     {
       path: filePath,
-      excludeDirs = DEFAULT_EXCLUDE_DIRS,
-      encoding = 'utf8'
+      excludeDirs = DEFAULT_EXCLUDE_DIRS
     }: {
       path: string;
       excludeDirs?: string[];
-      encoding?: string;
     },
     runManager: any,
     config: any
@@ -439,50 +443,19 @@ export const findFileTool = new DynamicStructuredTool({
     try {
       const searchRoot = process.cwd();
       const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
-      const fileName = path.basename(filePath);
-
-      // Find all matching files and get their content
-      const results = findFileRecursively(rootDir, fileName, excludeDirs).map(location => {
-        try {
-          return {
-            fileName: path.basename(location.path),
-            path: location.path,
-            content: fs.readFileSync(location.path, encoding as BufferEncoding)
-          };
-        } catch (err) {
-          return {
-            path: location.path,
-            content: null
-          };
-        }
-      });
-
-      const result =
-        results.length === 0
-          ? {
-              exists: false,
-              message: 'File not found'
-            }
-          : {
-              exists: true,
-              files: results,
-              message: 'Files found'
-            };
-
+      const results = findFileRecursively(rootDir, filePath, excludeDirs);
       return new Command({
-        // update state keys
         update: {
-          fileName: result.files?.map(f => f.fileName).join('\n'),
-          fileContent: result.files?.map(f => f.content).join('\n'),
-          filePath: result.files?.map(f => f.path).join('\n'),
+          fileName: results.length > 0 ? results.map(res => `${res.fileName}, \n`).join(', ') : '',
+          filePath: results.length > 0 ? results.map(res => `${res.path}, \n`).join(', ') : '',
+          fileContent: results.length > 0 ? results.map(res => `${res.content}, \n`).join('\n') : '',
           messages: [
             new ToolMessage({
               content:
-                `Found ${result.files?.length || 0} file(s) matching "${fileName}" in "${rootDir}":\n` +
-                (result.files?.length ? result.files.map(f => `${f.fileName} at ${f.path}`).join('\n') : '') +
-                `\n Content:\n` +
-                (result.files?.length ? result.files.map(f => f.content).join('\n') : '') +
-                `\n\n`,
+                results.length > 0
+                  ? `Found ${results.length} file(s):\n` +
+                    results.map(f => `${f.fileName} at ${f.path} with content ${f.content}`).join('\n')
+                  : 'No matching file found',
               tool_call_id: config.toolCall.id
             })
           ]
@@ -490,7 +463,6 @@ export const findFileTool = new DynamicStructuredTool({
       });
     } catch (error: any) {
       return new Command({
-        // update state keys
         update: {
           hasError: true,
           messages: [
@@ -505,6 +477,44 @@ export const findFileTool = new DynamicStructuredTool({
   }
 });
 
+// Move findTestFiles to top-level so it is defined before use
+const findTestFiles = (
+  dir: string,
+  sourcePattern: string,
+  extensions: string[]
+): { fileName: string; path: string; content: string }[] => {
+  let results: { fileName: string; path: string; content: string }[] = [];
+  const isPathPattern = sourcePattern && sourcePattern.includes(path.sep);
+  const sourceFileName = path.basename(sourcePattern, path.extname(sourcePattern));
+  const isMatchingTestFile = (fileName: string) => {
+    return extensions.some(
+      ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`)
+    );
+  };
+  const search = (currentDir: string) => {
+    if (results.length >= 2) return;
+    const files = fs.readdirSync(currentDir);
+    for (const file of files) {
+      if (results.length >= 2) break;
+      const filePath = path.join(currentDir, file);
+      const stat = fs.statSync(filePath);
+      if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
+        search(filePath);
+      } else if ((isPathPattern && filePath.endsWith(sourcePattern)) || (!isPathPattern && isMatchingTestFile(file))) {
+        try {
+          const content = fs.readFileSync(filePath, 'utf8');
+          results.push({ fileName: file, path: filePath, content });
+        } catch (err) {
+          results.push({ fileName: file, path: filePath, content: '[Error reading file]' });
+        }
+      }
+    }
+  };
+  search(dir);
+  return results.slice(0, 2);
+};
+
+// Enhanced test file finding tool
 export const findTestFileTool = new DynamicStructuredTool({
   name: 'find_test_file',
   description: 'Recursively finds and reads corresponding test file content',
@@ -526,70 +536,35 @@ export const findTestFileTool = new DynamicStructuredTool({
     config: any
   ) => {
     try {
-      // Get the file name without extension to search for test files
       const searchRoot = process.cwd();
-      const sourceFileName = path.basename(sourcePath, path.extname(sourcePath));
       const rootDir = searchRoot ? validateFilePath(searchRoot) : process.cwd();
-
-      // Function to check if a file is a test file for our source
-      const isMatchingTestFile = (fileName: string) => {
-        return extensions.some(
-          ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`)
-        );
-      };
-
-      // Find matching test file recursively
-      const findTestFile = (dir: string): { path: string; content: string } | null => {
-        let result: { path: string; content: string } | null = null;
-        const search = (currentDir: string) => {
-          if (result) return; // Stop if we found a match
-
-          const files = fs.readdirSync(currentDir);
-          for (const file of files) {
-            if (result) break; // Stop if we found a match
-
-            const filePath = path.join(currentDir, file);
-            const stat = fs.statSync(filePath);
-
-            if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
-              search(filePath); // Recurse into subdirectories
-            } else if (isMatchingTestFile(file)) {
-              try {
-                const content = fs.readFileSync(filePath, 'utf8');
-                result = {
-                  path: filePath,
-                  content: content
-                };
-                break;
-              } catch (err) {
-                console.warn(`Could not read file: ${filePath}`);
-              }
-            }
-          }
-        };
-
-        search(dir);
-        return result;
-      };
-
-      const testFile = findTestFile(rootDir);
-      const testFileFound = !!testFile;
-
+      const results: { fileName: string; path: string; content: string }[] = findTestFiles(
+        rootDir,
+        sourcePath,
+        extensions
+      );
       return new Command({
-        // update state keys
         update: {
-          testFileContent: testFile ? testFile.content : null,
-          testFilePath: testFile ? testFile.path : null,
-          testFileName: testFile ? path.basename(testFile.path) : null,
-          testFileFound,
+          testFileContent:
+            results.length > 0
+              ? results.map(res => `filename: ${res.fileName}: \n ${res.content} \n\n`).join('\n\n')
+              : '',
+          testFilePath: results.length > 0 ? results.map(res => `${res.path}\n\n`).join('\n\n') : [],
+          testFileName: results.length > 0 ? results.map(res => `${res.fileName}\n\n`).join('\n\n') : [],
+          testFileFound: results.length > 0,
+          hasError: results.length === 0,
           messages: [
             new ToolMessage({
-              content: testFileFound
-                ? ` Found test file: ${testFile.path}. \n
-              Content: ${testFile.content} \n
-              Use 'write_file' tool to create or update the test file if needed. Proceed with the next steps to run tests using the 'npm_test' or 'yarn_test' tool.
-              `
-                : 'No matching test file found',
+              content:
+                results.length > 0
+                  ? `Found ${results.length} test file(s):\n` +
+                    results
+                      .map(
+                        (f: { fileName: string; path: string; content: string }) =>
+                          `${f.fileName} at ${f.path} content ${f.content}`
+                      )
+                      .join('\n')
+                  : 'No matching test file found',
               tool_call_id: config.toolCall.id
             })
           ]
@@ -597,10 +572,10 @@ export const findTestFileTool = new DynamicStructuredTool({
       });
     } catch (error: any) {
       return new Command({
-        // update state keys
         update: {
           testFileContent: null,
           testFileFound: false,
+          hasError: true,
           messages: [
             new ToolMessage({
               content: `Error finding test file: ${error.message}`,
