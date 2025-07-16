@@ -37,7 +37,7 @@ export const MainGraphRun = async ({
   `;
 
   const finalPrompt = useDefaultPrompt ? `${prompt}\n${additionalPromptNotes}` : additionalPromptNotes;
-  const uniqueGuid = Math.random().toString(36).substring(2, 15);
+  const uniqueGuid = '8bd49e81-43d6-4688-afff-bc425833c8c7';
 
   // Use the Runnable
   const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
