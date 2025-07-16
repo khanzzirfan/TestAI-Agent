@@ -36058,24 +36058,19 @@ exports.findFileTool = new tools_1.DynamicStructuredTool({
 // Move findTestFiles to top-level so it is defined before use
 const findTestFiles = (dir, sourcePattern, extensions) => {
     let results = [];
-    const isPathPattern = sourcePattern && sourcePattern.includes(path_1.default.sep);
     const sourceFileName = path_1.default.basename(sourcePattern, path_1.default.extname(sourcePattern));
     const isMatchingTestFile = (fileName) => {
-        return extensions.some(ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`));
+        return extensions.some(ext => fileName === `${sourceFileName}${ext}`);
     };
     const search = (currentDir) => {
-        if (results.length >= 2)
-            return;
         const files = fs_1.default.readdirSync(currentDir);
         for (const file of files) {
-            if (results.length >= 2)
-                break;
             const filePath = path_1.default.join(currentDir, file);
             const stat = fs_1.default.statSync(filePath);
             if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
                 search(filePath);
             }
-            else if ((isPathPattern && filePath.endsWith(sourcePattern)) || (!isPathPattern && isMatchingTestFile(file))) {
+            else if (isMatchingTestFile(file)) {
                 try {
                     const content = fs_1.default.readFileSync(filePath, 'utf8');
                     results.push({ fileName: file, path: filePath, content });
@@ -36087,7 +36082,7 @@ const findTestFiles = (dir, sourcePattern, extensions) => {
         }
     };
     search(dir);
-    return results.slice(0, 2);
+    return results.slice(0, 5); // Limit to 5 results
 };
 // Enhanced test file finding tool
 exports.findTestFileTool = new tools_1.DynamicStructuredTool({

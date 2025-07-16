@@ -479,23 +479,18 @@ const findTestFiles = (
   extensions: string[]
 ): { fileName: string; path: string; content: string }[] => {
   let results: { fileName: string; path: string; content: string }[] = [];
-  const isPathPattern = sourcePattern && sourcePattern.includes(path.sep);
   const sourceFileName = path.basename(sourcePattern, path.extname(sourcePattern));
   const isMatchingTestFile = (fileName: string) => {
-    return extensions.some(
-      ext => fileName === `${sourceFileName}${ext}` || fileName.endsWith(`/${sourceFileName}${ext}`)
-    );
+    return extensions.some(ext => fileName === `${sourceFileName}${ext}`);
   };
   const search = (currentDir: string) => {
-    if (results.length >= 2) return;
     const files = fs.readdirSync(currentDir);
     for (const file of files) {
-      if (results.length >= 2) break;
       const filePath = path.join(currentDir, file);
       const stat = fs.statSync(filePath);
       if (stat.isDirectory() && !DEFAULT_EXCLUDE_DIRS.includes(file)) {
         search(filePath);
-      } else if ((isPathPattern && filePath.endsWith(sourcePattern)) || (!isPathPattern && isMatchingTestFile(file))) {
+      } else if (isMatchingTestFile(file)) {
         try {
           const content = fs.readFileSync(filePath, 'utf8');
           results.push({ fileName: file, path: filePath, content });
@@ -506,7 +501,7 @@ const findTestFiles = (
     }
   };
   search(dir);
-  return results.slice(0, 2);
+  return results.slice(0, 5); // Limit to 5 results
 };
 
 // Enhanced test file finding tool
