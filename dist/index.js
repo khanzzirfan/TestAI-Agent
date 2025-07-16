@@ -36561,10 +36561,15 @@ exports.npmTestTool = new tools_1.DynamicStructuredTool({
     func: async ({ command, silent = true, json = true, findRelatedTests, options = {} }, runManager, config) => {
         try {
             const { directory_path, testFilePath, coverage, watch, updateSnapshots } = options;
-            // Ensure command starts with `npm`
+            // Ensure command starts with `npm` or is already a full npm command
             let baseCommand = command.trim();
             if (!baseCommand.startsWith('npm')) {
-                baseCommand = `npm test ${baseCommand}`;
+                if (baseCommand === 'test') {
+                    baseCommand = 'npm test';
+                }
+                else {
+                    baseCommand = `npm ${baseCommand}`;
+                }
             }
             // Prepare arguments
             const args = [];
@@ -36741,8 +36746,7 @@ exports.InstallTools = [
                     fullCommand += ` --prefix ${options.directory_path}`;
                 if (options.force)
                     fullCommand += ' --force';
-                if (options.legacyPeerDeps)
-                    fullCommand += ' --legacy-peer-deps';
+                fullCommand += ' --legacy-peer-deps';
                 const result = await nodeExecutor(fullCommand);
                 return {
                     installResults: { success: result.success, output: result.stdout },

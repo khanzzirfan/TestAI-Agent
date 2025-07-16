@@ -134,10 +134,14 @@ export const npmTestTool = new DynamicStructuredTool({
     try {
       const { directory_path, testFilePath, coverage, watch, updateSnapshots } = options;
 
-      // Ensure command starts with `npm`
+      // Ensure command starts with `npm` or is already a full npm command
       let baseCommand = command.trim();
       if (!baseCommand.startsWith('npm')) {
-        baseCommand = `npm test ${baseCommand}`;
+        if (baseCommand === 'test') {
+          baseCommand = 'npm test';
+        } else {
+          baseCommand = `npm ${baseCommand}`;
+        }
       }
 
       // Prepare arguments
@@ -315,7 +319,7 @@ export const InstallTools = [
         // Add options to the command
         if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
         if (options.force) fullCommand += ' --force';
-        if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
+        fullCommand += ' --legacy-peer-deps';
 
         const result = await nodeExecutor(fullCommand);
 
