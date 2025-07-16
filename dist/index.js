@@ -35958,8 +35958,8 @@ exports.readFileTool = new tools_1.DynamicStructuredTool({
     name: 'read_file',
     description: 'Reads file content with encoding options and metadata',
     schema: zod_1.z.object({
-        reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
         path: zod_1.z.string().describe('path to the file'),
+        reason: zod_1.z.string().describe('What is the prompt that chose to call this tool from the context?'),
         encoding: zod_1.z.string().optional().describe('file encoding'),
         includeMetadata: zod_1.z.boolean().optional().describe('include file metadata')
     }),
@@ -35978,15 +35978,10 @@ exports.readFileTool = new tools_1.DynamicStructuredTool({
                 };
             }
             return new langgraph_1.Command({
-                // update state keys
                 update: {
-                    testFileContent: result.content,
-                    testFilePath: absolutePath,
-                    testFileName: path_1.default.basename(absolutePath),
-                    testFileFound: true,
                     messages: [
                         new messages_1.ToolMessage({
-                            content: `File read successfully from ${absolutePath}. \n
+                            content: `File read successfully from ${absolutePath}. at filePath : ${filePath} \n
               Content:\n${result.content}\n\n
               `,
                             tool_call_id: config.toolCall.id
@@ -36199,7 +36194,9 @@ exports.findPackageManagerFileTool = new tools_1.DynamicStructuredTool({
                         packageManagerContent: JSON.parse(content),
                         messages: [
                             new messages_1.ToolMessage({
-                                content: `Found package manager file at ${packageJsonPath}`,
+                                content: `Found package manager file at ${packageJsonPath} \n 
+                Content:\n${content}\n\n
+                `,
                                 tool_call_id: config.toolCall.id
                             })
                         ]

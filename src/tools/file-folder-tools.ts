@@ -362,8 +362,8 @@ export const readFileTool = new DynamicStructuredTool({
   name: 'read_file',
   description: 'Reads file content with encoding options and metadata',
   schema: z.object({
-    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
     path: z.string().describe('path to the file'),
+    reason: z.string().describe('What is the prompt that chose to call this tool from the context?'),
     encoding: z.string().optional().describe('file encoding'),
     includeMetadata: z.boolean().optional().describe('include file metadata')
   }),
@@ -384,15 +384,10 @@ export const readFileTool = new DynamicStructuredTool({
       }
 
       return new Command({
-        // update state keys
         update: {
-          testFileContent: result.content,
-          testFilePath: absolutePath,
-          testFileName: path.basename(absolutePath),
-          testFileFound: true,
           messages: [
             new ToolMessage({
-              content: `File read successfully from ${absolutePath}. \n
+              content: `File read successfully from ${absolutePath}. at filePath : ${filePath} \n
               Content:\n${result.content}\n\n
               `,
               tool_call_id: config.toolCall.id
@@ -639,7 +634,9 @@ export const findPackageManagerFileTool = new DynamicStructuredTool({
             packageManagerContent: JSON.parse(content),
             messages: [
               new ToolMessage({
-                content: `Found package manager file at ${packageJsonPath}`,
+                content: `Found package manager file at ${packageJsonPath} \n 
+                Content:\n${content}\n\n
+                `,
                 tool_call_id: config.toolCall.id
               })
             ]
