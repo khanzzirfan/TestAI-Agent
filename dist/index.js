@@ -35211,68 +35211,102 @@ var _default = exports["default"] = version;
 
 /***/ }),
 
-/***/ 168:
+/***/ 11598:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.MainGraphRun = void 0;
+exports.graph = void 0;
 const langgraph_1 = __nccwpck_require__(39405);
-const messages_1 = __nccwpck_require__(62776);
+const langgraph_supervisor_1 = __nccwpck_require__(62942);
+const supervisor_agents_1 = __nccwpck_require__(58253);
+const llm_1 = __nccwpck_require__(26627);
+const state_1 = __nccwpck_require__(96236);
+// Initialize memory to persist state between graph runs
+const checkpointer = new langgraph_1.MemorySaver();
+const inMemoryStore = new langgraph_1.InMemoryStore();
+const workflow = (0, langgraph_supervisor_1.createSupervisor)({
+    agents: [
+        supervisor_agents_1.findFilesAgent,
+        supervisor_agents_1.findExampleTestFileAgent,
+        supervisor_agents_1.findPackageManagerFileAgent,
+        supervisor_agents_1.createFileAgent,
+        supervisor_agents_1.readFileAgent,
+        supervisor_agents_1.writeFileAgent,
+        supervisor_agents_1.npmTestAgent,
+        supervisor_agents_1.yarnTestAgent
+    ],
+    llm: llm_1.llm,
+    prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
+        'For finding files, use find_files. ' +
+        'For finding example test files, use find_example_test_file_and_its_content. ' +
+        'For finding package manager files and script commands, use find_package_manager_file. ' +
+        'For creating files, use create_file. ' +
+        'For reading files, use read_file. ' +
+        'For writing files, use write_file. ' +
+        'For running tests, use npm_test.' +
+        'For running nodejs scripts, use node_exec.',
+    supervisorName: 'code_assistant_supervisor',
+    outputMode: 'full_history',
+    stateSchema: state_1.GraphState
+});
+exports.graph = workflow.compile({ checkpointer, store: inMemoryStore });
+
+
+/***/ }),
+
+/***/ 58253:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.yarnTestAgent = exports.npmTestAgent = exports.writeFileAgent = exports.readFileAgent = exports.createFileAgent = exports.findPackageManagerFileAgent = exports.findExampleTestFileAgent = exports.findFilesAgent = void 0;
 const prebuilt_1 = __nccwpck_require__(95286);
-// import { createSupervisor } from '@langchain/langgraph-supervisor';
 const tools_1 = __nccwpck_require__(72003);
 const llm_1 = __nccwpck_require__(26627);
 const structured_format_1 = __nccwpck_require__(18267);
 const state_1 = __nccwpck_require__(96236);
-// @ts-ignore
-// const createSupervisor = require('@langchain/langgraph-supervisor').createSupervisor;
-async function loadSupervisor() {
-    const supervisor = await __nccwpck_require__.e(/* import() */ 933).then(__nccwpck_require__.bind(__nccwpck_require__, 28933));
-    return supervisor;
-}
-const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, useDefaultPrompt }) => {
-    // Initialize memory to persist state between graph runs
-    const checkpointer = new langgraph_1.MemorySaver();
-    const inMemoryStore = new langgraph_1.InMemoryStore();
-    const filename = fileName;
-    // Create agents
-    const findFilesAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.findFileTool, tools_1.findTestFileTool],
-        name: 'find_files_expert',
-        prompt: "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for.",
-        stateSchema: state_1.GraphState
-    });
-    // find example test files
-    const findExampleTestFileAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.findExampleTestFileAndItsContent],
-        name: 'find_example_test_file_expert',
-        prompt: 'You are an example test file search expert. Please specify the reason for finding example test files. ' +
-            "You can use the 'find_example_test_file_and_its_content' tool to search for example test files in the project directory. " +
-            'The example test files will be used for observation and learning. ' +
-            'The example test files will be used to improve the existing tests or create new tests.',
-        responseFormat: structured_format_1.exampleTestFileAndItsContentFormat,
-        stateSchema: state_1.GraphState
-    });
-    // find package manager file
-    const findPackageManagerFileAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.findPackageManagerFileTool, tools_1.transferToNpmTestTool],
-        name: 'find_package_manager_file_expert',
-        prompt: 'You are a package manager file search expert. Please specify the package manager file you would like to find. ' +
-            "You can use the 'find_package_manager_file' tool to search for a package manager file. " +
-            "The package manager is 'package.json' " +
-            "if you need to transfer to another tool, use the 'transferToNpmTestTool' tool.",
-        stateSchema: state_1.GraphState
-    });
-    const createFileAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.createFileTool, tools_1.transferToNpmTestTool],
-        name: 'create_file_expert',
-        prompt: `
+// Create agents
+const findFilesAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.findFileTool, tools_1.findTestFileTool],
+    name: 'find_files_expert',
+    prompt: "You are directory search expert in finding files. Always use one  tool at a time. You can use the 'find_file' tool to search for a file or the 'find_test_file' tool to search for a test file. Please specify the file name you are looking for.",
+    stateSchema: state_1.GraphState
+});
+exports.findFilesAgent = findFilesAgent;
+// find example test files
+const findExampleTestFileAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.findExampleTestFileAndItsContent],
+    name: 'find_example_test_file_expert',
+    prompt: 'You are an example test file search expert. Please specify the reason for finding example test files. ' +
+        "You can use the 'find_example_test_file_and_its_content' tool to search for example test files in the project directory. " +
+        'The example test files will be used for observation and learning. ' +
+        'The example test files will be used to improve the existing tests or create new tests.',
+    responseFormat: structured_format_1.exampleTestFileAndItsContentFormat,
+    stateSchema: state_1.GraphState
+});
+exports.findExampleTestFileAgent = findExampleTestFileAgent;
+// find package manager file
+const findPackageManagerFileAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.findPackageManagerFileTool, tools_1.transferToNpmTestTool],
+    name: 'find_package_manager_file_expert',
+    prompt: 'You are a package manager file search expert. Please specify the package manager file you would like to find. ' +
+        "You can use the 'find_package_manager_file' tool to search for a package manager file. " +
+        "The package manager is 'package.json' " +
+        "if you need to transfer to another tool, use the 'transferToNpmTestTool' tool.",
+    stateSchema: state_1.GraphState
+});
+exports.findPackageManagerFileAgent = findPackageManagerFileAgent;
+const createFileAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.createFileTool, tools_1.transferToNpmTestTool],
+    name: 'create_file_expert',
+    prompt: `
           You are a file creation expert.
           The source file path is: {state.filePath}
           The example test content is {state.exampleTestFiles}
@@ -35280,75 +35314,67 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
           Do NOT use placeholders or random paths.
           If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
             `.trim(),
-        stateSchema: state_1.GraphState
-    });
-    const readFileAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.readFileTool, tools_1.transferToNpmTestTool],
-        name: 'read_file_expert',
-        prompt: `You are a file reading expert. Please specify the name of the file you would like to read.
+    stateSchema: state_1.GraphState
+});
+exports.createFileAgent = createFileAgent;
+const readFileAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.readFileTool, tools_1.transferToNpmTestTool],
+    name: 'read_file_expert',
+    prompt: `You are a file reading expert. Please specify the name of the file you would like to read.
     If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
     `,
-        stateSchema: state_1.GraphState
-    });
-    const writeFileAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.writeFileTool, tools_1.transferToNpmTestTool],
-        name: 'write_file_expert',
-        prompt: `You are a file writing expert. Please specify the name of the file you would like to write to.
+    stateSchema: state_1.GraphState
+});
+exports.readFileAgent = readFileAgent;
+const writeFileAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.writeFileTool, tools_1.transferToNpmTestTool],
+    name: 'write_file_expert',
+    prompt: `You are a file writing expert. Please specify the name of the file you would like to write to.
     If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
     `,
-        stateSchema: state_1.GraphState
-    });
-    const npmTestAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.npmTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
-        name: 'npm_test_expert',
-        prompt: `You are a test runner expert. Your task is to execute all relevant tests in the project using the "npm_test" tool from the root directory.
+    stateSchema: state_1.GraphState
+});
+exports.writeFileAgent = writeFileAgent;
+const npmTestAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.npmTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
+    name: 'npm_test_expert',
+    prompt: `You are a test runner expert. Your task is to execute all relevant tests in the project using the "npm_test" tool from the root directory.
     Use the provided testRegex to accurately match and select test files.
     If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
     `,
-        responseFormat: structured_format_1.testResultFormat,
-        stateSchema: state_1.GraphState
-    });
-    const yarnTestAgent = (0, prebuilt_1.createReactAgent)({
-        llm: llm_1.llm,
-        tools: [tools_1.yarnTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
-        name: 'yarn_test_expert',
-        prompt: `You are a test runner expert. Please use the "yarn_test" tool to run the tests.
+    responseFormat: structured_format_1.testResultFormat,
+    stateSchema: state_1.GraphState
+});
+exports.npmTestAgent = npmTestAgent;
+const yarnTestAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.yarnTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
+    name: 'yarn_test_expert',
+    prompt: `You are a test runner expert. Please use the "yarn_test" tool to run the tests.
     If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
     `,
-        responseFormat: structured_format_1.testResultFormat,
-        stateSchema: state_1.GraphState
-    });
-    // @ts-ignore
-    const { createSupervisor } = await loadSupervisor();
-    // @ts-ignore
-    const workflow = createSupervisor({
-        agents: [
-            findFilesAgent,
-            findExampleTestFileAgent,
-            createFileAgent,
-            readFileAgent,
-            writeFileAgent,
-            npmTestAgent,
-            yarnTestAgent
-        ],
-        llm: llm_1.llm,
-        prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
-            'For finding files, use find_files. ' +
-            'For finding example test files, use find_example_test_file_and_its_content. ' +
-            'For creating files, use create_file. ' +
-            'For reading files, use read_file. ' +
-            'For writing files, use write_file. ' +
-            'For updating files, use write_file. ' +
-            'For modifying files, use write_file. ' +
-            'For running tests, use npm_test.',
-        supervisorName: 'code_assistant_supervisor',
-        outputMode: 'full_history',
-        stateSchema: state_1.GraphState
-    });
-    const app = workflow.compile({ checkpointer, store: inMemoryStore });
+    responseFormat: structured_format_1.testResultFormat,
+    stateSchema: state_1.GraphState
+});
+exports.yarnTestAgent = yarnTestAgent;
+
+
+/***/ }),
+
+/***/ 168:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.MainGraphRun = void 0;
+const messages_1 = __nccwpck_require__(62776);
+const agent_1 = __nccwpck_require__(11598);
+const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, useDefaultPrompt }) => {
+    const filename = fileName;
     console.log('app version', 'v0.1.60-alpha.01');
     const additionalPromptNotes = `
   Additional Notes: ${additionalPrompt}
@@ -35373,7 +35399,7 @@ const MainGraphRun = async ({ fileName, recursionLimit = 25, additionalPrompt, u
     const uniqueGuid = Math.random().toString(36).substring(2, 15);
     // Use the Runnable
     const currentDate = new Date().toISOString().replace('T', ' ').split('.')[0];
-    const finalState = await app.invoke({
+    const finalState = await agent_1.graph.invoke({
         messages: [new messages_1.HumanMessage(finalPrompt)]
     }, { recursionLimit: recursionLimit || 200, configurable: { thread_id: uniqueGuid } });
     const resultOfGraph = finalState.messages[finalState.messages.length - 1].content;
@@ -85437,6 +85463,270 @@ module.exports = __nccwpck_require__(40907);
 
 /***/ }),
 
+/***/ 62865:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createHandoffTool = void 0;
+exports.createHandoffBackMessages = createHandoffBackMessages;
+const uuid_1 = __nccwpck_require__(12048);
+const zod_1 = __nccwpck_require__(50924);
+const messages_1 = __nccwpck_require__(62776);
+const tools_1 = __nccwpck_require__(3477);
+const langgraph_1 = __nccwpck_require__(39405);
+const WHITESPACE_RE = /\s+/;
+function _normalizeAgentName(agentName) {
+    /**
+     * Normalize an agent name to be used inside the tool name.
+     */
+    return agentName.trim().replace(WHITESPACE_RE, "_").toLowerCase();
+}
+const createHandoffTool = ({ agentName }) => {
+    /**
+     * Create a tool that can handoff control to the requested agent.
+     *
+     * @param agentName - The name of the agent to handoff control to, i.e.
+     *   the name of the agent node in the multi-agent graph.
+     *   Agent names should be simple, clear and unique, preferably in snake_case,
+     *   although you are only limited to the names accepted by LangGraph
+     *   nodes as well as the tool names accepted by LLM providers
+     *   (the tool name will look like this: `transfer_to_<agent_name>`).
+     */
+    const toolName = `transfer_to_${_normalizeAgentName(agentName)}`;
+    const handoffTool = (0, tools_1.tool)(async (_, config) => {
+        /**
+         * Ask another agent for help.
+         */
+        const toolMessage = new messages_1.ToolMessage({
+            content: `Successfully transferred to ${agentName}`,
+            name: toolName,
+            tool_call_id: config.toolCall.id,
+        });
+        // inject the current agent state
+        const state = (0, langgraph_1.getCurrentTaskInput)();
+        return new langgraph_1.Command({
+            goto: agentName,
+            graph: langgraph_1.Command.PARENT,
+            update: { messages: state.messages.concat(toolMessage) },
+        });
+    }, {
+        name: toolName,
+        schema: zod_1.z.object({}),
+        description: "Ask another agent for help.",
+    });
+    return handoffTool;
+};
+exports.createHandoffTool = createHandoffTool;
+function createHandoffBackMessages(agentName, supervisorName) {
+    /**
+     * Create a pair of (AIMessage, ToolMessage) to add to the message history when returning control to the supervisor.
+     */
+    const toolCallId = (0, uuid_1.v4)();
+    const toolName = `transfer_back_to_${_normalizeAgentName(supervisorName)}`;
+    const toolCalls = [{ name: toolName, args: {}, id: toolCallId }];
+    return [
+        new messages_1.AIMessage({
+            content: `Transferring back to ${supervisorName}`,
+            tool_calls: toolCalls,
+            name: agentName,
+        }),
+        new messages_1.ToolMessage({
+            content: `Successfully transferred back to ${supervisorName}`,
+            name: toolName,
+            tool_call_id: toolCallId,
+        }),
+    ];
+}
+//# sourceMappingURL=handoff.js.map
+
+/***/ }),
+
+/***/ 54311:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__nccwpck_require__(72603), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 72603:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createSupervisor = exports.withAgentName = void 0;
+const langgraph_1 = __nccwpck_require__(39405);
+const prebuilt_1 = __nccwpck_require__(95286);
+Object.defineProperty(exports, "withAgentName", ({ enumerable: true, get: function () { return prebuilt_1.withAgentName; } }));
+const handoff_js_1 = __nccwpck_require__(62865);
+const PROVIDERS_WITH_PARALLEL_TOOL_CALLS_PARAM = new Set(["ChatOpenAI"]);
+function isChatModelWithBindTools(llm) {
+    return ("_modelType" in llm &&
+        typeof llm._modelType === "function" &&
+        llm._modelType() === "base_chat_model" &&
+        "bindTools" in llm &&
+        typeof llm.bindTools === "function");
+}
+function isChatModelWithParallelToolCallsParam(llm) {
+    return llm.bindTools.length >= 2;
+}
+const makeCallAgent = (
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+agent, // TODO: agent should not be `any`
+outputMode, addHandoffBackMessages, supervisorName) => {
+    if (!["full_history", "last_message"].includes(outputMode)) {
+        throw new Error(`Invalid agent output mode: ${outputMode}. Needs to be one of ["full_history", "last_message"]`);
+    }
+    return async (state) => {
+        const output = await agent.invoke(state);
+        let { messages } = output;
+        if (outputMode === "last_message") {
+            messages = messages.slice(-1);
+        }
+        if (addHandoffBackMessages) {
+            messages.push(...(0, handoff_js_1.createHandoffBackMessages)(agent.name, supervisorName));
+        }
+        return { ...output, messages };
+    };
+};
+/**
+ * Create a multi-agent supervisor.
+ *
+ * @param agents List of agents to manage
+ * @param llm Language model to use for the supervisor
+ * @param tools Tools to use for the supervisor
+ * @param prompt Optional prompt to use for the supervisor. Can be one of:
+ *   - string: This is converted to a SystemMessage and added to the beginning of the list of messages in state["messages"]
+ *   - SystemMessage: this is added to the beginning of the list of messages in state["messages"]
+ *   - Function: This function should take in full graph state and the output is then passed to the language model
+ *   - Runnable: This runnable should take in full graph state and the output is then passed to the language model
+ * @param responseFormat An optional schema for the final supervisor output.
+ *
+ * If provided, output will be formatted to match the given schema and returned in the 'structuredResponse' state key.
+ * If not provided, `structuredResponse` will not be present in the output state.
+ *
+ * Can be passed in as:
+ *   - Zod schema
+ *   - JSON schema
+ *   - { prompt, schema }, where schema is one of the above.
+ *        The prompt will be used together with the model that is being used to generate the structured response.
+ *
+ * @remarks
+ * **Important**: `responseFormat` requires the model to support `.withStructuredOutput()`.
+ *
+ * **Note**: The graph will make a separate call to the LLM to generate the structured response after the agent loop is finished.
+ * This is not the only strategy to get structured responses, see more options in [this guide](https://langchain-ai.github.io/langgraph/how-tos/react-agent-structured-output/).
+ * @param stateSchema State schema to use for the supervisor graph
+ * @param outputMode Mode for adding managed agents' outputs to the message history in the multi-agent workflow.
+ *   Can be one of:
+ *   - `full_history`: add the entire agent message history
+ *   - `last_message`: add only the last message (default)
+ * @param addHandoffBackMessages Whether to add a pair of (AIMessage, ToolMessage) to the message history
+ *   when returning control to the supervisor to indicate that a handoff has occurred
+ * @param supervisorName Name of the supervisor node
+ * @param includeAgentName Use to specify how to expose the agent name to the underlying supervisor LLM.
+ *   - undefined: Relies on the LLM provider using the name attribute on the AI message. Currently, only OpenAI supports this.
+ *   - "inline": Add the agent name directly into the content field of the AI message using XML-style tags.
+ *     Example: "How can I help you" -> "<name>agent_name</name><content>How can I help you?</content>"
+ */
+const createSupervisor = ({ agents, llm, tools, prompt, responseFormat, stateSchema, outputMode = "last_message", addHandoffBackMessages = true, supervisorName = "supervisor", includeAgentName, }) => {
+    const agentNames = new Set();
+    for (const agent of agents) {
+        if (!agent.name || agent.name === "LangGraph") {
+            throw new Error("Please specify a name when you create your agent, either via `createReactAgent({ ..., name: agentName })` " +
+                "or via `graph.compile({ name: agentName })`.");
+        }
+        if (agentNames.has(agent.name)) {
+            throw new Error(`Agent with name '${agent.name}' already exists. Agent names must be unique.`);
+        }
+        agentNames.add(agent.name);
+    }
+    const handoffTools = agents.map((agent) => (0, handoff_js_1.createHandoffTool)({ agentName: agent.name }));
+    const allTools = [...(tools ?? []), ...handoffTools];
+    let supervisorLLM = llm;
+    if (isChatModelWithBindTools(llm)) {
+        if (isChatModelWithParallelToolCallsParam(llm) &&
+            PROVIDERS_WITH_PARALLEL_TOOL_CALLS_PARAM.has(llm.getName())) {
+            supervisorLLM = llm.bindTools(allTools, { parallel_tool_calls: false });
+        }
+        else {
+            supervisorLLM = llm.bindTools(allTools);
+        }
+        // hack: with newer version of LangChain we've started using `withConfig()` instead of `bind()`
+        // when binding tools, thus older version of LangGraph will incorrectly try to bind tools twice.
+        // TODO: remove when we start handling tools from config in @langchain/langgraph
+        // @ts-expect-error hack
+        supervisorLLM.kwargs ??= {};
+        // @ts-expect-error hack
+        // eslint-disable-next-line prefer-destructuring
+        const kwargs = supervisorLLM.kwargs;
+        if (!("tools" in kwargs)) {
+            if ("config" in supervisorLLM &&
+                typeof supervisorLLM.config === "object" &&
+                supervisorLLM.config != null &&
+                "tools" in supervisorLLM.config) {
+                kwargs.tools = supervisorLLM.config.tools;
+            }
+        }
+    }
+    // Apply agent name handling if specified
+    if (includeAgentName) {
+        supervisorLLM = (0, prebuilt_1.withAgentName)(supervisorLLM, includeAgentName);
+    }
+    const schema = stateSchema ?? (0, prebuilt_1.createReactAgentAnnotation)();
+    const supervisorAgent = (0, prebuilt_1.createReactAgent)({
+        name: supervisorName,
+        llm: supervisorLLM,
+        tools: allTools,
+        prompt,
+        responseFormat,
+        stateSchema: schema,
+    });
+    let builder = new langgraph_1.StateGraph(schema)
+        .addNode(supervisorAgent.name, supervisorAgent, {
+        ends: [...agentNames],
+    })
+        .addEdge(langgraph_1.START, supervisorAgent.name);
+    for (const agent of agents) {
+        builder = builder.addNode(agent.name, makeCallAgent(agent, outputMode, addHandoffBackMessages, supervisorName), {
+            subgraphs: [agent],
+        });
+        builder = builder.addEdge(agent.name, supervisorAgent.name);
+    }
+    return builder;
+};
+exports.createSupervisor = createSupervisor;
+//# sourceMappingURL=supervisor.js.map
+
+/***/ }),
+
+/***/ 62942:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+module.exports = __nccwpck_require__(54311);
+
+/***/ }),
+
 /***/ 7034:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -118800,60 +119090,7 @@ function default_1() {
 /******/ 		return module.exports;
 /******/ 	}
 /******/ 	
-/******/ 	// expose the modules object (__webpack_modules__)
-/******/ 	__nccwpck_require__.m = __webpack_modules__;
-/******/ 	
 /************************************************************************/
-/******/ 	/* webpack/runtime/define property getters */
-/******/ 	(() => {
-/******/ 		// define getter functions for harmony exports
-/******/ 		__nccwpck_require__.d = (exports, definition) => {
-/******/ 			for(var key in definition) {
-/******/ 				if(__nccwpck_require__.o(definition, key) && !__nccwpck_require__.o(exports, key)) {
-/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
-/******/ 				}
-/******/ 			}
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/ensure chunk */
-/******/ 	(() => {
-/******/ 		__nccwpck_require__.f = {};
-/******/ 		// This file contains only the entry chunk.
-/******/ 		// The chunk loading function for additional chunks
-/******/ 		__nccwpck_require__.e = (chunkId) => {
-/******/ 			return Promise.all(Object.keys(__nccwpck_require__.f).reduce((promises, key) => {
-/******/ 				__nccwpck_require__.f[key](chunkId, promises);
-/******/ 				return promises;
-/******/ 			}, []));
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/get javascript chunk filename */
-/******/ 	(() => {
-/******/ 		// This function allow to reference async chunks
-/******/ 		__nccwpck_require__.u = (chunkId) => {
-/******/ 			// return url for filenames based on template
-/******/ 			return "" + chunkId + ".index.js";
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
-/******/ 	(() => {
-/******/ 		__nccwpck_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/make namespace object */
-/******/ 	(() => {
-/******/ 		// define __esModule on exports
-/******/ 		__nccwpck_require__.r = (exports) => {
-/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
-/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
-/******/ 			}
-/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
-/******/ 		};
-/******/ 	})();
-/******/ 	
 /******/ 	/* webpack/runtime/node module decorator */
 /******/ 	(() => {
 /******/ 		__nccwpck_require__.nmd = (module) => {
@@ -118866,48 +119103,6 @@ function default_1() {
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
-/******/ 	
-/******/ 	/* webpack/runtime/require chunk loading */
-/******/ 	(() => {
-/******/ 		// no baseURI
-/******/ 		
-/******/ 		// object to store loaded chunks
-/******/ 		// "1" means "loaded", otherwise not loaded yet
-/******/ 		var installedChunks = {
-/******/ 			792: 1
-/******/ 		};
-/******/ 		
-/******/ 		// no on chunks loaded
-/******/ 		
-/******/ 		var installChunk = (chunk) => {
-/******/ 			var moreModules = chunk.modules, chunkIds = chunk.ids, runtime = chunk.runtime;
-/******/ 			for(var moduleId in moreModules) {
-/******/ 				if(__nccwpck_require__.o(moreModules, moduleId)) {
-/******/ 					__nccwpck_require__.m[moduleId] = moreModules[moduleId];
-/******/ 				}
-/******/ 			}
-/******/ 			if(runtime) runtime(__nccwpck_require__);
-/******/ 			for(var i = 0; i < chunkIds.length; i++)
-/******/ 				installedChunks[chunkIds[i]] = 1;
-/******/ 		
-/******/ 		};
-/******/ 		
-/******/ 		// require() chunk loading for javascript
-/******/ 		__nccwpck_require__.f.require = (chunkId, promises) => {
-/******/ 			// "1" is the signal for "already loaded"
-/******/ 			if(!installedChunks[chunkId]) {
-/******/ 				if(true) { // all chunks have JS
-/******/ 					installChunk(require("./" + __nccwpck_require__.u(chunkId)));
-/******/ 				} else installedChunks[chunkId] = 1;
-/******/ 			}
-/******/ 		};
-/******/ 		
-/******/ 		// no external install chunk
-/******/ 		
-/******/ 		// no HMR
-/******/ 		
-/******/ 		// no HMR manifest
-/******/ 	})();
 /******/ 	
 /************************************************************************/
 var __webpack_exports__ = {};
