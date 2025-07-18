@@ -1,5 +1,6 @@
-import { TestTools } from './npm-test-tool';
-import { FileFolderTools } from './file-folder-tools';
-import { TestResultAnalyzerTools } from './test-result-analyzer-tool';
+export * from './file-folder-tools';
+export * from './npm-test-tool';
+export * from './test-result-analyzer-tool';
+export * from './testing-tools';
 
-export const CustomTools = [...TestTools, ...FileFolderTools, ...TestResultAnalyzerTools];
+export * from './handover-tools';

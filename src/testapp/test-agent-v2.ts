@@ -71,7 +71,8 @@ const toolExecutor = async (state: State) => {
           throw new Error(`Tool ${toolCall.name} not found`);
         }
 
-        const result = await tool.invoke(toolCall.args);
+        // @ts-ignore
+        const result = await tool.call(toolCall.args);
         const { value, ...restResult } = result;
         return new Command({
           update: {

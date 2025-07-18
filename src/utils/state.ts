@@ -1,9 +1,15 @@
 import { BaseMessage } from '@langchain/core/messages';
-import { Annotation } from '@langchain/langgraph';
+import { Messages, Annotation, messagesStateReducer } from '@langchain/langgraph';
 
 // Define the graph state with additional properties
 export const GraphState = Annotation.Root({
-  messages: Annotation<BaseMessage[]>({
+  messages: Annotation<BaseMessage[], Messages>({
+    reducer: messagesStateReducer
+  }),
+  plan: Annotation<string[]>({
+    reducer: (x, y) => y ?? x ?? []
+  }),
+  pastSteps: Annotation<[string, string][]>({
     reducer: (x, y) => x.concat(y)
   }),
   iteration: Annotation<number>({
@@ -16,13 +22,13 @@ export const GraphState = Annotation.Root({
   fileName: Annotation<string>({
     reducer: (x, y) => y ?? x ?? ''
   }),
-  testFileName: Annotation<string>({
-    reducer: (x, y) => y ?? x ?? ''
-  }),
   fileContent: Annotation<string>({
     reducer: (x, y) => y ?? x ?? ''
   }),
   filePath: Annotation<string>({
+    reducer: (x, y) => y ?? x ?? ''
+  }),
+  testFileName: Annotation<string>({
     reducer: (x, y) => y ?? x ?? ''
   }),
   testFileContent: Annotation<string>({
@@ -43,6 +49,18 @@ export const GraphState = Annotation.Root({
   finalComments: Annotation<string>({
     reducer: (x, y) => y ?? x ?? '',
     default: () => ''
+  }),
+  packageManager: Annotation<string>({
+    reducer: (x, y) => y ?? x ?? 'npm',
+    default: () => 'npm'
+  }),
+  packageManagerContent: Annotation<any>({
+    reducer: (x, y) => y ?? x ?? {},
+    default: () => ({})
+  }),
+  exampleTestFiles: Annotation<any[]>({
+    reducer: (x, y) => y ?? x ?? [],
+    default: () => []
   })
 });
 

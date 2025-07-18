@@ -13,12 +13,12 @@ export async function run(): Promise<void> {
     /// await SampleRun()
     /** Sample code to run */
     const ms: string = core.getInput('milliseconds');
-    const filename: string = core.getInput('file_name');
+    const fileName: string = core.getInput('file_name');
+    const recursionLimit: number = parseInt(core.getInput('recursion_limit'), 100);
+    const additionalPrompt: string = core.getInput('additional_prompt');
+    const useDefaultPrompt: boolean = core.getInput('use_default_prompt') === 'true';
 
-    // The `who-to-greet` input is defined in action metadata file
-    const whoToGreet = core.getInput('who-to-greet', { required: false });
-    core.info(`Hello, ${whoToGreet}!`);
-    core.info(`The file name is ${filename}`);
+    core.info(`The file name is ${fileName} and the recursion limit is ${recursionLimit}`);
 
     // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
     core.debug(`Waiting ${ms} milliseconds ...`);
@@ -34,7 +34,12 @@ export async function run(): Promise<void> {
     // Sample LangChain code
     try {
       core.debug('Running the main graph');
-      const response = await MainGraphRun();
+      const response = await MainGraphRun({
+        fileName,
+        recursionLimit,
+        additionalPrompt,
+        useDefaultPrompt
+      });
       core.debug('Finished running the main graph');
       // wirte the final comments to the output
       core.setOutput('final_comments', response);
@@ -46,31 +51,4 @@ export async function run(): Promise<void> {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message);
   }
-
-  // // Commit changes if there are any
-  // try {
-  //   core.info('Checking for changes...');
-  //   let diffOutput = '';
-  //   await exec.exec('git', ['diff', '--name-only'], {
-  //     listeners: {
-  //       stdout: (data: Buffer) => {
-  //         diffOutput += data.toString();
-  //       }
-  //     }
-  //   });
-
-  //   if (diffOutput.trim()) {
-  //     core.info('Changes detected, committing...');
-  //     await exec.exec('git', ['config', 'user.name', 'github-actions']);
-  //     await exec.exec('git', ['config', 'user.email', 'github-actions@github.com']);
-  //     await exec.exec('git', ['add', '.']);
-  //     await exec.exec('git', ['commit', '-m', 'Automated commit by GitHub Actions']);
-  //     await exec.exec('git', ['push']);
-  //     core.info('Changes committed and pushed.');
-  //   } else {
-  //     core.info('No changes detected, skipping commit.');
-  //   }
-  // } catch (error) {
-  //   core.warning(`Failed to commit changes: ${error}`);
-  // }
 }
