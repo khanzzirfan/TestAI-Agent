@@ -1,13 +1,14 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+All notable changes to this project will be documented in this file. See
+[commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
 ## [0.1.69-alpha.67](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.66...v0.1.69-alpha.67) (2025-07-18)
 
-
 ### Bug Fixes
 
-* updated planning agents ([25d593e](https://github.com/khanzzirfan/TestAI-Agent.git/commit/25d593e4b262b2ad80a038c748d8b469555ce1a0))
+- updated planning agents
+  ([25d593e](https://github.com/khanzzirfan/TestAI-Agent.git/commit/25d593e4b262b2ad80a038c748d8b469555ce1a0))
 
 ## [0.1.69-alpha.66](https://github.com/khanzzirfan/TestAI-Agent.git/compare/v0.1.69-alpha.65...v0.1.69-alpha.66) (2025-07-18)
 

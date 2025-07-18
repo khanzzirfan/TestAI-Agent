@@ -35228,26 +35228,19 @@ const checkpointer = new langgraph_1.MemorySaver();
 const inMemoryStore = new langgraph_1.InMemoryStore();
 const workflow = (0, langgraph_supervisor_1.createSupervisor)({
     agents: [
-        supervisor_agents_1.masterPlanningAgent,
-        supervisor_agents_1.replanningAgent,
-        supervisor_agents_1.finalResponseValidationAgent,
         supervisor_agents_1.findExampleTestFileAgent,
         supervisor_agents_1.findFilesAgent,
         supervisor_agents_1.findPackageManagerFileAgent,
         supervisor_agents_1.createFileAgent,
         supervisor_agents_1.readFileAgent,
         supervisor_agents_1.writeFileAgent,
+        supervisor_agents_1.finalResponseValidationAgent,
         supervisor_agents_1.npmTestAgent,
         supervisor_agents_1.yarnTestAgent
     ],
     llm: llm_1.llm,
     prompt: 'You are a team supervisor managing various file system experts and a test runner expert. ' +
-        'For the given objective, come up with a simple step by step plan. ' +
         'This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. ' +
-        'The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.' +
-        'For planning, use master_planning_expert. ' +
-        'For replanning, use replanning_expert. ' +
-        'For validating final response, use final_response_validation_expert. ' +
         'For finding example test files in repository, use find_example_test_file_and_its_content. ' +
         'For finding package manager files and script commands, use find_package_manager_file. ' +
         'For finding files, use find_files. ' +
@@ -35255,6 +35248,7 @@ const workflow = (0, langgraph_supervisor_1.createSupervisor)({
         'For reading files, use read_file. ' +
         'For writing files, use write_file. ' +
         'For running tests, use npm_test.' +
+        'For validating final response, use final_response_validation_expert. ' +
         'For running nodejs scripts, use node_exec.',
     supervisorName: 'code_assistant_supervisor',
     outputMode: 'full_history',
@@ -35271,7 +35265,7 @@ exports.graph = workflow.compile({ checkpointer, store: inMemoryStore });
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.finalResponseValidationAgent = exports.replanningAgent = exports.masterPlanningAgent = exports.yarnTestAgent = exports.npmTestAgent = exports.writeFileAgent = exports.readFileAgent = exports.createFileAgent = exports.findPackageManagerFileAgent = exports.findExampleTestFileAgent = exports.findFilesAgent = void 0;
+exports.finalResponseValidationAgent = exports.yarnTestAgent = exports.npmTestAgent = exports.writeFileAgent = exports.readFileAgent = exports.createFileAgent = exports.findPackageManagerFileAgent = exports.findExampleTestFileAgent = exports.findFilesAgent = void 0;
 const prebuilt_1 = __nccwpck_require__(95286);
 const tools_1 = __nccwpck_require__(72003);
 const llm_1 = __nccwpck_require__(26627);
@@ -35383,7 +35377,6 @@ const masterPlanningAgent = (0, prebuilt_1.createReactAgent)({
     responseFormat: structured_format_1.planResponseObject,
     stateSchema: state_1.GraphState
 });
-exports.masterPlanningAgent = masterPlanningAgent;
 const replanningAgent = (0, prebuilt_1.createReactAgent)({
     llm: llm_1.llm,
     tools: [tools_1.npmTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
@@ -35405,27 +35398,20 @@ const replanningAgent = (0, prebuilt_1.createReactAgent)({
     responseFormat: structured_format_1.planResponseObject,
     stateSchema: state_1.GraphState
 });
-exports.replanningAgent = replanningAgent;
 const finalResponseValidationAgent = (0, prebuilt_1.createReactAgent)({
     llm: llm_1.llm,
-    tools: [
-        tools_1.transferToRePlanningTool,
-        tools_1.npmTestTool,
-        tools_1.transferToWriteFileTool,
-        tools_1.transferToReadFileTool,
-        tools_1.transferToCreateFileTool
-    ],
+    tools: [tools_1.npmTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
     name: 'final_response_validation_expert',
     prompt: `You are a final response validation expert. Your task is to validate the final response of the workflow.
     You will use the state values to determine the correctness of the final response.
     You will check if the final response contains the correct information about the source file, test file, and test results.
     If the final response is not correct, you will replan the execution of the agents in the workflow.
-    You will use the 'master_planning_expert' to replan the execution of the agents in the workflow.
     If you need to transfer to another tool, use the 'transferToRePlanningTool', 'transferToNpmTestTool', 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
     state results: 
     testResults: {state.testResults} \n
     testSummary: {state.testSummary} \n
     finalComments: {state.finalComments} \n
+    hasError: {state.hasError} \n
     `,
     stateSchema: state_1.GraphState
 });
