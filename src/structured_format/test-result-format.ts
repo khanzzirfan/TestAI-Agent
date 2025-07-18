@@ -17,7 +17,7 @@ export const testResultFormat = z.object({
 export const exampleTestFileAndItsContentFormat = z.object({
   summary: z
     .string()
-    .max(300, 'Must be at most 300 characters')
+    .max(300, 'Must be at most 500 characters')
     .describe('A brief summary of what the test file covers'),
   keySnippets: z
     .array(z.string().max(1000))

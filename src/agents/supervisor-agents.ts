@@ -13,7 +13,8 @@ import {
   transferToNpmTestTool,
   transferToWriteFileTool,
   transferToReadFileTool,
-  transferToCreateFileTool
+  transferToCreateFileTool,
+  transferToFindFilesTool
 } from '../tools';
 import { llm } from '../llm';
 import { testResultFormat, exampleTestFileAndItsContentFormat } from '../structured_format';
@@ -32,13 +33,14 @@ const findFilesAgent = createReactAgent({
 // find example test files
 const findExampleTestFileAgent = createReactAgent({
   llm: llm,
-  tools: [findExampleTestFileAndItsContent],
+  tools: [findExampleTestFileAndItsContent, transferToFindFilesTool],
   name: 'find_example_test_file_expert',
   prompt:
-    'You are an example test file search expert. Please specify the reason for finding example test files. ' +
+    'You are an example test file search expert in the repository.' +
     "You can use the 'find_example_test_file_and_its_content' tool to search for example test files in the project directory. " +
     'The example test files will be used for observation and learning. ' +
-    'The example test files will be used to improve the existing tests or create new tests.',
+    'The example test files will be used to improve the existing tests or create new tests.' +
+    'If you need to transfer to another tool, use the "transferToFindFilesTool" tool.',
   responseFormat: exampleTestFileAndItsContentFormat,
   stateSchema: GraphState
 });
@@ -63,7 +65,8 @@ const createFileAgent = createReactAgent({
   prompt: `
           You are a file creation expert.
           The source file path is: {state.filePath}
-          The example test content is {state.exampleTestFiles}
+          The example test content is \n {state.exampleTestFiles} \n
+          The example test file content is \n {state.exampleTestFileContent} \n
           When creating a file, use these state values to determine the correct absolute path.
           Do NOT use placeholders or random paths.
           If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
@@ -96,7 +99,7 @@ const npmTestAgent = createReactAgent({
   tools: [npmTestTool, transferToWriteFileTool, transferToReadFileTool, transferToCreateFileTool],
   name: 'npm_test_expert',
   prompt: `You are a test runner expert. Your task is to execute all relevant tests in the project using the "npm_test" tool from the root directory.
-    Use the provided testRegex to accurately match and select test files.
+    Only run tests that are relevant to the source file.
     If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
     `,
   responseFormat: testResultFormat,

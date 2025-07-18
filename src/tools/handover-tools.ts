@@ -78,3 +78,17 @@ export const transferToCreateFileTool = tool(
     returnDirect: true
   }
 );
+
+export const transferToFindFilesTool = tool(
+  async () => {
+    return 'Successfully transferred to find files tool';
+  },
+  {
+    name: 'transferToFindFilesTool',
+    description: 'Ask find files tool for help.',
+    schema: z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+  }
+);

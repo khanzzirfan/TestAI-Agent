@@ -19,8 +19,8 @@ const inMemoryStore = new InMemoryStore();
 
 const workflow = createSupervisor({
   agents: [
-    findFilesAgent,
     findExampleTestFileAgent,
+    findFilesAgent,
     findPackageManagerFileAgent,
     createFileAgent,
     readFileAgent,
@@ -31,9 +31,9 @@ const workflow = createSupervisor({
   llm: llm,
   prompt:
     'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
-    'For finding files, use find_files. ' +
-    'For finding example test files, use find_example_test_file_and_its_content. ' +
+    'For finding example test files in repository, use find_example_test_file_and_its_content. ' +
     'For finding package manager files and script commands, use find_package_manager_file. ' +
+    'For finding files, use find_files. ' +
     'For creating files, use create_file. ' +
     'For reading files, use read_file. ' +
     'For writing files, use write_file. ' +
