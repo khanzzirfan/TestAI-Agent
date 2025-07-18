@@ -15,7 +15,8 @@ import {
   transferToReadFileTool,
   transferToCreateFileTool,
   transferToFindFilesTool,
-  transferToRePlanningTool
+  transferToRePlanningTool,
+  transferToFinalResponseValidationTool
 } from '../tools';
 import { llm } from '../llm';
 import { testResultFormat, exampleTestFileAndItsContentFormat, planResponseObject } from '../structured_format';
@@ -76,31 +77,37 @@ const createFileAgent = createReactAgent({
 
 const readFileAgent = createReactAgent({
   llm: llm,
-  tools: [readFileTool, transferToNpmTestTool],
+  tools: [readFileTool, transferToNpmTestTool, transferToFinalResponseValidationTool],
   name: 'read_file_expert',
   prompt: `You are a file reading expert. Please specify the name of the file you would like to read.
-    If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool' tool or 'transferToFinalResponseValidationTool'.
     `,
   stateSchema: GraphState
 });
 
 const writeFileAgent = createReactAgent({
   llm: llm,
-  tools: [writeFileTool, transferToNpmTestTool],
+  tools: [writeFileTool, transferToNpmTestTool, transferToFinalResponseValidationTool],
   name: 'write_file_expert',
   prompt: `You are a file writing expert. Please specify the name of the file you would like to write to.
-    If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool' tool or 'transferToFinalResponseValidationTool'.
     `,
   stateSchema: GraphState
 });
 
 const npmTestAgent = createReactAgent({
   llm: llm,
-  tools: [npmTestTool, transferToWriteFileTool, transferToReadFileTool, transferToCreateFileTool],
+  tools: [
+    npmTestTool,
+    transferToWriteFileTool,
+    transferToReadFileTool,
+    transferToCreateFileTool,
+    transferToFinalResponseValidationTool
+  ],
   name: 'npm_test_expert',
   prompt: `You are a test runner expert. Your task is to execute all relevant tests in the project using the "npm_test" tool from the root directory.
     Only run tests that are relevant to the source file.
-    If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
+    If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools or 'transferToFinalResponseValidationTool'.   
     `,
   responseFormat: testResultFormat,
   stateSchema: GraphState
