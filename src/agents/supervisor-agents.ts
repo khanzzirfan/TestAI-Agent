@@ -14,10 +14,11 @@ import {
   transferToWriteFileTool,
   transferToReadFileTool,
   transferToCreateFileTool,
-  transferToFindFilesTool
+  transferToFindFilesTool,
+  transferToRePlanningTool
 } from '../tools';
 import { llm } from '../llm';
-import { testResultFormat, exampleTestFileAndItsContentFormat } from '../structured_format';
+import { testResultFormat, exampleTestFileAndItsContentFormat, planResponseObject } from '../structured_format';
 import { GraphState } from '../utils/state';
 
 // Create agents
@@ -116,6 +117,66 @@ const yarnTestAgent = createReactAgent({
   stateSchema: GraphState
 });
 
+const masterPlanningAgent = createReactAgent({
+  llm: llm,
+  tools: [transferToFindFilesTool, transferToWriteFileTool, transferToReadFileTool, transferToCreateFileTool],
+  name: 'master_planning_expert',
+  prompt: `You are a master planning expert. Your task is to plan the execution of the agents in the workflow.
+    You will use the state values to determine the correct order of execution.
+    You will use the 'find_files_expert' to find files, 'find_example_test_file_expert' to find example test files, 'find_package_manager_file_expert' to find package manager files,
+    'create_file_expert' to create files, 'read_file_expert' to read files, 'write_file_expert' to write files, 'npm_test_expert' to run npm tests, and 'yarn_test_expert' to run yarn tests.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool', 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
+    `,
+  responseFormat: planResponseObject,
+  stateSchema: GraphState
+});
+
+const replanningAgent = createReactAgent({
+  llm: llm,
+  tools: [npmTestTool, transferToWriteFileTool, transferToReadFileTool, transferToCreateFileTool],
+  name: 'replanning_expert',
+  prompt: `You are a replanning expert. Your task is to replan the execution of the agents in the workflow.
+    You will use the state values to determine the correct order of execution.
+    You will use the 'find_files_expert' to find files, 
+    'find_example_test_file_expert' to find example test files, 
+    'find_package_manager_file_expert' to find package manager files,
+    'create_file_expert' to create files, 
+    'read_file_expert' to read files, 
+    'write_file_expert' to write files, 
+    'npm_test_expert' to run npm tests, 
+    and 'yarn_test_expert' to run yarn tests.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool', 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
+    plannedSteps: {state.plan} \n
+    pastSteps: {state.pastSteps} \n
+    `,
+  responseFormat: planResponseObject,
+  stateSchema: GraphState
+});
+
+const finalResponseValidationAgent = createReactAgent({
+  llm: llm,
+  tools: [
+    transferToRePlanningTool,
+    npmTestTool,
+    transferToWriteFileTool,
+    transferToReadFileTool,
+    transferToCreateFileTool
+  ],
+  name: 'final_response_validation_expert',
+  prompt: `You are a final response validation expert. Your task is to validate the final response of the workflow.
+    You will use the state values to determine the correctness of the final response.
+    You will check if the final response contains the correct information about the source file, test file, and test results.
+    If the final response is not correct, you will replan the execution of the agents in the workflow.
+    You will use the 'master_planning_expert' to replan the execution of the agents in the workflow.
+    If you need to transfer to another tool, use the 'transferToRePlanningTool', 'transferToNpmTestTool', 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
+    state results: 
+    testResults: {state.testResults} \n
+    testSummary: {state.testSummary} \n
+    finalComments: {state.finalComments} \n
+    `,
+  stateSchema: GraphState
+});
+
 export {
   findFilesAgent,
   findExampleTestFileAgent,
@@ -124,5 +185,8 @@ export {
   readFileAgent,
   writeFileAgent,
   npmTestAgent,
-  yarnTestAgent
+  yarnTestAgent,
+  masterPlanningAgent,
+  replanningAgent,
+  finalResponseValidationAgent
 };

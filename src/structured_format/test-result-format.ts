@@ -55,3 +55,7 @@ export const findFilesAndTestFilesResponseFormat = z.object({
   testFileContent: z.string().max(1000, 'Must be at most 1000 characters').nullable(),
   testFileFound: z.boolean().nullable()
 });
+
+export const planResponseObject = z.object({
+  steps: z.array(z.string()).describe('different steps to follow, should be in sorted order')
+});

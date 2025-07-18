@@ -8,7 +8,10 @@ import {
   readFileAgent,
   writeFileAgent,
   npmTestAgent,
-  yarnTestAgent
+  yarnTestAgent,
+  masterPlanningAgent,
+  replanningAgent,
+  finalResponseValidationAgent
 } from './agents/supervisor-agents';
 import { llm } from './llm';
 import { GraphState } from './utils/state';
@@ -19,6 +22,9 @@ const inMemoryStore = new InMemoryStore();
 
 const workflow = createSupervisor({
   agents: [
+    masterPlanningAgent,
+    replanningAgent,
+    finalResponseValidationAgent,
     findExampleTestFileAgent,
     findFilesAgent,
     findPackageManagerFileAgent,
@@ -30,7 +36,13 @@ const workflow = createSupervisor({
   ],
   llm: llm,
   prompt:
-    'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
+    'You are a team supervisor managing various file system experts and a test runner expert. ' +
+    'For the given objective, come up with a simple step by step plan. ' +
+    'This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. ' +
+    'The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.' +
+    'For planning, use master_planning_expert. ' +
+    'For replanning, use replanning_expert. ' +
+    'For validating final response, use final_response_validation_expert. ' +
     'For finding example test files in repository, use find_example_test_file_and_its_content. ' +
     'For finding package manager files and script commands, use find_package_manager_file. ' +
     'For finding files, use find_files. ' +

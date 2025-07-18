@@ -6,6 +6,12 @@ export const GraphState = Annotation.Root({
   messages: Annotation<BaseMessage[], Messages>({
     reducer: messagesStateReducer
   }),
+  plan: Annotation<string[]>({
+    reducer: (x, y) => y ?? x ?? []
+  }),
+  pastSteps: Annotation<[string, string][]>({
+    reducer: (x, y) => x.concat(y)
+  }),
   iteration: Annotation<number>({
     reducer: (x, y) => y ?? x ?? 0,
     default: () => 0

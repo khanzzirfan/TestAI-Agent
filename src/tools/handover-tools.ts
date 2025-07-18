@@ -92,3 +92,45 @@ export const transferToFindFilesTool = tool(
     returnDirect: true
   }
 );
+
+export const transferToRePlanningTool = tool(
+  async () => {
+    return 'Successfully transferred to replanning tool';
+  },
+  {
+    name: 'transferToRePlanningTool',
+    description: 'Ask replanning tool for help.',
+    schema: z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+  }
+);
+
+export const transferToFinalResponseValidationTool = tool(
+  async () => {
+    return 'Successfully transferred to final response validation tool';
+  },
+  {
+    name: 'transferToFinalResponseValidationTool',
+    description: 'Ask final response validation tool for help.',
+    schema: z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+  }
+);
+
+export const transferToMasterPlanningTool = tool(
+  async () => {
+    return 'Successfully transferred to master planning tool';
+  },
+  {
+    name: 'transferToMasterPlanningTool',
+    description: 'Ask master planning tool for help.',
+    schema: z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+  }
+);
