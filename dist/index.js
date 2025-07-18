@@ -35228,6 +35228,9 @@ const checkpointer = new langgraph_1.MemorySaver();
 const inMemoryStore = new langgraph_1.InMemoryStore();
 const workflow = (0, langgraph_supervisor_1.createSupervisor)({
     agents: [
+        supervisor_agents_1.masterPlanningAgent,
+        supervisor_agents_1.replanningAgent,
+        supervisor_agents_1.finalResponseValidationAgent,
         supervisor_agents_1.findExampleTestFileAgent,
         supervisor_agents_1.findFilesAgent,
         supervisor_agents_1.findPackageManagerFileAgent,
@@ -35238,7 +35241,13 @@ const workflow = (0, langgraph_supervisor_1.createSupervisor)({
         supervisor_agents_1.yarnTestAgent
     ],
     llm: llm_1.llm,
-    prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
+    prompt: 'You are a team supervisor managing various file system experts and a test runner expert. ' +
+        'For the given objective, come up with a simple step by step plan. ' +
+        'This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. ' +
+        'The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps.' +
+        'For planning, use master_planning_expert. ' +
+        'For replanning, use replanning_expert. ' +
+        'For validating final response, use final_response_validation_expert. ' +
         'For finding example test files in repository, use find_example_test_file_and_its_content. ' +
         'For finding package manager files and script commands, use find_package_manager_file. ' +
         'For finding files, use find_files. ' +
@@ -35262,7 +35271,7 @@ exports.graph = workflow.compile({ checkpointer, store: inMemoryStore });
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.yarnTestAgent = exports.npmTestAgent = exports.writeFileAgent = exports.readFileAgent = exports.createFileAgent = exports.findPackageManagerFileAgent = exports.findExampleTestFileAgent = exports.findFilesAgent = void 0;
+exports.finalResponseValidationAgent = exports.replanningAgent = exports.masterPlanningAgent = exports.yarnTestAgent = exports.npmTestAgent = exports.writeFileAgent = exports.readFileAgent = exports.createFileAgent = exports.findPackageManagerFileAgent = exports.findExampleTestFileAgent = exports.findFilesAgent = void 0;
 const prebuilt_1 = __nccwpck_require__(95286);
 const tools_1 = __nccwpck_require__(72003);
 const llm_1 = __nccwpck_require__(26627);
@@ -35361,6 +35370,66 @@ const yarnTestAgent = (0, prebuilt_1.createReactAgent)({
     stateSchema: state_1.GraphState
 });
 exports.yarnTestAgent = yarnTestAgent;
+const masterPlanningAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.transferToFindFilesTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
+    name: 'master_planning_expert',
+    prompt: `You are a master planning expert. Your task is to plan the execution of the agents in the workflow.
+    You will use the state values to determine the correct order of execution.
+    You will use the 'find_files_expert' to find files, 'find_example_test_file_expert' to find example test files, 'find_package_manager_file_expert' to find package manager files,
+    'create_file_expert' to create files, 'read_file_expert' to read files, 'write_file_expert' to write files, 'npm_test_expert' to run npm tests, and 'yarn_test_expert' to run yarn tests.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool', 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
+    `,
+    responseFormat: structured_format_1.planResponseObject,
+    stateSchema: state_1.GraphState
+});
+exports.masterPlanningAgent = masterPlanningAgent;
+const replanningAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [tools_1.npmTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
+    name: 'replanning_expert',
+    prompt: `You are a replanning expert. Your task is to replan the execution of the agents in the workflow.
+    You will use the state values to determine the correct order of execution.
+    You will use the 'find_files_expert' to find files, 
+    'find_example_test_file_expert' to find example test files, 
+    'find_package_manager_file_expert' to find package manager files,
+    'create_file_expert' to create files, 
+    'read_file_expert' to read files, 
+    'write_file_expert' to write files, 
+    'npm_test_expert' to run npm tests, 
+    and 'yarn_test_expert' to run yarn tests.
+    If you need to transfer to another tool, use the 'transferToNpmTestTool', 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
+    plannedSteps: {state.plan} \n
+    pastSteps: {state.pastSteps} \n
+    `,
+    responseFormat: structured_format_1.planResponseObject,
+    stateSchema: state_1.GraphState
+});
+exports.replanningAgent = replanningAgent;
+const finalResponseValidationAgent = (0, prebuilt_1.createReactAgent)({
+    llm: llm_1.llm,
+    tools: [
+        tools_1.transferToRePlanningTool,
+        tools_1.npmTestTool,
+        tools_1.transferToWriteFileTool,
+        tools_1.transferToReadFileTool,
+        tools_1.transferToCreateFileTool
+    ],
+    name: 'final_response_validation_expert',
+    prompt: `You are a final response validation expert. Your task is to validate the final response of the workflow.
+    You will use the state values to determine the correctness of the final response.
+    You will check if the final response contains the correct information about the source file, test file, and test results.
+    If the final response is not correct, you will replan the execution of the agents in the workflow.
+    You will use the 'master_planning_expert' to replan the execution of the agents in the workflow.
+    If you need to transfer to another tool, use the 'transferToRePlanningTool', 'transferToNpmTestTool', 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
+    state results: 
+    testResults: {state.testResults} \n
+    testSummary: {state.testSummary} \n
+    finalComments: {state.finalComments} \n
+    `,
+    stateSchema: state_1.GraphState
+});
+exports.finalResponseValidationAgent = finalResponseValidationAgent;
 
 
 /***/ }),
@@ -35587,7 +35656,7 @@ __exportStar(__nccwpck_require__(79409), exports);
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.findFilesAndTestFilesResponseFormat = exports.writeFileResponseFormat = exports.createFileResponseFormat = exports.exampleTestFileAndItsContentFormat = exports.testResultFormat = void 0;
+exports.planResponseObject = exports.findFilesAndTestFilesResponseFormat = exports.writeFileResponseFormat = exports.createFileResponseFormat = exports.exampleTestFileAndItsContentFormat = exports.testResultFormat = void 0;
 // write a zod schema to format the test result
 const zod_1 = __nccwpck_require__(50924);
 exports.testResultFormat = zod_1.z.object({
@@ -35637,6 +35706,9 @@ exports.findFilesAndTestFilesResponseFormat = zod_1.z.object({
     testFilePath: zod_1.z.string().max(200, 'Must be at most 200 characters').nullable(),
     testFileContent: zod_1.z.string().max(1000, 'Must be at most 1000 characters').nullable(),
     testFileFound: zod_1.z.boolean().nullable()
+});
+exports.planResponseObject = zod_1.z.object({
+    steps: zod_1.z.array(zod_1.z.string()).describe('different steps to follow, should be in sorted order')
 });
 
 
@@ -36329,7 +36401,7 @@ exports.findExampleTestFileAndItsContent = new tools_1.DynamicStructuredTool({
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.transferToFindFilesTool = exports.transferToCreateFileTool = exports.transferToReadFileTool = exports.transferToWriteFileTool = exports.transferToNpmInstallTool = exports.transferToNpmTestTool = void 0;
+exports.transferToMasterPlanningTool = exports.transferToFinalResponseValidationTool = exports.transferToRePlanningTool = exports.transferToFindFilesTool = exports.transferToCreateFileTool = exports.transferToReadFileTool = exports.transferToWriteFileTool = exports.transferToNpmInstallTool = exports.transferToNpmTestTool = void 0;
 const zod_1 = __nccwpck_require__(50924);
 const tools_1 = __nccwpck_require__(3477);
 // Transfer tools
@@ -36394,6 +36466,36 @@ exports.transferToFindFilesTool = (0, tools_1.tool)(async () => {
 }, {
     name: 'transferToFindFilesTool',
     description: 'Ask find files tool for help.',
+    schema: zod_1.z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+});
+exports.transferToRePlanningTool = (0, tools_1.tool)(async () => {
+    return 'Successfully transferred to replanning tool';
+}, {
+    name: 'transferToRePlanningTool',
+    description: 'Ask replanning tool for help.',
+    schema: zod_1.z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+});
+exports.transferToFinalResponseValidationTool = (0, tools_1.tool)(async () => {
+    return 'Successfully transferred to final response validation tool';
+}, {
+    name: 'transferToFinalResponseValidationTool',
+    description: 'Ask final response validation tool for help.',
+    schema: zod_1.z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+});
+exports.transferToMasterPlanningTool = (0, tools_1.tool)(async () => {
+    return 'Successfully transferred to master planning tool';
+}, {
+    name: 'transferToMasterPlanningTool',
+    description: 'Ask master planning tool for help.',
     schema: zod_1.z.object({}),
     // Hint to our agent implementation that it should stop
     // immediately after invoking this tool
@@ -37161,6 +37263,12 @@ const langgraph_1 = __nccwpck_require__(39405);
 exports.GraphState = langgraph_1.Annotation.Root({
     messages: (0, langgraph_1.Annotation)({
         reducer: langgraph_1.messagesStateReducer
+    }),
+    plan: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => y ?? x ?? []
+    }),
+    pastSteps: (0, langgraph_1.Annotation)({
+        reducer: (x, y) => x.concat(y)
     }),
     iteration: (0, langgraph_1.Annotation)({
         reducer: (x, y) => y ?? x ?? 0,
