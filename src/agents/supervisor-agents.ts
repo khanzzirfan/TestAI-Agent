@@ -155,24 +155,18 @@ const replanningAgent = createReactAgent({
 
 const finalResponseValidationAgent = createReactAgent({
   llm: llm,
-  tools: [
-    transferToRePlanningTool,
-    npmTestTool,
-    transferToWriteFileTool,
-    transferToReadFileTool,
-    transferToCreateFileTool
-  ],
+  tools: [npmTestTool, transferToWriteFileTool, transferToReadFileTool, transferToCreateFileTool],
   name: 'final_response_validation_expert',
   prompt: `You are a final response validation expert. Your task is to validate the final response of the workflow.
     You will use the state values to determine the correctness of the final response.
     You will check if the final response contains the correct information about the source file, test file, and test results.
     If the final response is not correct, you will replan the execution of the agents in the workflow.
-    You will use the 'master_planning_expert' to replan the execution of the agents in the workflow.
     If you need to transfer to another tool, use the 'transferToRePlanningTool', 'transferToNpmTestTool', 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
     state results: 
     testResults: {state.testResults} \n
     testSummary: {state.testSummary} \n
     finalComments: {state.finalComments} \n
+    hasError: {state.hasError} \n
     `,
   stateSchema: GraphState
 });
@@ -186,7 +180,5 @@ export {
   writeFileAgent,
   npmTestAgent,
   yarnTestAgent,
-  masterPlanningAgent,
-  replanningAgent,
   finalResponseValidationAgent
 };
