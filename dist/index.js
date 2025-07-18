@@ -35228,8 +35228,8 @@ const checkpointer = new langgraph_1.MemorySaver();
 const inMemoryStore = new langgraph_1.InMemoryStore();
 const workflow = (0, langgraph_supervisor_1.createSupervisor)({
     agents: [
-        supervisor_agents_1.findFilesAgent,
         supervisor_agents_1.findExampleTestFileAgent,
+        supervisor_agents_1.findFilesAgent,
         supervisor_agents_1.findPackageManagerFileAgent,
         supervisor_agents_1.createFileAgent,
         supervisor_agents_1.readFileAgent,
@@ -35239,9 +35239,9 @@ const workflow = (0, langgraph_supervisor_1.createSupervisor)({
     ],
     llm: llm_1.llm,
     prompt: 'You are a team supervisor managing a file system expert, a file creation expert, a file reading expert, a file writing expert, and a test runner expert. ' +
-        'For finding files, use find_files. ' +
-        'For finding example test files, use find_example_test_file_and_its_content. ' +
+        'For finding example test files in repository, use find_example_test_file_and_its_content. ' +
         'For finding package manager files and script commands, use find_package_manager_file. ' +
+        'For finding files, use find_files. ' +
         'For creating files, use create_file. ' +
         'For reading files, use read_file. ' +
         'For writing files, use write_file. ' +
@@ -35280,12 +35280,13 @@ exports.findFilesAgent = findFilesAgent;
 // find example test files
 const findExampleTestFileAgent = (0, prebuilt_1.createReactAgent)({
     llm: llm_1.llm,
-    tools: [tools_1.findExampleTestFileAndItsContent],
+    tools: [tools_1.findExampleTestFileAndItsContent, tools_1.transferToFindFilesTool],
     name: 'find_example_test_file_expert',
-    prompt: 'You are an example test file search expert. Please specify the reason for finding example test files. ' +
+    prompt: 'You are an example test file search expert in the repository.' +
         "You can use the 'find_example_test_file_and_its_content' tool to search for example test files in the project directory. " +
         'The example test files will be used for observation and learning. ' +
-        'The example test files will be used to improve the existing tests or create new tests.',
+        'The example test files will be used to improve the existing tests or create new tests.' +
+        'If you need to transfer to another tool, use the "transferToFindFilesTool" tool.',
     responseFormat: structured_format_1.exampleTestFileAndItsContentFormat,
     stateSchema: state_1.GraphState
 });
@@ -35309,7 +35310,8 @@ const createFileAgent = (0, prebuilt_1.createReactAgent)({
     prompt: `
           You are a file creation expert.
           The source file path is: {state.filePath}
-          The example test content is {state.exampleTestFiles}
+          The example test content is \n {state.exampleTestFiles} \n
+          The example test file content is \n {state.exampleTestFileContent} \n
           When creating a file, use these state values to determine the correct absolute path.
           Do NOT use placeholders or random paths.
           If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
@@ -35342,7 +35344,7 @@ const npmTestAgent = (0, prebuilt_1.createReactAgent)({
     tools: [tools_1.npmTestTool, tools_1.transferToWriteFileTool, tools_1.transferToReadFileTool, tools_1.transferToCreateFileTool],
     name: 'npm_test_expert',
     prompt: `You are a test runner expert. Your task is to execute all relevant tests in the project using the "npm_test" tool from the root directory.
-    Use the provided testRegex to accurately match and select test files.
+    Only run tests that are relevant to the source file.
     If you need to transfer to another tool, use the 'transferToWriteFileTool', 'transferToReadFileTool', or 'transferToCreateFileTool' tools.
     `,
     responseFormat: structured_format_1.testResultFormat,
@@ -35604,7 +35606,7 @@ exports.testResultFormat = zod_1.z.object({
 exports.exampleTestFileAndItsContentFormat = zod_1.z.object({
     summary: zod_1.z
         .string()
-        .max(300, 'Must be at most 300 characters')
+        .max(300, 'Must be at most 500 characters')
         .describe('A brief summary of what the test file covers'),
     keySnippets: zod_1.z
         .array(zod_1.z.string().max(1000))
@@ -36328,7 +36330,7 @@ exports.findExampleTestFileAndItsContent = new tools_1.DynamicStructuredTool({
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.transferToCreateFileTool = exports.transferToReadFileTool = exports.transferToWriteFileTool = exports.transferToNpmInstallTool = exports.transferToNpmTestTool = void 0;
+exports.transferToFindFilesTool = exports.transferToCreateFileTool = exports.transferToReadFileTool = exports.transferToWriteFileTool = exports.transferToNpmInstallTool = exports.transferToNpmTestTool = void 0;
 const zod_1 = __nccwpck_require__(50924);
 const tools_1 = __nccwpck_require__(3477);
 // Transfer tools
@@ -36383,6 +36385,16 @@ exports.transferToCreateFileTool = (0, tools_1.tool)(async () => {
 }, {
     name: 'transferToCreateFileTool',
     description: 'Ask create file tool for help.',
+    schema: zod_1.z.object({}),
+    // Hint to our agent implementation that it should stop
+    // immediately after invoking this tool
+    returnDirect: true
+});
+exports.transferToFindFilesTool = (0, tools_1.tool)(async () => {
+    return 'Successfully transferred to find files tool';
+}, {
+    name: 'transferToFindFilesTool',
+    description: 'Ask find files tool for help.',
     schema: zod_1.z.object({}),
     // Hint to our agent implementation that it should stop
     // immediately after invoking this tool
