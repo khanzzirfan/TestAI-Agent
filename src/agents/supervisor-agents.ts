@@ -65,8 +65,7 @@ const createFileAgent = createReactAgent({
   prompt: `
           You are a file creation expert.
           The source file path is: {state.filePath}
-          The example test content is \n {state.exampleTestFiles} \n
-          The example test file content is \n {state.exampleTestFileContent} \n
+          The existing tests in the repo and their content is \n {state.exampleTestFiles} \n
           When creating a file, use these state values to determine the correct absolute path.
           Do NOT use placeholders or random paths.
           If you need to transfer to another tool, use the 'transferToNpmTestTool' tool.
