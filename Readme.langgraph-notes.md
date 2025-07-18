@@ -5,5 +5,13 @@ Langgraph notes
 - https://langchain-ai.github.io/langgraphjs/tutorials/quickstart/#customizing-agent-behavior
 - https://langchain-ai.github.io/langgraphjs/how-tos/update-state-from-tools/#define-tool
 
-// ## https://langchain-ai.github.io/langgraphjs/how-tos/multi-agent-network-functional/#travel-agent-example // ##
-https://langchain-ai.github.io/langgraphjs/how-tos/pass-run-time-values-to-tools/#define-the-agent-state
+## Agent sharing state and tool calls
+
+- https://langchain-ai.github.io/langgraphjs/how-tos/multi-agent-network-functional/#travel-agent-example // ##
+- https://langchain-ai.github.io/langgraphjs/how-tos/pass-run-time-values-to-tools/#define-the-agent-state
+
+## Running graph locally.
+
+```
+npx @langchain/langgraph-cli dev
+```

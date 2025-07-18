@@ -32,25 +32,19 @@ const nodeExecutor = async (cmd: string, options: any = {}) => {
 
 export const NodeExecutorTool = new DynamicStructuredTool({
   name: 'npm_exec',
-  description: 'Executes npm or Node.js commands with support for various options',
+  description:
+    'Executes npm or Node.js commands with support for various options. Check package manager file for commands or scripts.',
   schema: z.object({
-    command: z.string().describe('npm or Node.js command to execute'),
+    command: z
+      .string()
+      .describe(
+        'Executes npm or Node.js commands with support for various options. Check package manager file for commands or scripts.'
+      ),
     options: z
       .object({
-        directory_path: z
-          .string()
-          .optional()
-          .describe(
-            'path to the directory where the command will be executed. i.e where the package.json file is located'
-          ),
+        directory_path: z.string().optional().describe('Path where package.json is located (cwd override)'),
         force: z.boolean().optional().describe('Run command with --force'),
-        legacyPeerDeps: z.boolean().optional().describe('Run command with --legacy-peer-deps'),
-        coverage: z.boolean().optional().describe('Run tests with coverage'),
-        json: z.boolean().optional().describe('Output test results as JSON'),
-        watch: z.boolean().optional().describe('Run tests in watch mode'),
-        testRegex: z.string().optional().describe('Regular expression to match test files'),
-        updateSnapshots: z.boolean().optional().describe('Update test snapshots'),
-        testFilePath: z.string().optional().describe('Path to the single test file to run and collect coverage')
+        legacyPeerDeps: z.boolean().optional().describe('Run command with --legacy-peer-deps')
       })
       .optional()
   }),
@@ -60,44 +54,42 @@ export const NodeExecutorTool = new DynamicStructuredTool({
     if (options.directory_path) fullCommand += ` --prefix ${options.directory_path}`;
     if (options.force) fullCommand += ' --force';
     if (options.legacyPeerDeps) fullCommand += ' --legacy-peer-deps';
-    if (options.coverage) {
-      fullCommand += ' --coverage';
-      // run coverage with test file name --collectCoverageFrom=testFileName
-      if (options.testFilePath) {
-        fullCommand += ` --collectCoverageFrom=\"${options.testFilePath}\"`;
+    // Execute command (in directory if provided)
+    const execOptions = options.directory_path ? { cwd: options.directory_path } : undefined;
+    try {
+      let result = await nodeExecutor(fullCommand, execOptions);
+      let stdout = result.stdout || '';
+      // check the length of stdout and trim it to max 10000 characters
+      if (stdout.length > 5000) {
+        console.warn('stdout is too long, trimming to 10000 characters');
+        stdout = stdout.substring(0, 5000);
       }
-    }
-    if (options.json) fullCommand += ' --json';
-    if (options.watch) fullCommand += ' --watch';
-    if (options.testRegex) fullCommand += ` --testRegex=\"${options.testRegex}\"`;
-    if (options.updateSnapshots) fullCommand += ' -u';
-
-    const result = await nodeExecutor(fullCommand);
-    if (result.success) {
       return new Command({
         update: {
-          testResults: { success: true, output: result.stdout },
-          hasError: false,
+          executionResults: { success: result.success, output: stdout },
+          hasError: !result.success,
           messages: [
             new ToolMessage({
-              content: 'Command executed successfully',
+              content: result.success
+                ? 'Command executed successfully. Analyze the output for results.'
+                : `Error executing command: ${result.error}. Check if the test file exists and is valid. Use the write_file tool to create or update the test file.`,
               tool_call_id: config.toolCall.id
             })
           ]
         }
       });
-    } else {
+    } catch (error: any) {
       return new Command({
         update: {
           hasError: true,
           testResults: {
             success: false,
-            error: result.error,
-            output: result.stdout
+            error: error.message,
+            output: error.stdout || ''
           },
           messages: [
             new ToolMessage({
-              content: `Error executing command: ${result.error}`,
+              content: `Error executing test command: ${error.message}. Check if the test file exists and is valid. Use the write_file tool to create or update the test file.`,
               tool_call_id: config.toolCall.id
             })
           ]
@@ -131,17 +123,128 @@ export const npmTestTool = new DynamicStructuredTool({
     runManager: any,
     config: any
   ) => {
+    // Ensure command starts with `npm` or is already a full npm command
+    let baseCommand = command.trim();
+    // Combine full command
+    let fullCommand = '';
+    try {
+      const { directory_path, testFilePath, coverage, watch, updateSnapshots } = options;
+      if (baseCommand.startsWith('npm')) baseCommand = baseCommand.replace('npm ', '');
+      if (baseCommand.startsWith('yarn')) baseCommand = baseCommand.replace('yarn ', '');
+      if (baseCommand.startsWith('pnpm')) baseCommand = baseCommand.replace('pnpm ', '');
+      if (baseCommand.startsWith('test')) baseCommand = baseCommand.replace('test', '');
+
+      // now ensure base command is empty or starts with test
+      if (baseCommand === '' || baseCommand.startsWith('test')) {
+        baseCommand = 'npm test';
+      } else {
+        baseCommand = `npm test ${baseCommand}`;
+      }
+
+      // Prepare arguments
+      const args: string[] = [];
+
+      if (findRelatedTests) {
+        args.push('--findRelatedTests', findRelatedTests);
+      }
+
+      if (json) args.push('--json');
+      if (silent) args.push('--silent');
+      if (coverage && testFilePath) {
+        args.push('--coverage', `--collectCoverageFrom=**/${testFilePath}*`);
+      }
+
+      if (watch) args.push('--watch');
+      if (updateSnapshots) args.push('-u');
+
+      // Combine full command
+      fullCommand = `${baseCommand} -- ${args.join(' ')}`;
+
+      // Execute command (in directory if provided)
+      const execOptions = directory_path ? { cwd: directory_path } : undefined;
+      let result = await nodeExecutor(fullCommand, execOptions);
+      let stdout = result.stdout || '';
+      // check the length of stdout and trim it to max 10000 characters
+      if (stdout.length > 5000) {
+        console.warn('stdout is too long, trimming to 10000 characters');
+        stdout = stdout.substring(0, 5000);
+      }
+      return new Command({
+        update: {
+          testCommandExecuted: fullCommand.toString(),
+          testResults: { success: result.success, output: stdout },
+          hasError: !result.success,
+          messages: [
+            new ToolMessage({
+              content: result.success
+                ? 'Test command executed successfully. Analyze the output for results.'
+                : `Error executing test command: ${result.error}. Check if the test file exists and is valid. Use the write_file tool to create or update the test file.`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
+    } catch (error: any) {
+      return new Command({
+        update: {
+          hasError: true,
+          testCommandExecuted: fullCommand.toString(),
+          testResults: {
+            success: false,
+            error: error.message,
+            output: error.stdout || ''
+          },
+          messages: [
+            new ToolMessage({
+              content: `Error executing test command: ${error.message}. Check if the test file exists and is valid. Use the write_file tool to create or update the test file.`,
+              tool_call_id: config.toolCall.id
+            })
+          ]
+        }
+      });
+    }
+  }
+});
+
+export const yarnTestTool = new DynamicStructuredTool({
+  name: 'yarn_test',
+  description: 'Executes yarn test commands with support for various options including coverage and watch mode',
+  schema: z.object({
+    command: z.string().describe('npm command to execute, e.g. test, test <file>, etc.'),
+    silent: z.boolean().default(true).describe('Run command in silent mode'),
+    json: z.boolean().default(true).describe('Output test results as JSON'),
+    findRelatedTests: z.string().describe('Run tests related to a specific file'),
+    options: z
+      .object({
+        directory_path: z.string().optional().describe('Path where package.json is located (cwd override)'),
+        testFilePath: z.string().optional().describe('Path to a single test file to run and collect coverage from'),
+        coverage: z.boolean().optional().describe('Enable code coverage'),
+        watch: z.boolean().optional().describe('Enable watch mode'),
+        updateSnapshots: z.boolean().optional().describe('Update test snapshots')
+      })
+      .optional()
+  }),
+  func: async (
+    { command, silent = true, json = true, findRelatedTests, options = {} },
+    runManager: any,
+    config: any
+  ) => {
     try {
       const { directory_path, testFilePath, coverage, watch, updateSnapshots } = options;
 
       // Ensure command starts with `npm` or is already a full npm command
       let baseCommand = command.trim();
-      if (!baseCommand.startsWith('npm')) {
+      if (!baseCommand.startsWith('yarn')) {
         if (baseCommand === 'test') {
           baseCommand = 'npm test';
         } else {
           baseCommand = `npm ${baseCommand}`;
         }
+      }
+
+      // again ensure it starts with yarn or having duplicated test test remove it
+      if (!baseCommand.startsWith('yarn') || baseCommand.startsWith('npm test')) {
+        baseCommand = `yarn ${baseCommand}`;
       }
 
       // Prepare arguments
@@ -198,93 +301,6 @@ export const npmTestTool = new DynamicStructuredTool({
           messages: [
             new ToolMessage({
               content: `Error executing test command: ${error.message}. Check if the test file exists and is valid. Use the write_file tool to create or update the test file.`,
-              tool_call_id: config.toolCall.id
-            })
-          ]
-        }
-      });
-    }
-  }
-});
-
-export const yarnTestTool = new DynamicStructuredTool({
-  name: 'yarn_test',
-  description: 'Executes yarn test commands with support for various options including coverage and watch mode',
-  schema: z.object({
-    command: z.string().describe('yarn command to execute'),
-    silent: z.boolean().describe('Run command in silent mode'),
-    json: z.boolean().describe('Output test results as JSON'),
-    testRegex: z.string().describe('Regular expression to match test files'),
-    options: z
-      .object({
-        directory_path: z
-          .string()
-          .optional()
-          .describe(
-            'path to the directory where the command will be executed. i.e where the package.json file is located'
-          ),
-        coverage: z.boolean().optional().describe('Run tests with coverage'),
-        json: z.boolean().optional().describe('Output test results as JSON'),
-        watch: z.boolean().optional().describe('Run tests in watch mode'),
-        updateSnapshots: z.boolean().optional().describe('Update test snapshots'),
-        testFilePath: z.string().optional().describe('Path to the single test file to run and collect coverage')
-      })
-      .optional()
-  }),
-  func: async ({ command, silent = true, testRegex, options = {} }, runManager: any, config: any) => {
-    try {
-      const testCommandCheck = command.includes('test');
-      let fullCommand = !command.startsWith('yarn') ? `yarn ${testCommandCheck ? '' : 'test'} ${command}` : command;
-      // Add options to the command
-      if (options.directory_path) fullCommand += ` --cwd ${options.directory_path}`;
-      // suffix json
-      fullCommand += ` --json`;
-      if (silent) fullCommand += ' --silent';
-      if (options.coverage && options.testFilePath) {
-        fullCommand += ' --coverage';
-        // run coverage with test file name --collectCoverageFrom=testFileName
-        fullCommand += ` --collectCoverageFrom="${options.testFilePath}"`;
-      }
-      if (options.watch) fullCommand += ' --watch';
-      if (testRegex) fullCommand += ` --testRegex="${testRegex}"`;
-      if (options.updateSnapshots) fullCommand += ' -u';
-
-      let result = await nodeExecutor(fullCommand);
-      let stdout = result.stdout || '';
-      // check the length of stdout and trim it to max 10000 characters
-      if (stdout.length > 5000) {
-        console.warn('stdout is too long, trimming to 10000 characters');
-        stdout = stdout.substring(0, 5000);
-      }
-
-      return new Command({
-        // update state keys
-        update: {
-          testResults: { success: result.success, output: stdout },
-          hasError: !result.success,
-          messages: [
-            new ToolMessage({
-              content: result.success
-                ? 'Yarn test command executed successfully'
-                : `Error executing yarn test command: ${result.error}`,
-              tool_call_id: config.toolCall.id
-            })
-          ]
-        }
-      });
-    } catch (error: unknown | any) {
-      return new Command({
-        // update state keys
-        update: {
-          hasError: true,
-          testResults: {
-            success: false,
-            error: error.message,
-            output: error.stdout || ''
-          },
-          messages: [
-            new ToolMessage({
-              content: `Error executing yarn test command: ${error.message}`,
               tool_call_id: config.toolCall.id
             })
           ]
